@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sol Subagent Control"
+  short_description: "Keep Sol in charge while resolving one user-configured scenario/provider template at a time"
+  default_prompt: "Use $sol-control-plane; read metadata once, declare one route, resolve one scenario, and verify every auxiliary claim."
