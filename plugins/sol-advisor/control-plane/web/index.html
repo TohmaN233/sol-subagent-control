@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sol Subagent Control</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">LOCAL CONTROL PLANE</p>
+      <h1 id="page-title">Sol Subagent Control</h1>
+      <p class="lede">Sol stays in charge. Configure which provider each scenario may use; templates enter the model context only after that scenario is selected.</p>
+    </div>
+    <div class="header-actions">
+      <button id="reload" class="secondary">Reload</button>
+      <button id="save">Save configuration</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel" aria-labelledby="global-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">MASTER SWITCHES</p>
+          <h2 id="global-heading">Global controls</h2>
+        </div>
+        <span id="status-badge" class="badge">Loading</span>
+      </div>
+      <div class="grid three">
+        <label class="toggle-card">
+          <span>Control plane enabled</span>
+          <input id="global-enabled" type="checkbox">
+        </label>
+        <label class="toggle-card">
+          <span>Allow direct API calls</span>
+          <input id="allow-direct-api" type="checkbox">
+        </label>
+        <label>
+          <span>Console title</span>
+          <input id="console-title" type="text" maxlength="128">
+        </label>
+      </div>
+      <p class="hint">API keys are never stored here. OpenAI-compatible providers hold only an environment-variable name. External providers are disabled in the bundled defaults.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="providers-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">MODEL AND TRANSPORT ADAPTERS</p>
+          <h2 id="providers-heading">Providers</h2>
+        </div>
+        <button id="add-provider" class="secondary">Add provider</button>
+      </div>
+      <div id="providers" class="stack"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="scenarios-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">WHEN TO USE WHAT</p>
+          <h2 id="scenarios-heading">Scenarios and templates</h2>
+        </div>
+        <button id="add-scenario" class="secondary">Add scenario</button>
+      </div>
+      <p class="hint">Scenario descriptions and mappings are visible to Sol. Full template text stays here until Sol resolves that exact scenario.</p>
+      <div id="scenarios" class="stack"></div>
+    </section>
+
+    <section class="panel danger-zone" aria-labelledby="defaults-heading">
+      <div>
+        <p class="eyebrow">RECOVERY</p>
+        <h2 id="defaults-heading">Bundled defaults</h2>
+        <p class="hint">Load the bundled configuration into this page. Nothing is written until you press Save configuration.</p>
+      </div>
+      <button id="load-defaults" class="danger">Load bundled defaults</button>
+    </section>
+  </main>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

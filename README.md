@@ -1,70 +1,83 @@
-# Sol Advisor
+# Sol Advisor — Configurable Subagent Control
 
 **Sol / High runs the show. It declares a risk-gated route before task tools, keeps
 solo as the default, and uses a single auxiliary only when that improves delivery.**
 
-Sol Advisor is a Codex-only workflow for capability-routed software delivery. You
-bring the goal and constraints; Sol owns the plan, implementation or delegation,
-verification, and acceptance.
+This fork preserves Sol Advisor's native Codex workflow and adds an optional local
+control plane. The user maps a reusable scenario to a provider in a web console;
+Sol sees only sanitized metadata until it selects that scenario, when only that one
+prompt template enters the task.
 
 ## Go deeper
 
-I write [**Attention Heads**](https://attentionheads.substack.com/?utm_source=github&utm_medium=readme&utm_campaign=sol-advisor) — deep, evidence-backed writing on AI, cognition, and agentic engineering. The **Agentic Engineering Field Notes** series is where I publish practical advice on the craft of using AI. [Subscribe](https://attentionheads.substack.com/subscribe?utm_source=github&utm_medium=readme&utm_campaign=sol-advisor) to get new posts to your inbox.
+The original author writes [**Attention Heads**](https://attentionheads.substack.com/?utm_source=github&utm_medium=readme&utm_campaign=sol-advisor) — deep, evidence-backed writing on AI, cognition, and agentic engineering. [Subscribe](https://attentionheads.substack.com/subscribe?utm_source=github&utm_medium=readme&utm_campaign=sol-advisor) for new Agentic Engineering Field Notes.
 
 ## Quick start
 
 You need a current Codex CLI or ChatGPT desktop app with plugins enabled, GPT-5.6
-Sol / High for the primary session, native custom-agent support, and jq. GPT-5.6
+Sol / High for the primary session, native custom-agent support, Node.js 18+, and jq.
 Luna / Max or Terra / High access is needed only when the selected route delegates.
 
 ~~~sh
-codex plugin marketplace add DannyMac180/sol-advisor --ref main
+codex plugin marketplace add TohmaN233/sol-subagent-control --ref main
 codex plugin add sol-advisor@sol-advisor
 plugin_dir="$(codex plugin list --json | jq -r '.installed[] | select(.pluginId == "sol-advisor@sol-advisor") | .source.path')" && test -n "$plugin_dir" && test "$plugin_dir" != null && test -d "$plugin_dir" && test -f "$plugin_dir/scripts/install-agents.sh" && sh "$plugin_dir/scripts/install-agents.sh"
 ~~~
 
-The companion installer verifies all three exact role files after installation. It is
-fail-closed: modified, unsafe, nonregular, symlinked, unknown, or differing files
-are left untouched. It does not edit Codex configuration. Start a fresh Codex task
-after installation so native roles are discovered.
-
-Use this one prompt in the new task:
+Start a fresh task so the native roles and control-plane tools are discovered. Use:
 
 ~~~text
-Use $sol-advisor:orchestration to build this feature and verify it. Declare the selective route before task tools.
+Use $sol-advisor:sol-control-plane. Keep Sol as the main agent, read sanitized control metadata once, declare one selective route, resolve only the selected scenario, and verify every auxiliary claim.
 ~~~
+
+The original native-only workflow remains available as `$sol-advisor:orchestration`.
+
+## User-owned console
+
+Ask Codex to open the Sol Subagent Control console. It opens a token-protected page on
+`127.0.0.1`; normal tool output does not reveal the token or prompt library. The page
+can enable or disable providers, map scenario → provider, edit preset templates, and
+create new scenarios. Configuration persists outside the plugin cache.
+
+Native Luna, Terra, and fresh Sol review are enabled by default. Cursor Bridge, Grok
+Build Supervisor, ChatGPT web Pro packet review, and custom OpenAI-compatible advisory
+models are present but disabled. External providers are never auto-enabled or silently
+substituted. API credentials remain in environment variables, not the console.
+
+Preset scenarios cover bounded code changes, judgment-heavy bounded changes,
+cross-review, brainstorm, and an off-by-default hard-path web Pro consultation. Cursor
+and Grok retain their own task/session and permission contracts; the root still checks
+the real diff, tests, and artifacts.
 
 ## What you do
 
-Give Sol the outcome, constraints, and any important repository context. You do not
-need to select or manage a lane; Sol records the route and owns verification and
-acceptance.
+Give Sol the outcome, constraints, and important repository context. You do not need to select or manage a lane; the console stores your reusable mapping while Sol records
+the chosen route and owns verification and acceptance.
 
 ## Routes
 
 | Mode | Use it when | Delivery |
 |---|---|---|
 | `solo` | Default; risk is contained. | Root plans, implements, tests, and self-reviews. |
-| `delegate` | A complete spec is better executed by one implementer. | Luna / Max for bounded work, or Terra / High for judgment-heavy or high-risk work; root verifies. |
-| `audit` | Independent final scrutiny matters more than delegation. | Root implements; a fresh read-only Sol / High reviews. |
-| `full` | Explicit broad or high-risk exception. | One selected implementer, root verification, and a fresh Sol / High review. |
+| `delegate` | One complete bounded task benefits from an auxiliary. | The mapped provider executes or advises; root verifies. |
+| `audit` | Independent final scrutiny matters more than delegation. | Root implements; the mapped read-only reviewer audits. |
+| `full` | Explicit broad or high-risk exception. | One implementation stage, root verification, then one fresh review stage. |
 
 Solo is the default. One auxiliary is the default maximum; `full` is the explicit
-exception. Sol emits a `SELECTIVE ROUTE` declaration with the mode and concise risk
-rationale before the first task tool call. It can escalate only when newly observed
-risk justifies it and never silently downgrades.
+exception. Sol emits a `SELECTIVE ROUTE` declaration before the first task tool call.
+It can escalate only when newly observed risk justifies it and never silently downgrades
+or remaps the provider.
 
 ## What happens automatically
 
 Sol / High keeps architecture, decomposition, route selection, parent verification,
 escalation decisions, and acceptance in the primary task. Auxiliary work substitutes
-for root work; it does not duplicate it. The root inspects the complete diff and
-reruns the requested checks. When the selected route includes a review, a fresh Sol /
-High reviewer returns ship, fix-first, or rethink; any fix requires a new review.
+for root work; it does not duplicate it. Only the selected template is compiled. When
+the route includes review, any correction invalidates the old verdict.
 
 ## Updating
 
-Update the marketplace plugin, reinstall the companion roles, and start a new task:
+Upgrade the fork, reinstall the companion roles, and start a new task:
 
 ~~~sh
 codex plugin marketplace upgrade sol-advisor
@@ -72,12 +85,12 @@ codex plugin add sol-advisor@sol-advisor
 plugin_dir="$(codex plugin list --json | jq -r '.installed[] | select(.pluginId == "sol-advisor@sol-advisor") | .source.path')" && test -n "$plugin_dir" && test "$plugin_dir" != null && test -d "$plugin_dir" && test -f "$plugin_dir/scripts/install-agents.sh" && sh "$plugin_dir/scripts/install-agents.sh"
 ~~~
 
-For exact spawn, runtime-evidence, sandbox, installer, and maintainer verification
-details, read [advanced native operations](plugins/sol-advisor/skills/orchestration/references/operations.md).
-For local development, install this checkout as a marketplace:
+For exact native spawn, runtime evidence, sandbox interpretation, installer, and
+maintainer verification details, read [advanced native operations](plugins/sol-advisor/skills/orchestration/references/operations.md). For the extension, read the
+[control-plane architecture](plugins/sol-advisor/skills/control-plane/references/architecture.md)
+and [provider contracts](plugins/sol-advisor/skills/control-plane/references/provider-contracts.md).
 
-~~~sh
-cd /absolute/path/to/sol-advisor
-codex plugin marketplace add /absolute/path/to/sol-advisor
-codex plugin add sol-advisor@sol-advisor
-~~~
+## Attribution
+
+The native selective-routing core was created by Daniel McAteer and remains under the
+MIT license. This fork's configurable control plane is maintained by TohmaN233.

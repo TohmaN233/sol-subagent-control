@@ -1,7 +1,7 @@
 {
   "name": "sol-advisor",
   "interface": {
-    "displayName": "Sol Advisor"
+    "displayName": "Sol Subagent Control"
   },
   "plugins": [
     {

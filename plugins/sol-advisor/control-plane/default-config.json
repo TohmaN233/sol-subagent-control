@@ -1,0 +1,258 @@
+{
+  "version": 1,
+  "global": {
+    "enabled": true,
+    "allow_direct_api": false,
+    "console_title": "Sol Subagent Control",
+    "max_prompt_chars": 80000
+  },
+  "providers": [
+    {
+      "id": "native-luna",
+      "name": "Native Luna / Max",
+      "kind": "native_agent",
+      "enabled": true,
+      "description": "Default bounded implementation worker inside Codex.",
+      "requires_user_approval": false,
+      "capabilities": {
+        "read": true,
+        "write": true,
+        "background": false
+      },
+      "config": {
+        "agent_type": "sol_advisor_luna_implementer",
+        "model": "gpt-5.6-luna",
+        "reasoning_effort": "max",
+        "role": "implementer",
+        "fresh_context": true,
+        "requested_sandbox": "workspace-write"
+      }
+    },
+    {
+      "id": "native-terra",
+      "name": "Native Terra / High",
+      "kind": "native_agent",
+      "enabled": true,
+      "description": "Judgment-heavy, context-heavy, or higher-risk bounded worker.",
+      "requires_user_approval": false,
+      "capabilities": {
+        "read": true,
+        "write": true,
+        "background": false
+      },
+      "config": {
+        "agent_type": "sol_advisor_terra_implementer",
+        "model": "gpt-5.6-terra",
+        "reasoning_effort": "high",
+        "role": "implementer",
+        "fresh_context": true,
+        "requested_sandbox": "workspace-write"
+      }
+    },
+    {
+      "id": "native-sol-reviewer",
+      "name": "Fresh native Sol / High reviewer",
+      "kind": "native_agent",
+      "enabled": true,
+      "description": "Context-clean final review lane. Requested read-only isolation must still be observed.",
+      "requires_user_approval": false,
+      "capabilities": {
+        "read": true,
+        "write": false,
+        "background": false
+      },
+      "config": {
+        "agent_type": "sol_advisor_sol_reviewer",
+        "model": "gpt-5.6-sol",
+        "reasoning_effort": "high",
+        "role": "reviewer",
+        "fresh_context": true,
+        "requested_sandbox": "read-only"
+      }
+    },
+    {
+      "id": "cursor-bridge",
+      "name": "Cursor Bridge",
+      "kind": "mcp_tool",
+      "enabled": false,
+      "description": "Optional bounded Cursor Agent execution. Cursor model choice remains owned by the user's logged-in Cursor configuration.",
+      "requires_user_approval": true,
+      "capabilities": {
+        "read": true,
+        "write": true,
+        "background": true
+      },
+      "config": {
+        "protocol": "cursor-bridge-v1",
+        "model_label": "Cursor user-selected model",
+        "tools": {
+          "initialize": "cursor_init",
+          "dispatch": "cursor_do",
+          "status": "cursor_status",
+          "control": "cursor_task_control"
+        },
+        "defaults": {
+          "execution": "fifo",
+          "background": true
+        },
+        "notes": "Allowed paths are a scheduling and prompt boundary, not an operating-system sandbox. Preserve task_id and agent_id and verify the real diff in Sol."
+      }
+    },
+    {
+      "id": "grok-build-supervisor",
+      "name": "Grok Build Supervisor",
+      "kind": "mcp_tool",
+      "enabled": false,
+      "description": "Optional persistent Grok Build execution through the separate guarded Supervisor plugin.",
+      "requires_user_approval": true,
+      "capabilities": {
+        "read": true,
+        "write": true,
+        "background": true
+      },
+      "config": {
+        "protocol": "grok-build-supervisor-v1",
+        "model_label": "Grok Build",
+        "tools": {
+          "inspect": "grok_session_inspect",
+          "open": "grok_session_open",
+          "dispatch": "grok_session_prompt",
+          "respond": "grok_session_respond",
+          "control": "grok_session_control"
+        },
+        "defaults": {
+          "presentation": "windows_terminal"
+        },
+        "notes": "Use the Supervisor session/run identity and permission flow. Grok completion is a claim; Sol rechecks files, Git, and tests."
+      }
+    },
+    {
+      "id": "chatgpt-web-pro",
+      "name": "ChatGPT web Pro packet reviewer",
+      "kind": "web_review",
+      "enabled": false,
+      "description": "Optional external advice for genuine planning dead ends or high-blast-radius uncertainty. Packet-only and advisory.",
+      "requires_user_approval": true,
+      "capabilities": {
+        "read": true,
+        "write": false,
+        "background": false
+      },
+      "config": {
+        "skill": "chatgpt-review-agent",
+        "source_repository": "https://github.com/TohmaN233/chatgpt-review-agent-skill",
+        "path": "packet",
+        "reviewer": "ChatGPT web Pro",
+        "model_label": "User-selected ChatGPT Pro"
+      }
+    },
+    {
+      "id": "custom-openai-compatible",
+      "name": "Custom OpenAI-compatible advisory model",
+      "kind": "openai_compatible",
+      "enabled": false,
+      "description": "Optional text-only custom model. Replace endpoint/model and set the named environment variable before enabling.",
+      "requires_user_approval": true,
+      "capabilities": {
+        "read": true,
+        "write": false,
+        "background": false
+      },
+      "config": {
+        "endpoint": "https://example.invalid/v1/chat/completions",
+        "model": "replace-me",
+        "api_key_env": "SOL_CONTROL_CUSTOM_API_KEY",
+        "auth_type": "bearer",
+        "timeout_ms": 120000,
+        "max_output_tokens": 4096,
+        "max_tokens_field": "max_tokens",
+        "temperature": 0.2,
+        "system_prompt": "You are an advisory subagent. Return evidence-based analysis only. Do not claim file access, tool execution, or implementation.",
+        "headers": {}
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "bounded-code-change",
+      "name": "Bounded code change",
+      "enabled": true,
+      "description": "Implement a complete, fixed-interface change in the smallest owned path set.",
+      "route": "delegate",
+      "provider_id": "native-luna",
+      "read_only": false,
+      "requires_user_approval": false,
+      "tags": [
+        "implementation",
+        "bounded",
+        "default"
+      ],
+      "template": "ROLE\nAct as {{provider_name}} for a bounded implementation task. Execute the settled design; do not redesign product direction or architecture.\n\nSCENARIO\n{{scenario_id}}\n\nOBJECTIVE\n{{task}}\n\nCONTEXT\n{{context}}\n\nCONSTRAINTS AND OWNERSHIP\n{{constraints}}\nPreserve concurrent user or agent edits. Modify only explicitly owned paths. Surface material ambiguity instead of silently widening scope.\n\nVERIFICATION\n{{verification}}\nRun the requested checks and inspect the actual diff. A completion claim without concrete evidence is invalid.\n\nRETURN\nSTATUS: complete | partial | blocked\nCHANGES: file-by-file summary from the real diff\nVERIFIED: exact commands and concrete output\nJUDGMENT CALLS: decisions left open by the specification, or none\nGAPS: unfinished work, ambiguity, or none"
+    },
+    {
+      "id": "judgment-heavy-change",
+      "name": "Judgment-heavy bounded change",
+      "enabled": true,
+      "description": "Implement a bounded change whose local details require deeper judgment or carry a wider blast radius.",
+      "route": "delegate",
+      "provider_id": "native-terra",
+      "read_only": false,
+      "requires_user_approval": false,
+      "tags": [
+        "implementation",
+        "high-risk",
+        "escalation"
+      ],
+      "template": "ROLE\nAct as {{provider_name}} for a judgment-heavy but still bounded implementation task. Resolve local technical uncertainty inside the settled architecture; do not change product direction without returning a blocker.\n\nSCENARIO\n{{scenario_id}}\n\nOBJECTIVE\n{{task}}\n\nEVIDENCE AND CONTEXT\n{{context}}\n\nFIXED CONSTRAINTS, OWNERSHIP, AND BLAST-RADIUS BOUNDARY\n{{constraints}}\nPreserve concurrent edits and document every material judgment call. Stop if safe ownership or an acceptance boundary cannot be established.\n\nVERIFICATION\n{{verification}}\nUse risk-proportionate checks and inspect the complete change set.\n\nRETURN\nSTATUS: complete | partial | blocked\nCHANGES: file-by-file summary\nVERIFIED: exact commands and evidence\nJUDGMENT CALLS: choices made and why\nRESIDUAL RISK: most important remaining risk\nGAPS: unresolved items or none"
+    },
+    {
+      "id": "cross-review",
+      "name": "Cross-review",
+      "enabled": true,
+      "description": "Fresh findings-first review of an accumulated change or plan. The reviewer remains read-only and never fixes its own findings.",
+      "route": "audit",
+      "provider_id": "native-sol-reviewer",
+      "read_only": true,
+      "requires_user_approval": false,
+      "tags": [
+        "review",
+        "read-only",
+        "default"
+      ],
+      "template": "ROLE\nAct as {{provider_name}}, a fresh final reviewer. Remain strictly read-only. Do not edit files, implement fixes, or broaden scope.\n\nSTATED GOAL\n{{task}}\n\nACCUMULATED CHANGE SET OR REVIEW PACKET\n{{context}}\n\nINTERFACES AND CONSTRAINTS\n{{constraints}}\n\nPRIMARY VERIFICATION EVIDENCE\n{{verification}}\n\nREVIEW\nJudge correctness, completeness, regressions, scope discipline, interface preservation, test adequacy, and material risk. Findings must cite precise evidence.\n\nRETURN\nVERDICT: ship | fix-first | rethink\nREASON: decisive evidence-based reason\nBLOCKING FINDINGS: precise locations and required fixes, or none\nNON-BLOCKING RISKS: concise list, or none\nSMALLEST NEXT CHECK: one discriminating validation step\nRESIDUAL RISK: most important remaining risk, or none"
+    },
+    {
+      "id": "brainstorm",
+      "name": "Bounded brainstorm",
+      "enabled": true,
+      "description": "Generate alternatives and discriminating checks without taking architecture authority away from Sol.",
+      "route": "delegate",
+      "provider_id": "native-terra",
+      "read_only": true,
+      "requires_user_approval": false,
+      "tags": [
+        "advice",
+        "brainstorm",
+        "read-only"
+      ],
+      "template": "ROLE\nAct as {{provider_name}} as a read-only idea partner. Explore alternatives, but leave architecture choice and acceptance with Sol.\n\nQUESTION\n{{task}}\n\nKNOWN CONTEXT\n{{context}}\n\nFIXED DECISIONS AND EXCLUDED SCOPE\n{{constraints}}\n\nWHAT WOULD COUNT AS PROGRESS\n{{verification}}\n\nRETURN\n1. Three materially different candidate approaches\n2. Strongest argument against each\n3. Unknowns that actually change the decision\n4. Smallest discriminating experiment or source check\n5. Recommended direction with calibrated confidence\nDo not present speculation as observed evidence."
+    },
+    {
+      "id": "hard-path-web-advice",
+      "name": "Hard-path ChatGPT web Pro advice",
+      "enabled": false,
+      "description": "Packet-only second opinion after a real planning dead end, contradictory evidence, or a high-blast-radius low-confidence decision.",
+      "route": "audit",
+      "provider_id": "chatgpt-web-pro",
+      "read_only": true,
+      "requires_user_approval": true,
+      "tags": [
+        "web-pro",
+        "external",
+        "hard-path",
+        "read-only"
+      ],
+      "template": "ROLE\nAct as an external ChatGPT web Pro advisor. Review only the supplied packet. You have no ambient repository access and must not claim implementation.\n\nDECISION OR BLOCKER\n{{task}}\n\nPACKET CONTENT AND OBSERVED EVIDENCE\n{{context}}\n\nFIXED CONSTRAINTS\n{{constraints}}\n\nPRIOR ATTEMPTS OR REQUIRED DECISION TEST\n{{verification}}\n\nRETURN\n1. Blocking assumptions or contradictions\n2. Two plausible next routes and their failure modes\n3. Exact evidence missing from the packet\n4. Smallest next check that most changes the decision\n5. One-sentence recommendation with uncertainty\nDo not request broad repository access and do not turn the consultation into implementation."
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Verify native Sol Advisor core
+        run: sh plugins/sol-advisor/scripts/verify.sh
+      - name: Verify configurable control plane
+        run: sh plugins/sol-advisor/scripts/verify-control-plane.sh
