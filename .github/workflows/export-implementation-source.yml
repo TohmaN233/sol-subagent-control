@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feat/builtin-cursor-grok-write
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
