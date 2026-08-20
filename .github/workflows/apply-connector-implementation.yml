@@ -1,17 +1,18 @@
 name: apply-connector-implementation
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/builtin-grok-acp-connector
+      - main
     paths:
-      - .github/connector-patch/READY
+      - .github/connector-patch/**
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/builtin-grok-acp-connector'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
