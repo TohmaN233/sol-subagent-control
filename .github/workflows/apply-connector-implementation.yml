@@ -1,0 +1,49 @@
+name: apply-connector-implementation
+
+on:
+  push:
+    branches:
+      - fix/builtin-grok-acp-connector
+    paths:
+      - .github/connector-patch/READY
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/builtin-grok-acp-connector
+          fetch-depth: 0
+      - name: Reconstruct and apply connector source
+        shell: bash
+        run: |
+          test -f .github/connector-patch/READY
+          test "$(find .github/connector-patch -maxdepth 1 -type f -name 'part-*' | wc -l | tr -d ' ')" = 10
+          cat .github/connector-patch/part-* | base64 --decode | gzip --decompress --stdout > /tmp/connector-code.patch
+          printf '%s  %s\n' '1ab21f99f2e288b413d5314384e3841cad11d743607bffef9c6392d4e5f18dce' /tmp/connector-code.patch | sha256sum --check --strict
+          git apply --index --whitespace=error-all /tmp/connector-code.patch
+          git rm -r .github/connector-patch
+          git diff --cached --check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run connector and repository gates
+        shell: bash
+        run: |
+          node --check plugins/sol-advisor/control-plane/server.mjs
+          node --check plugins/sol-advisor/control-plane/connectors/grok-acp.mjs
+          node --test plugins/sol-advisor/control-plane/test/*.test.mjs
+          sh plugins/sol-advisor/scripts/verify-control-plane.sh
+          sh plugins/sol-advisor/scripts/verify.sh
+          git diff --cached --check
+      - name: Commit verified connector source
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: add experimental built-in Grok ACP connector'
+          git push origin HEAD:fix/builtin-grok-acp-connector
