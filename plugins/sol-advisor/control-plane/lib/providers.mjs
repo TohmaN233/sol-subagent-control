@@ -33,10 +33,32 @@ export function buildProviderAdapter(provider, scenario, { env = process.env, al
     };
   }
 
-  if (provider.kind === 'mcp_tool') {
+  if (provider.kind === 'builtin_connector') {
+    const identityFields = provider.config.connector === 'grok_acp'
+      ? ['task_id', 'session_id', 'run_id']
+      : ['task_id'];
     return {
       ...base,
-      execution: 'host_mcp',
+      execution: 'builtin_connector',
+      connector: provider.config.connector,
+      transport: provider.config.transport,
+      prompt_delivery: 'internal',
+      operations: {
+        probe: 'sol_connector_probe',
+        start: 'sol_connector_start',
+        status: 'sol_connector_status',
+        control: 'sol_connector_control',
+      },
+      identity_fields: identityFields,
+      connection_state: 'unprobed',
+    };
+  }
+
+  if (provider.kind === 'external_mcp' || provider.kind === 'mcp_tool') {
+    return {
+      ...base,
+      execution: 'external_mcp',
+      availability: 'unverified',
       protocol: provider.config.protocol,
       model_label: provider.config.model_label,
       tools: provider.config.tools,

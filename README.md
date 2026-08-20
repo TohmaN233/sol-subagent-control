@@ -15,7 +15,7 @@ The original author writes [**Attention Heads**](https://attentionheads.substack
 ## Quick start
 
 You need a current Codex CLI or ChatGPT desktop app with plugins enabled, GPT-5.6
-Sol / High for the primary session, native custom-agent support, Node.js 18+, and jq.
+Sol / High for the primary session, native custom-agent support, Node.js 20+, and jq.
 Luna / Max or Terra / High access is needed only when the selected route delegates.
 
 ~~~sh
@@ -39,15 +39,16 @@ Ask Codex to open the Sol Subagent Control console. It opens a token-protected p
 can enable or disable providers, map scenario → provider, edit preset templates, and
 create new scenarios. Configuration persists outside the plugin cache.
 
-Native Luna, Terra, and fresh Sol review are enabled by default. Cursor Bridge, Grok
-Build Supervisor, ChatGPT web Pro packet review, and custom OpenAI-compatible advisory
-models are present but disabled. External providers are never auto-enabled or silently
-substituted. API credentials remain in environment variables, not the console.
+Native Luna, Terra, and fresh Sol review are enabled by default. The repository now
+bundles an **experimental, read-only Grok Leader + ACP connector**, disabled until the
+user enables and approves its scenario. Cursor remains an explicitly external Bridge
+descriptor; this repository does not yet bundle a Cursor connection. ChatGPT web Pro
+and custom OpenAI-compatible advisory models also remain opt-in.
 
-Preset scenarios cover bounded code changes, judgment-heavy bounded changes,
-cross-review, brainstorm, and an off-by-default hard-path web Pro consultation. Cursor
-and Grok retain their own task/session and permission contracts; the root still checks
-the real diff, tests, and artifacts.
+The Grok connector owns task/session/run identity, permission and input gates, timeout
+ambiguity, cancellation, and restart fail-closed state. It has automated fake-process
+coverage but still requires desktop live smoke before any broad compatibility claim.
+The root continues to check the real Git state, tests, and artifacts.
 
 ## What you do
 

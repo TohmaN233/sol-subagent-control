@@ -1,21 +1,34 @@
 {
   "name": "sol-advisor",
   "version": "0.6.0",
-  "description": "Sol-led selective routing with a human-owned scenario/provider control plane; native agents remain the default and external models are opt-in.",
-  "author": {"name": "TohmaN233", "url": "https://github.com/TohmaN233"},
+  "description": "Sol-led selective routing with a human-owned control plane, native agents, an experimental built-in Grok ACP connector, and opt-in external providers.",
+  "author": {
+    "name": "TohmaN233",
+    "url": "https://github.com/TohmaN233"
+  },
   "homepage": "https://github.com/TohmaN233/sol-subagent-control#readme",
   "repository": "https://github.com/TohmaN233/sol-subagent-control",
   "license": "MIT",
-  "keywords": ["codex", "orchestration", "multi-agent", "gpt-5.6", "control-plane", "external-models"],
+  "keywords": [
+    "codex",
+    "orchestration",
+    "multi-agent",
+    "gpt-5.6",
+    "control-plane",
+    "external-models"
+  ],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Sol Subagent Control",
-    "shortDescription": "Keep Sol in charge while a local console maps enabled scenarios to native or optional external providers.",
-    "longDescription": "Sol Advisor keeps GPT-5.6 Sol / High in the primary session for architecture, implementation when solo or audit is selected, verification, and acceptance. Before the first task tool call, Sol declares a machine-auditable SELECTIVE ROUTE: solo is the default; delegate uses native GPT-5.6 Luna / Max for bounded work or GPT-5.6 Terra / High for higher-risk work; audit uses a fresh read-only GPT-5.6 Sol / High review; full combines one selected implementer with a fresh review only for a broad or high-risk exception. Public role metadata is authoritative and missing, conflicting, unavailable, or unobservable routing evidence fails closed. The optional control plane adds a loopback console, private scenario templates, typed bridge/web/API adapters, and per-provider switches without changing Sol's final authority.",
+    "shortDescription": "Keep Sol in charge while a local console maps scenarios to native, experimental built-in, or external providers.",
+    "longDescription": "Sol Advisor keeps GPT-5.6 Sol / High in the primary session for architecture, implementation when solo or audit is selected, verification, and acceptance. Before the first task tool call, Sol declares a machine-auditable SELECTIVE ROUTE: solo is the default; delegate uses native GPT-5.6 Luna / Max for bounded work or GPT-5.6 Terra / High for higher-risk work; audit uses a fresh read-only GPT-5.6 Sol / High review; full combines one selected implementer with a fresh review only for a broad or high-risk exception. Public role metadata is authoritative and missing, conflicting, unavailable, or unobservable routing evidence fails closed. The optional control plane adds a loopback console, private scenario templates, an experimental repository-owned read-only Grok Leader + ACP connector, external-MCP descriptors such as Cursor Bridge, web/API advisory lanes, and per-provider switches without changing Sol's final authority.",
     "developerName": "TohmaN233",
     "category": "Productivity",
-    "capabilities": ["Interactive", "Write"],
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
     "websiteURL": "https://github.com/TohmaN233/sol-subagent-control",
     "defaultPrompt": [
       "Use $sol-advisor:sol-control-plane; read metadata once, resolve one scenario, and verify every auxiliary claim.",

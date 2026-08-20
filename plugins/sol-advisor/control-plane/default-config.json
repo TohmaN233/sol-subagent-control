@@ -72,10 +72,10 @@
     },
     {
       "id": "cursor-bridge",
-      "name": "Cursor Bridge",
-      "kind": "mcp_tool",
+      "name": "External Cursor Bridge descriptor",
+      "kind": "external_mcp",
       "enabled": false,
-      "description": "Optional bounded Cursor Agent execution. Cursor model choice remains owned by the user's logged-in Cursor configuration.",
+      "description": "Requires a separately installed Cursor Bridge MCP plugin. This repository does not yet bundle a Cursor connection.",
       "requires_user_approval": true,
       "capabilities": {
         "read": true,
@@ -83,7 +83,7 @@
         "background": true
       },
       "config": {
-        "protocol": "cursor-bridge-v1",
+        "protocol": "external-cursor-bridge-v1",
         "model_label": "Cursor user-selected model",
         "tools": {
           "initialize": "cursor_init",
@@ -95,35 +95,30 @@
           "execution": "fifo",
           "background": true
         },
-        "notes": "Allowed paths are a scheduling and prompt boundary, not an operating-system sandbox. Preserve task_id and agent_id and verify the real diff in Sol."
+        "notes": "Availability is unverified until the external tools are observed. Allowed paths are not an operating-system sandbox."
       }
     },
     {
-      "id": "grok-build-supervisor",
-      "name": "Grok Build Supervisor",
-      "kind": "mcp_tool",
+      "id": "grok-local",
+      "name": "Experimental built-in Grok ACP connector",
+      "kind": "builtin_connector",
       "enabled": false,
-      "description": "Optional persistent Grok Build execution through the separate guarded Supervisor plugin.",
+      "description": "Repository-owned read-only Grok connection using a dedicated Leader and ACP over stdio. Desktop live smoke is still required.",
       "requires_user_approval": true,
       "capabilities": {
         "read": true,
-        "write": true,
+        "write": false,
         "background": true
       },
       "config": {
-        "protocol": "grok-build-supervisor-v1",
-        "model_label": "Grok Build",
-        "tools": {
-          "inspect": "grok_session_inspect",
-          "open": "grok_session_open",
-          "dispatch": "grok_session_prompt",
-          "respond": "grok_session_respond",
-          "control": "grok_session_control"
-        },
-        "defaults": {
-          "presentation": "windows_terminal"
-        },
-        "notes": "Use the Supervisor session/run identity and permission flow. Grok completion is a claim; Sol rechecks files, Git, and tests."
+        "connector": "grok_acp",
+        "binary_env": "GROK_BIN",
+        "transport": "leader_acp_stdio",
+        "environment_mode": "inherit",
+        "startup_timeout_ms": 15000,
+        "task_timeout_ms": 600000,
+        "max_result_chars": 131072,
+        "single_active_run": true
       }
     },
     {
@@ -253,6 +248,22 @@
         "read-only"
       ],
       "template": "ROLE\nAct as an external ChatGPT web Pro advisor. Review only the supplied packet. You have no ambient repository access and must not claim implementation.\n\nDECISION OR BLOCKER\n{{task}}\n\nPACKET CONTENT AND OBSERVED EVIDENCE\n{{context}}\n\nFIXED CONSTRAINTS\n{{constraints}}\n\nPRIOR ATTEMPTS OR REQUIRED DECISION TEST\n{{verification}}\n\nRETURN\n1. Blocking assumptions or contradictions\n2. Two plausible next routes and their failure modes\n3. Exact evidence missing from the packet\n4. Smallest next check that most changes the decision\n5. One-sentence recommendation with uncertainty\nDo not request broad repository access and do not turn the consultation into implementation."
+    },
+    {
+      "id": "grok-readonly-advice",
+      "name": "Experimental Grok read-only advice",
+      "enabled": false,
+      "description": "Use the built-in Grok ACP connector for one bounded read-only analysis. Requires explicit current-task approval.",
+      "route": "delegate",
+      "provider_id": "grok-local",
+      "read_only": true,
+      "requires_user_approval": true,
+      "tags": [
+        "grok",
+        "read-only",
+        "experimental"
+      ],
+      "template": "ROLE\nAct as a bounded read-only Grok subagent. Do not modify files or approve permissions on your own.\n\nOBJECTIVE\n{{task}}\n\nCONTEXT\n{{context}}\n\nCONSTRAINTS\n{{constraints}}\n\nVERIFICATION\n{{verification}}\n\nRETURN\nReturn observed evidence, uncertainties, the smallest next check, and a concise final recommendation. Do not claim that commands or file changes occurred unless they are directly evidenced.\n"
     }
   ]
 }

@@ -14,6 +14,9 @@ manifest=$plugin_dir/.codex-plugin/plugin.json
 mcp_manifest=$plugin_dir/.mcp.json
 config=$control/default-config.json
 server=$control/server.mjs
+grok_connector=$control/connectors/grok-acp.mjs
+connector_registry=$control/connectors/registry.mjs
+connector_store=$control/connectors/task-store.mjs
 skill=$plugin_dir/skills/control-plane/SKILL.md
 architecture=$plugin_dir/skills/control-plane/references/architecture.md
 contracts=$plugin_dir/skills/control-plane/references/provider-contracts.md
@@ -23,8 +26,10 @@ workflow=$repo_dir/.github/workflows/verify.yml
 for required in \
   "$manifest" "$mcp_manifest" "$config" "$server" "$skill" "$architecture" \
   "$contracts" "$ui" "$workflow" "$control/package.json" \
+  "$grok_connector" "$connector_registry" "$connector_store" \
   "$control/lib/config.mjs" "$control/lib/control.mjs" \
   "$control/lib/providers.mjs" "$control/lib/templates.mjs" \
+  "$grok_connector" "$connector_registry" "$connector_store" \
   "$control/web/index.html" "$control/web/app.js" "$control/web/styles.css"; do
   test -f "$required" || fail "required control-plane file missing: $required"
 done
@@ -92,11 +97,11 @@ for phrase in \
 done
 grep -Fq 'This is minimization, not a hostile-model secrecy sandbox' "$architecture" || fail "architecture overclaims template isolation"
 grep -Fq 'Cursor user-selected model' "$config" || fail "Cursor model-selection boundary missing"
-grep -Fq "Cursor's model is selected by the user's Cursor configuration" "$contracts" || fail "provider contracts invent Cursor per-call model selection"
+grep -Fq 'Cursor Bridge remains external in this release' "$contracts" || fail "provider contracts overstate the Cursor connection"
 pass "prompt minimization, provider boundaries, and hard-path gate documented"
 
 node --check "$server"
-for file in "$control"/lib/*.mjs "$control"/web/app.js; do
+for file in "$control"/lib/*.mjs "$control"/connectors/*.mjs "$control"/web/app.js; do
   node --check "$file"
 done
 node --test "$control"/test/*.test.mjs

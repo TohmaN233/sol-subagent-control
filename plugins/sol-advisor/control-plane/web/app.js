@@ -113,7 +113,7 @@ function providerCard(provider, index) {
   id.addEventListener('input', refreshProviderOptions);
   const name = textInput(provider.name, 'provider-name');
   name.addEventListener('input', () => { title.textContent = name.value || '(unnamed provider)'; });
-  const kind = selectInput(['native_agent', 'mcp_tool', 'web_review', 'openai_compatible'], provider.kind, 'provider-kind');
+  const kind = selectInput(['native_agent', 'builtin_connector', 'external_mcp', 'web_review', 'openai_compatible'], provider.kind, 'provider-kind');
   const enabled = checkbox(provider.enabled, 'provider-enabled');
   const approval = checkbox(provider.requires_user_approval, 'provider-approval');
   const read = checkbox(provider.capabilities?.read, 'provider-read');
