@@ -17,11 +17,13 @@ preflight, runtime-evidence, isolation, and maintainer procedures.
 
 ## Confirm the primary session
 
-Run the primary Codex session on gpt-5.6-sol with high reasoning. Verify the current
-model and effort when runtime metadata exposes them. If either differs, tell the user
-to select Sol / High and stop before delegation. If runtime metadata does not expose
-them, ask the user to confirm Sol / High and stop until confirmed. A skill cannot
-change the primary model itself; never assume or claim this prerequisite is satisfied.
+GPT-5.6 Sol is the default. GPT-5.6 Terra also qualifies. GPT-5.6 Luna never qualifies.
+The reasoning effort must be high, xhigh, or max. Verify the current model and effort
+when runtime metadata exposes them. If either violates this contract, tell the user to
+select a qualifying primary session and stop before delegation. If runtime metadata
+does not expose them, ask the user to confirm the qualifying model and effort and stop
+until confirmed. A skill cannot change the primary model itself; never assume or claim
+this prerequisite is satisfied.
 
 ## Declare the route before task tools
 
@@ -40,13 +42,13 @@ escalation. Details and the task-scoped preflight matrix are in operations.md.
 
 ## Preflight selected auxiliaries only
 
-Confirm Sol / High in the primary session. Preflight only an auxiliary selected by the
-declared route: none for solo; Luna / Max or Terra / High for delegate; fresh Sol / High
-for audit; and the selected implementer plus fresh Sol reviewer for full. Public metadata
-for role, model, and effort is authoritative. If it omits a model or effort, use the
-local inspector only for that omitted field. Missing, conflicting, unavailable, or
-unobservable evidence stops the affected lane; never silently substitute a role,
-model, effort, or reviewer.
+Confirm the qualifying primary-session contract. Preflight only an auxiliary selected
+by the declared route: none for solo; Luna / Max or Terra / High for delegate; fresh
+Sol / High for audit; and the selected implementer plus fresh Sol reviewer for full.
+Public metadata for role, model, and effort is authoritative. If it omits a model or
+effort, use the local inspector only for that omitted field. Missing, conflicting,
+unavailable, or unobservable evidence stops the affected lane; never silently
+substitute a role, model, effort, or reviewer.
 
 ## Route delivery without duplication
 

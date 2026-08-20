@@ -16,8 +16,11 @@ manifest=$plugin_dir/.codex-plugin/plugin.json
 skill=$plugin_dir/skills/orchestration/SKILL.md
 contracts=$plugin_dir/skills/orchestration/references/role-contracts.md
 operations=$plugin_dir/skills/orchestration/references/operations.md
+control_skill=$plugin_dir/skills/control-plane/SKILL.md
+architecture=$plugin_dir/skills/control-plane/references/architecture.md
 readme=$repo_dir/README.md
 ui=$plugin_dir/skills/orchestration/agents/openai.yaml
+control_ui=$plugin_dir/skills/control-plane/agents/openai.yaml
 retired_contract=$plugin_dir/skills/orchestration/references/luna-task-lane.md
 
 tmp_base=/tmp
@@ -156,11 +159,25 @@ V050_TERRA
   [ "$(shasum -a 256 "$target/$terra_file" | awk '{print $1}')" = "$legacy_terra_v050_sha256" ] || fail "v0.5.0 Terra fixture digest drifted"
 }
 
-for required in "$installer" "$runtime_inspector" "$manifest" "$skill" "$contracts" "$operations" "$readme" "$ui"; do
+for required in "$installer" "$runtime_inspector" "$manifest" "$skill" "$contracts" "$operations" "$control_skill" "$architecture" "$readme" "$ui" "$control_ui"; do
   test -f "$required" || fail "required file missing: $required"
 done
 test ! -e "$retired_contract" || fail "retired separate workflow contract remains: $retired_contract"
 pass "required files present and retired contract absent"
+
+for primary_contract in "$skill" "$contracts" "$operations" "$control_skill" "$architecture"; do
+  grep -Fq 'GPT-5.6 Sol is the default.' "$primary_contract" || fail "primary contract omits default Sol in $primary_contract"
+  grep -Fq 'GPT-5.6 Terra also qualifies.' "$primary_contract" || fail "primary contract omits eligible Terra in $primary_contract"
+  grep -Fq 'GPT-5.6 Luna never qualifies.' "$primary_contract" || fail "primary contract does not reject Luna in $primary_contract"
+  grep -Fq 'reasoning effort must be high, xhigh, or max.' "$primary_contract" || fail "primary contract has the wrong reasoning floor in $primary_contract"
+done
+grep -Fq 'Sol remains the default; Terra is also allowed, Luna is rejected' "$readme" || fail "README omits primary model policy"
+grep -Fq 'reasoning must be `high`, `xhigh`, or `max`' "$readme" || fail "README omits primary reasoning policy"
+grep -Fq 'defaults to GPT-5.6 Sol' "$manifest" || fail "manifest omits default Sol"
+grep -Fq 'permits GPT-5.6 Terra' "$manifest" || fail "manifest omits eligible Terra"
+grep -Fq 'rejects GPT-5.6 Luna' "$manifest" || fail "manifest does not reject Luna"
+grep -Fq 'requires high, xhigh, or max reasoning' "$manifest" || fail "manifest has the wrong reasoning floor"
+pass "default-Sol primary eligibility with Terra/high-plus support and Luna refusal"
 
 jq empty "$manifest"
 [ "$(jq -r '.version' "$manifest")" = 0.6.0 ] || fail "manifest version is not 0.6.0"
@@ -527,7 +544,10 @@ for path in paths:
 print("obsolete workflow references are absent")
 PY
 
-grep -Fq 'Sol / High runs the show' "$readme" || fail "README omits primary ownership"
+grep -Fq 'A qualifying primary agent runs the show' "$readme" || fail "README omits primary ownership"
+grep -Fq 'What this fork changes' "$readme" || fail "README omits fork delta"
+grep -Fq 'Upstream behavior retained' "$readme" || fail "README fork delta does not preserve upstream scope"
+grep -Fq 'This fork adds or changes' "$readme" || fail "README fork delta does not identify fork work"
 grep -Fq 'Luna / Max' "$readme" || fail "README omits Luna / Max delegate path"
 grep -Fq 'Terra / High' "$readme" || fail "README omits Terra delegate path"
 grep -Fq 'Auxiliary work substitutes' "$readme" || fail "README omits substitution rule"
@@ -536,7 +556,7 @@ grep -Fq 'https://attentionheads.substack.com/?utm_source=github&utm_medium=read
 grep -Fq 'https://attentionheads.substack.com/subscribe?utm_source=github&utm_medium=readme&utm_campaign=sol-advisor' "$readme" || fail "README changed Subscribe link"
 pass "README selective routing and preserved Go deeper links"
 
-for document in "$readme" "$manifest" "$skill" "$contracts" "$ui"; do
+for document in "$readme" "$manifest" "$skill" "$contracts" "$ui" "$control_skill" "$architecture" "$control_ui"; do
   if grep -Eqi 'Terra / High is the sole implementation producer|one role-pinned .*handles all implementation|route all implementation through.*Terra|delegate all implementation to (the )?(native )?Terra' "$document"; then
     fail "stale single-mode implementation claim remains in $document"
   fi

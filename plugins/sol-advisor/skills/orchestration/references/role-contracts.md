@@ -21,11 +21,13 @@ Solo is the default; one auxiliary is the default maximum. Full is an explicit b
 or high-risk exception. A later route declaration may only escalate after newly
 observed risk justifies it and supplies that evidence; never silently downgrade.
 
-Confirm Sol / High in the primary session, then preflight only auxiliaries selected by
-the route: none for solo; Luna / Max or Terra / High for delegate; fresh Sol / High
-for audit; and one selected implementer plus fresh Sol reviewer for full. Cache each
-successful check only for the task. After spawning, complete the selected role's
-routing and reviewer-isolation checks before accepting the result:
+GPT-5.6 Sol is the default. GPT-5.6 Terra also qualifies. GPT-5.6 Luna never qualifies.
+The reasoning effort must be high, xhigh, or max. Confirm that primary-session contract,
+then preflight only auxiliaries selected by the route: none for solo; Luna / Max or
+Terra / High for delegate; fresh Sol / High for audit; and one selected implementer
+plus fresh Sol reviewer for full. Cache each successful check only for the task. After
+spawning, complete the selected role's routing and reviewer-isolation checks before
+accepting the result:
 
 1. Require the selected exact native role and fresh-context spawn contract.
 2. Observe the selected role, model, and effort through public spawn/details metadata

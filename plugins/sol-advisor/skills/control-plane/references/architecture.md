@@ -2,14 +2,15 @@
 
 ## Design objective
 
-Keep Sol / High as the only task owner while letting the user decide, outside the
-model prompt, which auxiliary provider is mapped to each reusable scenario. The
-control plane is intentionally a policy and prompt compiler, not another autonomous
-orchestrator.
+Keep one qualifying primary agent as the only task owner while letting the user decide,
+outside the model prompt, which auxiliary provider is mapped to each reusable scenario.
+GPT-5.6 Sol is the default. GPT-5.6 Terra also qualifies. GPT-5.6 Luna never qualifies.
+The reasoning effort must be high, xhigh, or max. The control plane is intentionally a
+policy and prompt compiler, not another autonomous orchestrator.
 
 ## Four layers
 
-1. **Sol root session**
+1. **Qualifying root session**
    - owns requirements, architecture, route declaration, scope, verification, and
      acceptance;
    - sees sanitized scenario/provider metadata;

@@ -1,12 +1,23 @@
 # Sol Advisor — Configurable Subagent Control
 
-**Sol / High runs the show. It declares a risk-gated route before task tools, keeps
-solo as the default, and uses a single auxiliary only when that improves delivery.**
+**A qualifying primary agent runs the show. GPT-5.6 Sol is the default; GPT-5.6 Terra also qualifies, GPT-5.6 Luna does not, and reasoning must be high or above.**
 
-This fork preserves Sol Advisor's native Codex workflow and adds an optional local
-control plane. The user maps a reusable scenario to a provider in a web console;
-Sol sees only sanitized metadata until it selects that scenario, when only that one
-prompt template enters the task.
+This fork preserves Sol Advisor's native Codex workflow and adds an optional local control plane. The user maps a reusable scenario to a provider; the primary agent sees sanitized metadata first and receives only the selected prompt template.
+
+## What this fork changes
+
+The upstream four-route workflow, exact custom-agent roles, runtime evidence, and fail-closed verification remain intact. This fork adds or changes:
+
+| Area | Upstream behavior retained | This fork adds or changes |
+|---|---|---|
+| Primary owner | One root agent owns architecture, routing, verification, and acceptance. | Sol remains the default; Terra is also allowed, Luna is rejected, and reasoning must be `high`, `xhigh`, or `max`. |
+| Routing | `solo`, `delegate`, `audit`, and exceptional `full`; native Luna / Max, Terra / High, and fresh Sol / High roles remain pinned. | A user-owned scenario selects one provider without transferring final authority away from the root. |
+| Configuration | Native routing is instruction- and role-driven. | A token-protected `127.0.0.1` console manages provider/scenario switches, mappings, approval gates, and templates outside the plugin cache. |
+| Context | Native role prompts enter context when their route is selected. | Status exposes sanitized metadata only; resolution returns one selected compiled template rather than the whole prompt library. |
+| Providers | Codex-native custom agents. | Experimental built-in read-only Grok Leader + ACP, external MCP descriptors such as Cursor, packet-only ChatGPT web review, and text-only OpenAI-compatible advisory providers. External and paid paths remain opt-in. |
+| Safety and portability | Exact role pins and runtime evidence fail closed. | Provider capability checks, loopback authentication, revision-safe saves, secret-safe direct API rules, read-only connector postconditions, and Windows plus Linux verification. |
+
+Cursor is a descriptor for a separately installed Bridge, not a bundled connection. The built-in Grok connector is read-only and requires explicit enablement and current-task approval.
 
 ## Go deeper
 
@@ -14,9 +25,7 @@ The original author writes [**Attention Heads**](https://attentionheads.substack
 
 ## Quick start
 
-You need a current Codex CLI or ChatGPT desktop app with plugins enabled, GPT-5.6
-Sol / High for the primary session, native custom-agent support, Node.js 20+, and jq.
-Luna / Max or Terra / High access is needed only when the selected route delegates.
+You need a current Codex CLI or ChatGPT desktop app with plugins enabled, GPT-5.6 Sol (default) or Terra at high/xhigh/max reasoning, native custom-agent support, Node.js 20+, and jq. Luna never qualifies as the primary agent; Luna / Max or Terra / High access is needed only when the selected route delegates.
 
 ~~~sh
 codex plugin marketplace add TohmaN233/sol-subagent-control --ref main
@@ -27,17 +36,14 @@ plugin_dir="$(codex plugin list --json | jq -r '.installed[] | select(.pluginId 
 Start a fresh task so the native roles and control-plane tools are discovered. Use:
 
 ~~~text
-Use $sol-advisor:sol-control-plane. Keep Sol as the main agent, read sanitized control metadata once, declare one selective route, resolve only the selected scenario, and verify every auxiliary claim.
+Use $sol-advisor:sol-control-plane. Keep a qualifying primary agent in charge, read sanitized control metadata once, declare one selective route, resolve only the selected scenario, and verify every auxiliary claim.
 ~~~
 
 The original native-only workflow remains available as `$sol-advisor:orchestration`.
 
 ## User-owned console
 
-Ask Codex to open the Sol Subagent Control console. It opens a token-protected page on
-`127.0.0.1`; normal tool output does not reveal the token or prompt library. The page
-can enable or disable providers, map scenario → provider, edit preset templates, and
-create new scenarios. Configuration persists outside the plugin cache.
+Ask Codex to open the Sol Subagent Control console. Its token-protected `127.0.0.1` page manages providers, scenario mappings, templates, and switches without exposing the token or prompt library in normal tool output. Configuration persists outside the plugin cache.
 
 Native Luna, Terra, and fresh Sol review are enabled by default. The repository now
 bundles an **experimental, read-only Grok Leader + ACP connector**, disabled until the
@@ -52,8 +58,9 @@ The root continues to check the real Git state, tests, and artifacts.
 
 ## What you do
 
-Give Sol the outcome, constraints, and important repository context. You do not need to select or manage a lane; the console stores your reusable mapping while Sol records
-the chosen route and owns verification and acceptance.
+Give the primary agent the outcome, constraints, and important repository context. You
+do not need to select or manage a lane; the console stores your reusable mapping while
+the primary agent records the chosen route and owns verification and acceptance.
 
 ## Routes
 
@@ -64,17 +71,16 @@ the chosen route and owns verification and acceptance.
 | `audit` | Independent final scrutiny matters more than delegation. | Root implements; the mapped read-only reviewer audits. |
 | `full` | Explicit broad or high-risk exception. | One implementation stage, root verification, then one fresh review stage. |
 
-Solo is the default. One auxiliary is the default maximum; `full` is the explicit
-exception. Sol emits a `SELECTIVE ROUTE` declaration before the first task tool call.
-It can escalate only when newly observed risk justifies it and never silently downgrades
-or remaps the provider.
+Solo is the default. One auxiliary is the default maximum; `full` is the explicit exception.
+The primary agent emits a `SELECTIVE ROUTE` declaration before the first task tool call. It can escalate only when newly observed risk justifies it and never silently downgrades or remaps the provider.
 
 ## What happens automatically
 
-Sol / High keeps architecture, decomposition, route selection, parent verification,
-escalation decisions, and acceptance in the primary task. Auxiliary work substitutes
-for root work; it does not duplicate it. Only the selected template is compiled. When
-the route includes review, any correction invalidates the old verdict.
+The qualifying primary agent keeps architecture, decomposition, route selection,
+parent verification, escalation decisions, and acceptance in the primary task.
+Auxiliary work substitutes for root work; it does not duplicate it. Only the selected
+template is compiled. When the route includes review, any correction invalidates the
+old verdict.
 
 ## Updating
 

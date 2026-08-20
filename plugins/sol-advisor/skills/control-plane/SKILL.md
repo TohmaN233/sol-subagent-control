@@ -1,14 +1,14 @@
 ---
 name: sol-control-plane
-description: "Keep Sol / High as the primary architect while selecting one user-owned scenario/provider mapping. Native roles remain the default; the experimental built-in read-only Grok ACP connector and optional external providers fail closed and are never auto-enabled."
+description: "Keep one qualifying primary architect in charge while selecting one user-owned scenario/provider mapping. Native roles remain the default; the experimental built-in read-only Grok ACP connector and optional external providers fail closed and are never auto-enabled."
 ---
 
 # Sol Subagent Control Plane
 
 Act as the primary architect. Keep requirements, architecture, route selection, scope,
-verification, escalation, and final acceptance in the Sol / High root session. The
-control plane changes how one auxiliary is selected; it does not transfer ownership of
-the task.
+verification, escalation, and final acceptance in the qualifying root session. The
+control plane changes how one auxiliary is selected; it does not transfer ownership
+of the task.
 
 Read [references/architecture.md](references/architecture.md) for the trust boundary and
 [references/provider-contracts.md](references/provider-contracts.md) before executing a
@@ -16,10 +16,12 @@ non-native provider.
 
 ## Confirm the primary session
 
-Use GPT-5.6 Sol with high reasoning in the primary session. If runtime metadata exposes
-the current model and effort, verify them. If it proves a mismatch, stop the controlled
-route. If the host does not expose either field, do not invent evidence; ask for Sol /
-High only when the task actually needs an auxiliary.
+GPT-5.6 Sol is the default. GPT-5.6 Terra also qualifies. GPT-5.6 Luna never qualifies.
+The reasoning effort must be high, xhigh, or max. If runtime metadata exposes the
+current model and effort, verify them. If either violates this contract, stop the
+controlled route. If the host does not expose either field, do not invent evidence;
+ask the user to confirm the qualifying model and effort only when the task actually
+needs an auxiliary.
 
 ## Read metadata, not the prompt library
 
