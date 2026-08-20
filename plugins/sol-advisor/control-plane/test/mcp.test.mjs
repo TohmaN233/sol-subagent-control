@@ -58,12 +58,7 @@ test('stdio MCP lists control tools and returns sanitized status', async (t) => 
 
   const listed = await client.request({ jsonrpc: '2.0', id: 3, method: 'tools/list', params: {} });
   const names = listed.result.tools.map((tool) => tool.name);
-  assert.deepEqual(names, [
-    'sol_control_status',
-    'sol_control_console',
-    'sol_control_resolve',
-    'sol_control_invoke',
-  ]);
+  assert.deepEqual(names, ['sol_control_status', 'sol_control_console', 'sol_control_resolve', 'sol_connector_probe', 'sol_connector_start', 'sol_connector_status', 'sol_connector_control', 'sol_control_invoke']);
 
   const statusResponse = await client.request({
     jsonrpc: '2.0',
@@ -76,4 +71,14 @@ test('stdio MCP lists control tools and returns sanitized status', async (t) => 
   assert.ok(status.scenarios.some((scenario) => scenario.id === 'bounded-code-change'));
   assert.doesNotMatch(statusResponse.result.content[0].text, /CONSTRAINTS AND OWNERSHIP/);
   assert.doesNotMatch(statusResponse.result.content[0].text, /example\.invalid/);
+
+  const connectorError = await client.request({
+    jsonrpc: '2.0', id: 5, method: 'tools/call', params: {
+      name: 'sol_connector_status', arguments: { task_id: 'missing-task' },
+    },
+  });
+  assert.equal(connectorError.result.isError, true);
+  const errorPayload = JSON.parse(connectorError.result.content[0].text);
+  assert.equal(errorPayload.code, 'TASK_NOT_FOUND');
+  assert.match(errorPayload.error, /Unknown connector task/);
 });

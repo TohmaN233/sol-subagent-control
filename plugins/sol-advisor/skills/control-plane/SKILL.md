@@ -1,6 +1,6 @@
 ---
 name: sol-control-plane
-description: "Keep Sol / High as the primary architect while selecting an enabled user-owned scenario/provider mapping from the local Sol Subagent Control console. Native Luna, Terra, and fresh Sol remain the default; optional Cursor, Grok, ChatGPT web Pro, and OpenAI-compatible providers fail closed and are never auto-enabled."
+description: "Keep Sol / High as the primary architect while selecting one user-owned scenario/provider mapping. Native roles remain the default; the experimental built-in read-only Grok ACP connector and optional external providers fail closed and are never auto-enabled."
 ---
 
 # Sol Subagent Control Plane
@@ -98,24 +98,29 @@ higher-risk, or wider-blast-radius bounded work. A fresh Sol reviewer remains
 behaviorally read-only and never fixes its own findings. The root inspects the complete
 diff and reruns verification.
 
-### Host MCP bridge
+### Built-in connector
 
-Call only the exact operations returned in `adapter.tools` and follow the named
-protocol in [provider contracts](references/provider-contracts.md). Do not describe a
-Cursor or Grok session as a native Codex subagent.
+When the adapter says `execution: builtin_connector`, do not expose or manually resend
+the compiled prompt. Call `sol_connector_start` once with the exact scenario, absolute
+Git workspace, minimum context, and current-task approval. Preserve the returned
+`task_id` plus Grok `session_id` and `run_id`; read state only through
+`sol_connector_status`.
 
-For Cursor Bridge, preserve its `task_id` and any `agent_id`, use the bounded path and
-read-only fields, collect through status/control instead of the visible chat, and treat
-allowed paths as a scheduling/prompt boundary rather than an operating-system sandbox.
+The bundled Grok connector is experimental and read-only. It starts a dedicated Leader,
+connects over ACP stdio, surfaces every permission or form input request, and never
+selects an option automatically. Answer only the exact returned request and option
+through `sol_connector_control`. Timeout is `needs_attention`, not completion or a
+reason to resubmit. After restart, a nonterminal task is `unknown_after_restart` and
+must not be silently replaced. Treat `scope_violation` as a failed lane even if Grok
+returned a plausible answer.
 
-For Grok Build Supervisor, preserve session/run identity, keep the current host turn
-alive through its bounded interaction waits, surface permission or elicitation choices
-when owner authority is needed, and never use approve-everything modes. Grok completion
-is an agent claim; the root rechecks files, Git, tests, and artifacts.
+### External MCP descriptor
 
-If a configured MCP tool is unavailable, administrator-disabled, or returns ambiguous
-identity, do not bypass it through shell typing, another bridge, or automatic
-resubmission.
+When the adapter says `execution: external_mcp`, availability is unverified and the
+connection is outside this repository. Call only exact observed host tools. Cursor
+Bridge remains in this category in the current release; do not describe it as bundled
+or connected. If an external tool is unavailable or identity is ambiguous, fail the
+lane without shell typing, adjacent-tool substitution, or automatic resubmission.
 
 ### ChatGPT web review
 

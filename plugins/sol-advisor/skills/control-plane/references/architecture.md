@@ -19,11 +19,11 @@ orchestrator.
      caches;
    - exposes a token-protected loopback console bound to `127.0.0.1`;
    - is the only supported writer for provider/scenario configuration.
-3. **Provider adapters**
-   - native Codex role, host MCP bridge, packet-only web review, or direct
-     OpenAI-compatible advisory API;
+3. **Provider adapters and connectors**
+   - native Codex role, repository-owned connector, external-MCP descriptor,
+     packet-only web review, or direct OpenAI-compatible advisory API;
    - return typed execution contracts rather than pretending every provider is a
-     native subagent.
+     native subagent or that an external descriptor is connected.
 4. **Evidence and acceptance**
    - auxiliary output is a claim;
    - Sol inspects files, task identity, diffs, tests, and artifacts before acceptance.
@@ -85,18 +85,22 @@ The effective route is enabled only when all relevant layers allow it:
 Every failure is closed. The server never changes mappings, silently substitutes a
 provider, stores an API key, downgrades a route, or invokes an adjacent tool.
 
-## Why bridges stay external
+## Built-in connector boundary
 
-Cursor Bridge and Grok Build Supervisor already own identity, queueing, session
-continuity, cancellation, permissions, and recovery. Reimplementing them inside Sol
-Subagent Control would erase those safety contracts and make failures ambiguous.
-Instead, the selected adapter returns the exact host tool operations and protocol name;
-Sol calls the installed bridge and retains final verification.
+The repository now owns one deliberately small connection layer: an experimental,
+read-only Grok connector using a dedicated Grok Leader and ACP over stdio. It keeps the
+reliability mechanisms that affect truthfulness—exact task/session/run identity,
+permission and input gates, bounded waits, cancellation, restart ambiguity, and a Git
+read-only postcondition—without copying the reference Supervisor daemon, TUI, writer
+leases, proxy discovery, cross-host continuity, or large event journal.
 
-The same principle applies to ChatGPT web Pro: the packet-first review skill remains
-the browser transport and capture authority. Sol Subagent Control decides when that
-lane is eligible and compiles the selected review prompt; it does not duplicate browser
-automation.
+Cursor remains an `external_mcp` descriptor in this release. Its configuration does
+not prove the external Bridge is installed or compatible. A later built-in Cursor slice
+must own CDP transport, one pinned UI profile, exact Agent identity, terminal evidence,
+and cancellation before documentation may call it connected.
+
+ChatGPT web Pro remains packet-first because the browser transport and capture boundary
+is materially different from a local coding-agent protocol.
 
 ## Direct custom models
 

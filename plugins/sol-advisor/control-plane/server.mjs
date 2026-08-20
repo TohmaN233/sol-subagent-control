@@ -15,12 +15,20 @@ import {
   saveConfig,
   validateConfig,
 } from './lib/config.mjs';
-import { getControlStatus, invokeSelection, resolveSelection } from './lib/control.mjs';
+import {
+  controlConnectorTask,
+  getConnectorTask,
+  getControlStatus,
+  invokeSelection,
+  probeConnector,
+  resolveSelection,
+  startConnectorSelection,
+} from './lib/control.mjs';
 
 const CONTROL_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = join(CONTROL_DIR, 'default-config.json');
 const WEB_DIR = join(CONTROL_DIR, 'web');
-const SERVER_VERSION = '0.1.0';
+const SERVER_VERSION = '0.2.0';
 const MAX_HTTP_BODY = 512 * 1024;
 
 let consoleState = null;
@@ -30,6 +38,16 @@ function textToolResult(value, isError = false) {
   return {
     content: [{ type: 'text', text }],
     ...(isError ? { isError: true } : {}),
+  };
+}
+
+function errorToolPayload(error) {
+  return {
+    error: error instanceof Error ? error.message : String(error),
+    ...(typeof error?.code === 'string' ? { code: error.code } : {}),
+    ...(error?.retryable === true ? { retryable: true } : {}),
+    ...(error?.actionRequired ? { action_required: error.actionRequired } : {}),
+    ...(error?.details && typeof error.details === 'object' ? { details: error.details } : {}),
   };
 }
 
@@ -262,6 +280,67 @@ export function buildToolDefinitions() {
       },
     },
     {
+      name: 'sol_connector_probe',
+      description: 'Probe one enabled built-in connector without sending a task. A successful probe means the local binary/configuration is available; it does not claim a live model session.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          provider_id: { type: 'string' },
+          workspace: { type: 'string', description: 'Optional absolute workspace path to validate.' },
+        },
+        required: ['provider_id'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'sol_connector_start',
+      description: 'Compile and internally deliver exactly one selected scenario to its enabled built-in connector. The experimental Grok connector is read-only and requires an absolute Git workspace plus current-task approval when configured.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          ...sharedResolveProperties,
+          workspace: { type: 'string', description: 'Absolute existing Git workspace.' },
+        },
+        required: ['scenario_id', 'task', 'workspace'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'sol_connector_status',
+      description: 'Read one exact connector task by task_id, optionally waiting up to 25 seconds for a state change. Never infer identity from the visible UI or latest session.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'string' },
+          wait_ms: { type: 'integer', minimum: 0, maximum: 25000, default: 0 },
+        },
+        required: ['task_id'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'sol_connector_control',
+      description: 'Control one exact connector task. Permission/input responses require the returned request identity; cancel requires the exact returned session_id and run_id; abandon is explicitly risk-acknowledged.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'string' },
+          action: { type: 'string', enum: ['respond_permission', 'respond_input', 'cancel', 'disconnect', 'abandon'] },
+          request_id: { type: 'string' },
+          decision: { type: 'string', enum: ['select', 'accept', 'decline', 'cancel'] },
+          option_id: { type: 'string' },
+          content: { type: 'object' },
+          expected_session_id: { type: 'string' },
+          expected_run_id: { type: 'string' },
+          confirm: { type: 'boolean', default: false },
+          acknowledge_may_still_run: { type: 'boolean', default: false },
+          reason: { type: 'string' },
+        },
+        required: ['task_id', 'action'],
+        additionalProperties: false,
+      },
+    },
+    {
       name: 'sol_control_invoke',
       description: 'Resolve and directly call one enabled OpenAI-compatible advisory provider. Direct API invocation must be enabled in the console, credentials must exist only in the configured environment variable, the scenario must be read-only, and approval gates still apply. This tool never grants file or host tools to the external model.',
       inputSchema: {
@@ -348,6 +427,22 @@ export async function handleRpc(request, {
         });
         return { jsonrpc: '2.0', id, result: textToolResult(result) };
       }
+      if (name === 'sol_connector_probe') {
+        const result = await probeConnector(args, { configPath, defaultConfigPath, env });
+        return { jsonrpc: '2.0', id, result: textToolResult(result) };
+      }
+      if (name === 'sol_connector_start') {
+        const result = await startConnectorSelection(args, { configPath, defaultConfigPath, env });
+        return { jsonrpc: '2.0', id, result: textToolResult(result) };
+      }
+      if (name === 'sol_connector_status') {
+        const result = await getConnectorTask(args, { configPath, env });
+        return { jsonrpc: '2.0', id, result: textToolResult(result) };
+      }
+      if (name === 'sol_connector_control') {
+        const result = await controlConnectorTask(args, { configPath, env });
+        return { jsonrpc: '2.0', id, result: textToolResult(result) };
+      }
       if (name === 'sol_control_invoke') {
         const result = await invokeSelection(args, {
           configPath,
@@ -359,7 +454,7 @@ export async function handleRpc(request, {
       }
       throw new Error(`unknown tool: ${name}`);
     } catch (error) {
-      return { jsonrpc: '2.0', id, result: textToolResult(`Sol control-plane error: ${error.message}`, true) };
+      return { jsonrpc: '2.0', id, result: textToolResult(errorToolPayload(error), true) };
     }
   }
   if (id === undefined || id === null) return null;

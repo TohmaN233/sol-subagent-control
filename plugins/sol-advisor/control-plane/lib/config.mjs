@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 export const CONFIG_VERSION = 1;
-export const PROVIDER_KINDS = new Set(['native_agent', 'mcp_tool', 'web_review', 'openai_compatible']);
+export const PROVIDER_KINDS = new Set(['native_agent', 'builtin_connector', 'external_mcp', 'mcp_tool', 'web_review', 'openai_compatible']);
 export const ROUTES = new Set(['solo', 'delegate', 'audit', 'full']);
 export const ALLOWED_TEMPLATE_FIELDS = new Set([
   'task', 'context', 'constraints', 'verification', 'scenario_id', 'provider_name',
@@ -113,8 +113,8 @@ function capabilities(raw, kind) {
   const value = object(raw) ? raw : {};
   return {
     read: bool(value.read, true),
-    write: bool(value.write, kind === 'native_agent' || kind === 'mcp_tool'),
-    background: bool(value.background, kind === 'mcp_tool'),
+    write: bool(value.write, kind === 'native_agent' || kind === 'external_mcp' || kind === 'mcp_tool'),
+    background: bool(value.background, kind === 'builtin_connector' || kind === 'external_mcp' || kind === 'mcp_tool'),
   };
 }
 
@@ -130,6 +130,33 @@ function validateNative(raw) {
     role,
     fresh_context: bool(raw.fresh_context, true),
     requested_sandbox: text(raw.requested_sandbox, 'provider.config.requested_sandbox', { max: 64 }),
+  };
+}
+
+function validateBuiltinConnector(raw) {
+  assert(object(raw), 'built-in connector config must be an object');
+  const connector = text(raw.connector, 'provider.config.connector', { required: true, max: 64 });
+  assert(connector === 'grok_acp', 'provider.config.connector must be grok_acp in this release');
+  const binaryEnv = text(raw.binary_env ?? 'GROK_BIN',
+    'provider.config.binary_env', { required: true, max: 128 });
+  assert(ENV_RE.test(binaryEnv),
+    'provider.config.binary_env must name an uppercase environment variable');
+  const transport = text(raw.transport ?? 'leader_acp_stdio',
+    'provider.config.transport', { required: true, max: 64 });
+  assert(transport === 'leader_acp_stdio',
+    'provider.config.transport must be leader_acp_stdio');
+  return {
+    connector,
+    binary_env: binaryEnv,
+    transport,
+    environment_mode: 'inherit',
+    startup_timeout_ms: integer(raw.startup_timeout_ms, 15_000, 1_000, 120_000,
+      'provider.config.startup_timeout_ms'),
+    task_timeout_ms: integer(raw.task_timeout_ms, 600_000, 1_000, 900_000,
+      'provider.config.task_timeout_ms'),
+    max_result_chars: integer(raw.max_result_chars, 131_072, 1_024, 524_288,
+      'provider.config.max_result_chars'),
+    single_active_run: true,
   };
 }
 
@@ -216,18 +243,21 @@ function validateProvider(raw, index) {
   assert(PROVIDER_KINDS.has(kind), `providers[${index}].kind is unsupported`);
   const validators = {
     native_agent: validateNative,
+    builtin_connector: validateBuiltinConnector,
+    external_mcp: validateMcp,
     mcp_tool: validateMcp,
     web_review: validateWeb,
     openai_compatible: validateOpenAI,
   };
+  const normalizedKind = kind === 'mcp_tool' ? 'external_mcp' : kind;
   return {
     id: id(raw.id, `providers[${index}].id`),
     name: text(raw.name, `providers[${index}].name`, { required: true, max: 128 }),
-    kind,
+    kind: normalizedKind,
     enabled: bool(raw.enabled, false),
     description: text(raw.description, `providers[${index}].description`, { max: 4000 }),
     requires_user_approval: bool(raw.requires_user_approval, kind !== 'native_agent'),
-    capabilities: capabilities(raw.capabilities, kind),
+    capabilities: capabilities(raw.capabilities, normalizedKind),
     config: validators[kind](raw.config),
   };
 }
@@ -369,7 +399,10 @@ export async function saveConfig(config, { configPath, expectedRevision = '' } =
 function modelLabel(provider) {
   if (provider.kind === 'native_agent') return provider.config.model;
   if (provider.kind === 'openai_compatible') return provider.config.model;
-  return provider.config.model_label;
+  if (provider.kind === 'builtin_connector' && provider.config.connector === 'grok_acp') {
+    return 'Grok Build via ACP (user installation)';
+  }
+  return provider.config.model_label || null;
 }
 
 export function sanitizeConfig(config, { env = process.env } = {}) {
@@ -435,6 +468,11 @@ export async function appendAuditEvent(configPath, event) {
     provider_id: event.provider_id ? id(event.provider_id, 'audit.provider_id') : null,
     outcome: text(event.outcome ?? 'ok', 'audit.outcome', { required: true, max: 64 }),
     detail: text(event.detail, 'audit.detail', { max: 1000 }),
+    task_id: event.task_id ? id(event.task_id, 'audit.task_id') : null,
+    action: text(event.action, 'audit.action', { max: 64 }),
+    connector: text(event.connector, 'audit.connector', { max: 64 }),
+    state: text(event.state, 'audit.state', { max: 64 }),
+    error_code: text(event.error_code, 'audit.error_code', { max: 128 }),
   };
   const auditPath = resolveAuditPath(configPath);
   await mkdir(dirname(auditPath), { recursive: true, mode: 0o700 });
