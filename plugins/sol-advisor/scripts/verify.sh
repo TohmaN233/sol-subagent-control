@@ -355,7 +355,10 @@ pass "modified current-role refusal with zero partial mutation"
 
 unsafe=$tmp_dir/unsafe
 mkdir "$unsafe"
-ln -s "$templates/$luna_file" "$unsafe/$luna_file"
+# Git for Windows otherwise copies the target instead of creating a link. The
+# MSYS setting is ignored by Unix ln and keeps the same assertion on Linux.
+MSYS=winsymlinks:sys ln -s "$templates/$luna_file" "$unsafe/$luna_file"
+[ -L "$unsafe/$luna_file" ] || fail "could not create symlink safety fixture"
 before=$(snapshot_files "$unsafe")
 if sh "$installer" --target-dir "$unsafe"; then fail "installer accepted symlinked Luna"; fi
 after=$(snapshot_files "$unsafe")

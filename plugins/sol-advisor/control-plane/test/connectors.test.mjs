@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { execFile, spawn } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,9 +26,6 @@ async function fixture() {
   await writeFile(join(workspace, 'tracked.txt'), 'baseline\n');
   await execFileAsync('git', ['-C', workspace, 'add', 'tracked.txt']);
   await execFileAsync('git', ['-C', workspace, 'commit', '-qm', 'fixture']);
-  const fake = join(root, 'fake-grok');
-  await writeFile(fake, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(fakeSource)} "$@"\n`);
-  await chmod(fake, 0o755);
   const configPath = join(root, 'control-plane.json');
   const config = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
   const provider = config.providers.find((item) => item.id === 'grok-local');
@@ -37,10 +34,14 @@ async function fixture() {
   const scenario = config.scenarios.find((item) => item.id === 'grok-readonly-advice');
   scenario.enabled = true;
   await saveConfig(config, { configPath });
-  const env = { ...process.env, GROK_BIN: fake };
-  const registry = new ConnectorRegistry({ configPath, env });
+  const env = { ...process.env, GROK_BIN: fakeSource };
+  const spawnImpl = (command, args, options) => {
+    assert.equal(command, fakeSource);
+    return spawn(process.execPath, [fakeSource, ...args], options);
+  };
+  const registry = new ConnectorRegistry({ configPath, env, spawnImpl });
   await registry.initialize();
-  return { root, workspace, fake, configPath, env, registry };
+  return { root, workspace, configPath, env, registry };
 }
 
 async function start(fx, task) {
