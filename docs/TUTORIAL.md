@@ -28,6 +28,36 @@ A subagent can be called only when all of the following are true:
 
 Enabling a Provider by itself does not trigger a call, incur a charge, or start anything in the background. The primary agent cannot swap Providers on the fly or silently fall back after a failure.
 
+## Install and validate the native roles
+
+The native Luna, Terra, and Sol role files are installed by one cross-platform Node
+entry. PowerShell does not need Git Bash, WSL, `sh`, `jq`, `find`, or `grep`:
+
+```powershell
+$plugin = (codex plugin list --json | ConvertFrom-Json).installed |
+  Where-Object pluginId -eq 'sol-advisor@sol-advisor'
+if (-not $plugin) { throw 'sol-advisor is not installed' }
+$installer = Join-Path $plugin.source.path 'scripts\install-agents.mjs'
+if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'native role installer is missing' }
+node $installer
+node $installer --check
+```
+
+Linux and macOS use the same Node entry. The shipped `.sh` file is only a compatibility
+wrapper:
+
+```sh
+plugin_dir="$(codex plugin list --json | jq -r '.installed[] | select(.pluginId == "sol-advisor@sol-advisor") | .source.path')"
+test -n "$plugin_dir" && test "$plugin_dir" != null || { echo 'sol-advisor is not installed' >&2; exit 1; }
+node "$plugin_dir/scripts/install-agents.mjs"
+node "$plugin_dir/scripts/install-agents.mjs" --check
+```
+
+If the optional checker or runtime inspector cannot be found or executed, the skill
+reports `ROLE VALIDATION UNAVAILABLE`, identifies the unverified evidence, and continues
+the task. It does not pretend the check passed. An executed check that returns an
+explicit role, model, or effort mismatch still stops that native lane.
+
 ## Open the real configuration console with one command
 
 The following scripts use the real user configuration:

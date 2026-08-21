@@ -29,6 +29,8 @@ jobs:
           node --check plugins/sol-advisor/control-plane/test/fixtures/fake-grok.mjs
       - name: Run process and protocol connector tests
         run: node plugins/sol-advisor/control-plane/test/run-tests.mjs
+      - name: Verify cross-platform native role tools
+        run: node --test plugins/sol-advisor/scripts/test/native-role-tools.test.mjs
 
   full-verify:
     name: full-repository-verify

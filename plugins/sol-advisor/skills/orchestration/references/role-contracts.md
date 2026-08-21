@@ -37,9 +37,11 @@ accepting the result:
    delegate/full implementation, and Sol / High for audit/full review.
 3. For the reviewer, capture actual sandbox policy and permission profile types.
 
-A missing, stale, unsafe, conflicting, unavailable, inconsistent, or unobservable
-role/model/effort stops the native lane. Never silently fall back. Model and effort
-are pinned by custom-agent TOML, so omit native per-spawn overrides.
+If the cross-platform role checker or runtime inspector is missing or cannot execute,
+emit `ROLE VALIDATION UNAVAILABLE`, identify the unverified fields, and continue the
+task without claiming they were verified. An explicit stale, unsafe, conflicting, or
+inconsistent role/model/effort result stops the native lane. Never silently fall back.
+Model and effort are pinned by custom-agent TOML, so omit native per-spawn overrides.
 
 ## Shared implementation contract
 

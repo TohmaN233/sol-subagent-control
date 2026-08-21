@@ -20,6 +20,9 @@ plugin_dir=$(CDPATH= cd "$script_dir/.." && pwd) || exit 1
 repo_dir=$(CDPATH= cd "$plugin_dir/../.." && pwd) || exit 1
 installer=$script_dir/install-agents.sh
 runtime_inspector=$script_dir/inspect-agent-runtime.sh
+node_installer=$script_dir/install-agents.mjs
+node_runtime_inspector=$script_dir/inspect-agent-runtime.mjs
+native_tools_test=$script_dir/test/native-role-tools.test.mjs
 templates=$plugin_dir/agents
 manifest=$plugin_dir/.codex-plugin/plugin.json
 skill=$plugin_dir/skills/orchestration/SKILL.md
@@ -168,7 +171,7 @@ V050_TERRA
   [ "$(hash_digest "$target/$terra_file")" = "$legacy_terra_v050_sha256" ] || fail "v0.5.0 Terra fixture digest drifted"
 }
 
-for required in "$installer" "$runtime_inspector" "$manifest" "$skill" "$contracts" "$operations" "$control_skill" "$architecture" "$readme" "$ui" "$control_ui"; do
+for required in "$installer" "$runtime_inspector" "$node_installer" "$node_runtime_inspector" "$native_tools_test" "$manifest" "$skill" "$contracts" "$operations" "$control_skill" "$architecture" "$readme" "$ui" "$control_ui"; do
   test -f "$required" || fail "required file missing: $required"
 done
 test ! -e "$retired_contract" || fail "retired separate workflow contract remains: $retired_contract"
@@ -189,13 +192,13 @@ grep -Fq 'requires high, xhigh, or max reasoning' "$manifest" || fail "manifest 
 pass "default-Sol primary eligibility with Terra/high-plus support and Luna refusal"
 
 jq empty "$manifest"
-[ "$(jq -r '.version' "$manifest")" = 0.7.5 ] || fail "manifest version is not 0.7.5"
+[ "$(jq -r '.version' "$manifest")" = 0.7.6 ] || fail "manifest version is not 0.7.6"
 grep -Fq 'SELECTIVE ROUTE' "$manifest" || fail "manifest omits route declaration"
 grep -Fq 'delegate is the default' "$manifest" || fail "manifest omits delegate default"
 grep -Fq 'Route is derived from those Stages rather than configured independently' "$manifest" || fail "manifest omits derived-route contract"
 grep -Fq 'full combines implementation then review for difficult' "$manifest" || fail "manifest omits difficult full contract"
 grep -Fq 'fails closed' "$manifest" || fail "manifest omits fail-closed evidence rule"
-pass "manifest JSON, v0.7.5 release, and selective-routing language"
+pass "manifest JSON, v0.7.6 release, and selective-routing language"
 
 python3 - "$templates" <<'PY'
 from pathlib import Path
@@ -424,8 +427,9 @@ for document in "$contracts" "$operations"; do
   if grep -Eq '^[[:space:]]*(model|reasoning_effort):' "$document"; then fail "per-spawn override remains in $document"; fi
 done
 grep -Fq 'references/operations.md' "$skill" || fail "skill does not link operations reference"
-grep -Fq '../../scripts/install-agents.sh' "$operations" || fail "operations does not resolve installer relatively"
-grep -Fq '../../scripts/inspect-agent-runtime.sh' "$operations" || fail "operations does not resolve inspector relatively"
+grep -Fq '../../scripts/install-agents.mjs' "$operations" || fail "operations does not resolve installer relatively"
+grep -Fq '../../scripts/inspect-agent-runtime.mjs' "$operations" || fail "operations does not resolve inspector relatively"
+grep -Fq 'ROLE VALIDATION UNAVAILABLE' "$skill" || fail "skill omits non-blocking unavailable-validation marker"
 grep -Fq 'SELECTIVE ROUTE' "$skill" || fail "skill omits route declaration"
 grep -Fq 'mode: solo | delegate | audit | full' "$skill" || fail "skill omits exact route modes"
 grep -Fq 'No task tool call may precede this declaration' "$skill" || fail "skill permits tool-before-route"
@@ -466,7 +470,7 @@ for phrase in \
   'only to escalate when' \
   'local inspector' \
   'sandbox_mode = read-only' \
-  'install-agents.sh --check'; do
+  'install-agents.mjs --check'; do
   grep -Fqi "$phrase" "$operations" || fail "operations reference omits: $phrase"
 done
 pass "operations reference preserves selective native operational detail"
@@ -475,7 +479,7 @@ readme_lines=$(wc -l < "$readme" | tr -d ' ')
 [ "$readme_lines" -le 110 ] || fail "README remains maintainer-sized ($readme_lines lines)"
 grep -Fq 'codex plugin marketplace add' "$readme" || fail "README omits marketplace quick start"
 grep -Fq 'codex plugin add' "$readme" || fail "README omits plugin quick start"
-grep -Fq 'scripts/install-agents.sh' "$readme" || fail "README omits companion install"
+grep -Fq 'scripts/install-agents.mjs' "$readme" || fail "README omits companion install"
 if grep -Eq 'agent_type:|fork_turns:|inspect-agent-runtime|sandbox_policy|sandbox_mode' "$readme"; then
   fail "README exposes maintainer routing/runtime machinery"
 fi
@@ -499,7 +503,7 @@ from pathlib import Path
 import sys
 
 lines = [line.strip() for line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()]
-install_lines = [line for line in lines if line.startswith("plugin_dir=\"") and "scripts/install-agents.sh" in line]
+install_lines = [line for line in lines if line.startswith("plugin_dir=\"") and "scripts/install-agents.mjs" in line]
 if len(install_lines) != 2:
     raise SystemExit(f"expected two guarded companion install examples, found {len(install_lines)}")
 for line in install_lines:
@@ -507,11 +511,11 @@ for line in install_lines:
         'test -n "$plugin_dir"',
         'test "$plugin_dir" != null',
         'test -d "$plugin_dir"',
-        'test -f "$plugin_dir/scripts/install-agents.sh"',
+        'test -f "$plugin_dir/scripts/install-agents.mjs"',
     ]
     if any(check not in line for check in required):
         raise SystemExit(f"unguarded companion install example: {line}")
-    if line.index("sh \"") < line.index(required[-1]):
+    if line.index("node \"") < line.index(required[-1]):
         raise SystemExit(f"installer executes before directory/file guards: {line}")
 print("two companion install examples are fail-closed and guarded")
 PY
@@ -577,6 +581,9 @@ pass "obsolete single-lane claims and second Terra role absent"
 sh -n "$installer"
 sh -n "$runtime_inspector"
 sh -n "$script_dir/verify.sh"
-pass "shell syntax"
+node --check "$node_installer"
+node --check "$node_runtime_inspector"
+node --test "$native_tools_test"
+pass "shell wrappers and cross-platform native role tools"
 
-printf '%s\n' "VERIFY PASSED: Sol Advisor v0.7.5 selective routing checks completed in $tmp_dir"
+printf '%s\n' "VERIFY PASSED: Sol Advisor v0.7.6 selective routing checks completed in $tmp_dir"

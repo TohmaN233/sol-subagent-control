@@ -29,6 +29,35 @@ skill 激活后，主 Agent 会在第一次仓库/任务工具调用前读取一
 
 仅启用 Provider 不会触发调用、收费或后台运行。主 Agent 不能临时换 Provider，也不能失败后静默回退。
 
+## 安装并校验原生角色
+
+原生 Luna、Terra 和 Sol 角色文件统一通过跨平台 Node 入口安装。PowerShell
+不需要 Git Bash、WSL、`sh`、`jq`、`find` 或 `grep`：
+
+```powershell
+$plugin = (codex plugin list --json | ConvertFrom-Json).installed |
+  Where-Object pluginId -eq 'sol-advisor@sol-advisor'
+if (-not $plugin) { throw 'sol-advisor is not installed' }
+$installer = Join-Path $plugin.source.path 'scripts\install-agents.mjs'
+if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'native role installer is missing' }
+node $installer
+node $installer --check
+```
+
+Linux 和 macOS 使用同一个 Node 入口；随包提供的 `.sh` 只作为兼容包装器：
+
+```sh
+plugin_dir="$(codex plugin list --json | jq -r '.installed[] | select(.pluginId == "sol-advisor@sol-advisor") | .source.path')"
+test -n "$plugin_dir" && test "$plugin_dir" != null || { echo 'sol-advisor is not installed' >&2; exit 1; }
+node "$plugin_dir/scripts/install-agents.mjs"
+node "$plugin_dir/scripts/install-agents.mjs" --check
+```
+
+如果可选校验器或运行时检查器不存在、或在当前平台无法执行，skill 会报告
+`ROLE VALIDATION UNAVAILABLE`、说明哪些证据未校验，然后继续任务；它不会假装
+校验已经通过。只有实际执行的校验明确发现 role、model 或 effort 不匹配时，才停止
+对应 native lane。
+
 ## 一键打开真实配置控制台
 
 以下脚本读取真实用户配置：

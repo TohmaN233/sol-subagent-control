@@ -12,7 +12,7 @@ This fork preserves Sol Advisor's native Codex workflow and adds a user-owned co
 | Routes | `solo`, `delegate`, `audit`, and `full`; native Luna / Max, Terra / High, and fresh Sol / High roles stay pinned. | Delegate is the ordinary default; difficult work uses full. A Task Type's route is derived from its Stage topology instead of being configured twice. |
 | Configuration | Native routing remains instruction- and role-driven. | A token-protected `127.0.0.1` console manages pluggable Task Types, Stage bindings, Provider switches, approval gates, and private templates. |
 | Connectors | Codex-native custom agents. | Minimal built-in Cursor CDP and Grok Leader+ACP connectors support read-only and explicitly approved bounded-write work. |
-| Safety | Exact role/runtime evidence fails closed. | Writes require Provider write capability, a `bounded_write` Stage, explicit current-task approval, and non-empty `allowed_paths`; a live workspace monitor plus Git content/HEAD/index/ref/config/reflog evidence rejects scope violations. |
+| Safety | Explicit role/runtime mismatches stop the selected native lane; an unavailable optional checker is reported as unverified and does not stop the task. | Writes require Provider write capability, a `bounded_write` Stage, explicit current-task approval, and non-empty `allowed_paths`; a live workspace monitor plus Git content/HEAD/index/ref/config/reflog evidence rejects scope violations. |
 | External cost | Native use follows the user's Codex access. | Cursor, Grok, ChatGPT web review, and custom APIs are all disabled by default and are never called merely because they are installed. |
 
 Cursor uses loopback CDP and one pinned Agents UI profile; Grok uses a dedicated Leader and ACP over stdio. Neither connector includes the full reference Bridge/Supervisor. Automated fixtures cover both transports. The maintained Windows baseline has also passed the live smoke steps below with Cursor 3.16.29 and Grok CLI 1.0.4; other local versions still fail closed until the same checks pass.
@@ -23,12 +23,12 @@ The original author writes [**Attention Heads**](https://attentionheads.substack
 
 ## Quick start
 
-You need a current Codex CLI or ChatGPT desktop app with plugins enabled, GPT-5.6 Sol or Terra at high/xhigh/max reasoning, native custom-agent support, Node.js 20+, Git, and jq. Luna / Max or Terra / High access is needed only when the selected route delegates through a native role.
+You need a current Codex CLI or ChatGPT desktop app with plugins enabled, GPT-5.6 Sol or Terra at high/xhigh/max reasoning, native custom-agent support, Node.js 20+, and Git; the POSIX one-liner below also uses jq. Luna / Max or Terra / High access is needed only when the selected route delegates through a native role.
 
 ~~~sh
 codex plugin marketplace add TohmaN233/sol-subagent-control --ref main
 codex plugin add sol-advisor@sol-advisor
-plugin_dir="$(codex plugin list --json | jq -r '.installed[] | select(.pluginId == "sol-advisor@sol-advisor") | .source.path')" && test -n "$plugin_dir" && test "$plugin_dir" != null && test -d "$plugin_dir" && test -f "$plugin_dir/scripts/install-agents.sh" && sh "$plugin_dir/scripts/install-agents.sh"
+plugin_dir="$(codex plugin list --json | jq -r '.installed[] | select(.pluginId == "sol-advisor@sol-advisor") | .source.path')" && test -n "$plugin_dir" && test "$plugin_dir" != null && test -d "$plugin_dir" && test -f "$plugin_dir/scripts/install-agents.mjs" && node "$plugin_dir/scripts/install-agents.mjs"
 ~~~
 
 Start a fresh task, then use:
@@ -45,7 +45,7 @@ You do not need to select or manage a lane; the console stores reusable policy w
 
 The saved control-plane policy is user-global, not repository-local: it lives at `$CODEX_HOME/sol-advisor/control-plane.json`, or `~/.codex/sol-advisor/control-plane.json` when `CODEX_HOME` is unset. The console shows the active storage scope and path at the top. An explicit `SOL_CONTROL_CONFIG` path is an override for development/testing and is visibly marked; it does not replace the global policy.
 
-If the host cannot expose the current primary model or reasoning effort, the skill gives one non-blocking reminder and continues; only an observed mismatch stops controlled delegation. Missing control tools or a denied global-config read is reported as an activation/permission error and never silently changes the selected workflow or Provider.
+If the host cannot expose the current primary model or reasoning effort, the skill gives one non-blocking reminder and continues; only an observed mismatch stops controlled delegation. A missing optional native-role checker is likewise reported as unverified without stopping the task. Missing control tools or a denied global-config read is reported as an activation/permission error and never silently changes the selected workflow or Provider.
 
 ## Console, connector enablement, and approval
 
@@ -100,7 +100,7 @@ The repository CI does not prove the user's actual Cursor UI version, login stat
 ~~~sh
 codex plugin marketplace upgrade sol-advisor
 codex plugin add sol-advisor@sol-advisor
-plugin_dir="$(codex plugin list --json | jq -r '.installed[] | select(.pluginId == "sol-advisor@sol-advisor") | .source.path')" && test -n "$plugin_dir" && test "$plugin_dir" != null && test -d "$plugin_dir" && test -f "$plugin_dir/scripts/install-agents.sh" && sh "$plugin_dir/scripts/install-agents.sh"
+plugin_dir="$(codex plugin list --json | jq -r '.installed[] | select(.pluginId == "sol-advisor@sol-advisor") | .source.path')" && test -n "$plugin_dir" && test "$plugin_dir" != null && test -d "$plugin_dir" && test -f "$plugin_dir/scripts/install-agents.mjs" && node "$plugin_dir/scripts/install-agents.mjs"
 ~~~
 
 For exact native spawn, runtime evidence, sandbox interpretation, installer, and maintainer verification, read [advanced native operations](plugins/sol-advisor/skills/orchestration/references/operations.md). For connector states and trust boundaries, read the [control-plane architecture](plugins/sol-advisor/skills/control-plane/references/architecture.md) and [provider contracts](plugins/sol-advisor/skills/control-plane/references/provider-contracts.md).

@@ -35,8 +35,9 @@ agent_type: sol_advisor_sol_reviewer
 fork_turns: none
 ~~~
 
-Do not attach model or reasoning overrides. A missing, conflicting, unavailable, or
-unobservable role/model/effort is a hard stop; never substitute another role.
+Do not attach model or reasoning overrides. An explicit conflicting role/model/effort
+result stops the native lane; never substitute another role. An unavailable optional
+checker is reported as unverified but does not stop the task.
 
 ## Selective route declaration, preflight, and caching
 
@@ -47,19 +48,21 @@ from task routing because plugin installation does not register user-owned TOMLs
 At installation or update time, run the repository-relative installer and its exactness
 check:
 
-~~~sh
-sh plugins/sol-advisor/scripts/install-agents.sh
-sh plugins/sol-advisor/scripts/install-agents.sh --check
+~~~text
+node plugins/sol-advisor/scripts/install-agents.mjs
+node plugins/sol-advisor/scripts/install-agents.mjs --check
 ~~~
 
 When operating from an installed skill, resolve the same script relative to this
-reference's parent skill:
+reference's parent skill. The installer is `../../scripts/install-agents.mjs` relative
+to the orchestration skill directory:
 
-~~~sh
-skill_dir=<directory-containing-this-SKILL.md>
-installer="$skill_dir/../../scripts/install-agents.sh"
-sh "$installer" --check
+~~~text
+node <absolute-plugin-path>/scripts/install-agents.mjs --check
 ~~~
+
+The `.sh` installer remains a Linux compatibility wrapper. Windows and PowerShell use
+the `.mjs` entry directly and do not require Git Bash, WSL, `sh`, `jq`, or Unix tools.
 
 The installer is fail-closed and performs its own post-install exactness check. It
 recognizes only byte-exact historical templates, including the shipped v0.2.0 profiles
@@ -81,8 +84,8 @@ newly observed risk justifies it. It records that evidence and never silently
 downgrades.
 
 The existing --check flag verifies all three roles. For task-scoped preflight, check
-only the auxiliaries selected by the declaration; every check is non-mutating and
-fail-closed:
+only the auxiliaries selected by the declaration; every executed check is non-mutating
+and fails on an explicit mismatch:
 
 | Route | Required companion checks |
 |---|---|
@@ -95,9 +98,9 @@ fail-closed:
 
 For example:
 
-~~~sh
-sh plugins/sol-advisor/scripts/install-agents.sh --check --check-role luna
-sh plugins/sol-advisor/scripts/install-agents.sh --check --check-role sol
+~~~text
+node plugins/sol-advisor/scripts/install-agents.mjs --check --check-role luna
+node plugins/sol-advisor/scripts/install-agents.mjs --check --check-role sol
 ~~~
 
 Unknown or missing role arguments fail before any destination mutation. A selective
@@ -118,19 +121,23 @@ for those omitted fields only. Do not use it to replace available public evidenc
 
 The public spawn/details record is authoritative for the selected role and any exposed
 model/effort. When model or effort is omitted, resolve the helper relative to the
-installed skill and inspect the exact native thread ID:
+installed skill and inspect the exact native thread ID. The helper is
+`../../scripts/inspect-agent-runtime.mjs` relative to the orchestration skill directory:
 
-~~~sh
-skill_dir=<directory-containing-this-SKILL.md>
-runtime_inspector="$skill_dir/../../scripts/inspect-agent-runtime.sh"
-sh "$runtime_inspector" <native-subagent-thread-id>
+~~~text
+node <absolute-plugin-path>/scripts/inspect-agent-runtime.mjs <native-subagent-thread-id>
 ~~~
 
 For a disposable fixture or non-default session root:
 
-~~~sh
-sh "$runtime_inspector" --sessions-dir /absolute/path/to/sessions <native-subagent-thread-id>
+~~~text
+node <absolute-plugin-path>/scripts/inspect-agent-runtime.mjs --sessions-dir <absolute-path-to-sessions> <native-subagent-thread-id>
 ~~~
+
+If Node or either `.mjs` entry cannot be found or executed, emit
+`ROLE VALIDATION UNAVAILABLE`, name the check that did not run, and continue the task.
+You must not claim the missing check or runtime fields were verified. An explicit
+mismatch returned by a check must stop the affected native lane.
 
 The helper searches one exact rollout filename suffix and emits only allowlisted
 routing fields. It refuses invalid IDs, zero/multiple matches, missing fields, or
@@ -181,15 +188,23 @@ work; it does not duplicate it. A reviewer never fixes its own findings.
 
 ## Maintainer verification
 
-From the repository root, run:
+From the repository root on every supported platform, run:
 
-~~~sh
-sh plugins/sol-advisor/scripts/verify.sh
+~~~text
+node --test plugins/sol-advisor/scripts/test/native-role-tools.test.mjs
+node plugins/sol-advisor/control-plane/test/run-tests.mjs
 git diff --check
 git status --short
 git diff --stat
 ~~~
 
-The verifier covers the v0.7.5 manifest, exact three-role TOMLs, selective-routing
+On Linux, also run the full compatibility wrapper suite:
+
+~~~sh
+sh plugins/sol-advisor/scripts/verify.sh
+~~~
+
+The verifier covers the v0.7.6 manifest, exact three-role TOMLs, selective-routing
 contracts, concise README journey, absence of retired workflow references, installer
-safety fixtures, Luna runtime evidence, JSON/TOML validity, and shell syntax.
+safety fixtures, Luna runtime evidence, JSON/TOML validity, Node syntax, and Linux
+wrapper compatibility.

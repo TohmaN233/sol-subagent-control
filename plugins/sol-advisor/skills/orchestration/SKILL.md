@@ -47,9 +47,11 @@ Confirm the qualifying primary-session contract. Preflight only an auxiliary sel
 by the declared route: none for solo; Luna / Max or Terra / High for delegate; fresh
 Sol / High for audit; and the selected implementer plus fresh Sol reviewer for full.
 Public metadata for role, model, and effort is authoritative. If it omits a model or
-effort, use the local inspector only for that omitted field. Missing, conflicting,
-unavailable, or unobservable evidence stops the affected lane; never silently
-substitute a role, model, effort, or reviewer.
+effort, use the local inspector only for that omitted field. If the inspector entry is
+missing or cannot run on the current platform, emit `ROLE VALIDATION UNAVAILABLE`,
+state which evidence remains unverified, and continue the task. You must not claim the
+unavailable evidence was verified. Any explicit role/model/effort mismatch must stop
+the affected lane; never silently substitute a role, model, effort, or reviewer.
 
 ## Route delivery without duplication
 
