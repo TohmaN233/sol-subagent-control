@@ -111,10 +111,12 @@ without CDP, it refuses to force-close the application. It binds the exact repos
 workspace, creates one fresh Agent, and returns `task_id`, `agent_id`, and `target_id`.
 
 The connector supports one pinned Agents UI profile. Missing selectors, multiple
-matching workspaces/pages, multiple new Agent identities, or an Agent/history mismatch
-fail closed. Status comes from the exact Agent and stable reply/history evidence, not
-the currently visible chat. Cancellation requires `expected_agent_id` and confirms a
-stable stopped state for that exact composer.
+matching workspaces/pages, multiple new Agent identities, or an identity mismatch fail
+closed. It binds the exact history/composer identity where history is available and the
+exact post-submission composer ID on Cursor 3.16's Agents panel. Status comes from that
+exact Agent plus stable reply/composer or history evidence, not an unrelated visible
+chat. Cancellation requires `expected_agent_id` and confirms a stable stopped state for
+that exact composer.
 
 Cursor exposes no reliable host permission callback in this transport. Therefore the
 available pre-execution controls are exact workspace binding, validated path policy,

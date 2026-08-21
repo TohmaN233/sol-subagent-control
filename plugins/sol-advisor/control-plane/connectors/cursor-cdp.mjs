@@ -291,7 +291,8 @@ export class CursorCdpConnector {
         intentionalCleanup: false,
       };
       this.active.set(task.task_id, active);
-      const before = await this.#waitForHistory(active);
+      const deferredIdentity = active.profile.ui_flavor === 'agents_panel';
+      const before = deferredIdentity ? null : await this.#waitForHistory(active);
       const created = JSON.parse(await active.client.evaluate(cursorCreateAgentExpression(fullWorkspace)) || '{}');
       if (!created.ok) {
         throw connectorError('CURSOR_WORKSPACE_BIND_FAILED',
@@ -299,29 +300,46 @@ export class CursorCdpConnector {
             details: { available: created.available || [] },
           });
       }
-      let composer = null;
-      for (let attempt = 0; attempt < 30; attempt += 1) {
-        composer = JSON.parse(await active.client.evaluate(cursorComposerExpression()) || '{}');
-        if (composer.ok && composer.id) break;
-        await sleep(200);
+      if (deferredIdentity && created.previous_composer_id) {
+        let previousStillVisible = true;
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          const observed = JSON.parse(await active.client.evaluate(cursorComposerExpression()) || '{}');
+          previousStillVisible = observed.ok && observed.id === created.previous_composer_id;
+          if (!previousStillVisible) break;
+          await sleep(200);
+        }
+        if (previousStillVisible) {
+          throw connectorError('REMOTE_IDENTITY_AMBIGUOUS',
+            'Cursor did not replace the previous composer after the exact New Agent action.', {
+              details: { previous_composer_id: created.previous_composer_id },
+            });
+        }
       }
-      if (!composer?.ok || !composer.id) {
-        throw connectorError('REMOTE_IDENTITY_AMBIGUOUS', 'Cursor did not expose one exact composer identity');
+      if (!deferredIdentity) {
+        let composer = null;
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+          composer = JSON.parse(await active.client.evaluate(cursorComposerExpression()) || '{}');
+          if (composer.ok && composer.id) break;
+          await sleep(200);
+        }
+        if (!composer?.ok || !composer.id) {
+          throw connectorError('REMOTE_IDENTITY_AMBIGUOUS', 'Cursor did not expose one exact composer identity');
+        }
+        let selected = { agent: null, ambiguous: false, count: 0 };
+        for (let attempt = 0; attempt < 25; attempt += 1) {
+          const after = await this.#waitForHistory(active, 1200);
+          selected = selectNewCursorAgent(before, after);
+          if (selected.agent || selected.ambiguous) break;
+          await sleep(200);
+        }
+        if (selected.ambiguous || !selected.agent || selected.agent.id !== composer.id) {
+          throw connectorError('REMOTE_IDENTITY_AMBIGUOUS',
+            'Cursor Agent history did not yield one unique identity matching the created composer', {
+              details: { composer_id: composer.id, new_agent_count: selected.count },
+            });
+        }
+        active.agentId = selected.agent.id;
       }
-      let selected = { agent: null, ambiguous: false, count: 0 };
-      for (let attempt = 0; attempt < 25; attempt += 1) {
-        const after = await this.#waitForHistory(active, 1200);
-        selected = selectNewCursorAgent(before, after);
-        if (selected.agent || selected.ambiguous) break;
-        await sleep(200);
-      }
-      if (selected.ambiguous || !selected.agent || selected.agent.id !== composer.id) {
-        throw connectorError('REMOTE_IDENTITY_AMBIGUOUS',
-          'Cursor Agent history did not yield one unique identity matching the created composer', {
-            details: { composer_id: composer.id, new_agent_count: selected.count },
-          });
-      }
-      active.agentId = selected.agent.id;
       if (scopeMonitor.violations.length > 0) {
         const error = connectorError('SCOPE_VIOLATION',
           'The workspace changed outside the declared scope before Cursor task submission.', {
@@ -367,6 +385,29 @@ export class CursorCdpConnector {
         throw error;
       }
       submissionAccepted = true;
+      if (deferredIdentity) {
+        let composer = null;
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          composer = JSON.parse(await active.client.evaluate(cursorComposerExpression()) || '{}');
+          if (composer.ok && composer.id) break;
+          await sleep(200);
+        }
+        if (!composer?.ok || !composer.id) {
+          throw connectorError('REMOTE_IDENTITY_UNBOUND',
+            'Cursor accepted the task but did not expose one exact composer identity.', {
+              actionRequired: 'Inspect the visible Cursor task and do not resubmit automatically.',
+              details: { observed: composer },
+            });
+        }
+        active.agentId = composer.id;
+        const bound = JSON.parse(await active.client.evaluate(cursorSnapshotExpression(active.agentId)) || '{}');
+        if (bound.identity_match !== true || Number(bound.visible_composer_count || 0) !== 1) {
+          throw connectorError('REMOTE_IDENTITY_AMBIGUOUS',
+            'Cursor exposed a composer id, but it was not the unique visible task identity.', {
+              details: { composer_id: active.agentId, observed: bound },
+            });
+        }
+      }
       await this.store.update(task.task_id, {
         state: 'running',
         remote_identity: {
@@ -374,6 +415,7 @@ export class CursorCdpConnector {
           target_id: active.page.id,
           cdp_port: provider.config.cdp_port,
           ui_profile: provider.config.ui_profile,
+          ui_flavor: active.profile.ui_flavor,
         },
         transport: {
           cdp_port: provider.config.cdp_port,
@@ -403,6 +445,7 @@ export class CursorCdpConnector {
             remote_identity: {
               agent_id: active.agentId, target_id: active.page?.id || null,
               cdp_port: provider.config.cdp_port, ui_profile: provider.config.ui_profile,
+              ui_flavor: active.profile?.ui_flavor || null,
             },
             transport: {
               cdp_port: provider.config.cdp_port, target_id: active.page?.id || null,
@@ -419,6 +462,31 @@ export class CursorCdpConnector {
           // convert it to unknown_after_restart rather than allowing a duplicate send.
           throw uncertain;
         }
+      }
+      if (sentOrUncertain && active && !active.agentId) {
+        const unbound = connectorError('REMOTE_IDENTITY_UNBOUND',
+          'Cursor may have accepted the task, but no exact composer identity was published.', {
+            details: { task_id: task.task_id, target_id: active.page?.id || null, cause: redact(safeError.message) },
+            actionRequired: 'Inspect the visible Cursor task; use abandon only after confirming it stopped. Do not resubmit automatically.',
+          });
+        await this.store.update(task.task_id, {
+          state: 'needs_attention',
+          remote_identity: {
+            agent_id: null,
+            target_id: active.page?.id || null,
+            cdp_port: provider.config.cdp_port,
+            ui_profile: provider.config.ui_profile,
+            ui_flavor: active.profile?.ui_flavor || null,
+          },
+          transport: {
+            cdp_port: provider.config.cdp_port,
+            target_id: active.page?.id || null,
+            web_socket_url: active.page?.webSocketDebuggerUrl || null,
+          },
+          error: publicConnectorError(unbound),
+        });
+        this.#signal(task.task_id);
+        return this.publicTask(await this.store.get(task.task_id));
       }
       transport?.client?.close(safeError);
       scopeMonitor?.close();
@@ -610,8 +678,17 @@ export class CursorCdpConnector {
           });
         }
         try {
-          [version, pages] = await Promise.all([httpJson(port, '/json/version'), httpJson(port, '/json/list')]);
-          break;
+          const [candidateVersion, candidatePages] = await Promise.all([
+            httpJson(port, '/json/version'),
+            httpJson(port, '/json/list'),
+          ]);
+          const hasTarget = Array.isArray(candidatePages)
+            && candidatePages.some((page) => page?.type === 'page' && page.webSocketDebuggerUrl);
+          if (isCursorIdentity(candidateVersion, candidatePages) && hasTarget) {
+            version = candidateVersion;
+            pages = candidatePages;
+            break;
+          }
         } catch {}
         await sleep(250);
       }
@@ -853,22 +930,46 @@ export class CursorCdpConnector {
     }, task.workspace, version, pages);
     const page = selectedTarget.page;
     const client = selectedTarget.client;
-    const history = JSON.parse(await client.evaluate(cursorHistoryExpression()) || '{}');
-    const entry = (history.entries || []).find((candidate) => candidate.id === agentId);
-    if (!entry) {
-      client.close();
-      throw connectorError('REMOTE_IDENTITY_MISSING', 'Cursor Agent history no longer contains the exact agent_id');
-    }
-    const opened = await client.evaluate(cursorOpenAgentExpression(agentId));
-    if (opened !== 'OPENED') {
-      client.close();
-      throw connectorError('RECOVERY_FAILED', `Could not open exact Cursor Agent: ${opened}`);
-    }
-    try {
-      await this.#waitForExactComposer(client, agentId);
-    } catch (error) {
-      client.close();
-      throw error;
+    const uiFlavor = selectedTarget.profile?.ui_flavor || task.remote_identity?.ui_flavor || null;
+    let entry;
+    if (uiFlavor === 'agents_panel') {
+      const composer = JSON.parse(await client.evaluate(cursorComposerExpression()) || '{}');
+      if (!composer.ok || composer.id !== agentId) {
+        client.close();
+        throw connectorError('REMOTE_IDENTITY_MISSING',
+          'Cursor Agents panel is not displaying the persisted exact agent_id; recovery will not guess another task.', {
+            details: { expected_agent_id: agentId, observed: composer },
+          });
+      }
+      const status = String(composer.status || '').toLowerCase();
+      const state = /generating|running|in_progress/.test(status)
+        ? 'running'
+        : /completed|done|finished|success/.test(status)
+          ? 'completed'
+          : /cancel/.test(status)
+            ? 'cancelled'
+            : /failed|error/.test(status)
+              ? 'failed'
+              : 'unknown';
+      entry = { id: agentId, state };
+    } else {
+      const history = JSON.parse(await client.evaluate(cursorHistoryExpression()) || '{}');
+      entry = (history.entries || []).find((candidate) => candidate.id === agentId);
+      if (!entry) {
+        client.close();
+        throw connectorError('REMOTE_IDENTITY_MISSING', 'Cursor Agent history no longer contains the exact agent_id');
+      }
+      const opened = await client.evaluate(cursorOpenAgentExpression(agentId));
+      if (opened !== 'OPENED') {
+        client.close();
+        throw connectorError('RECOVERY_FAILED', `Could not open exact Cursor Agent: ${opened}`);
+      }
+      try {
+        await this.#waitForExactComposer(client, agentId);
+      } catch (error) {
+        client.close();
+        throw error;
+      }
     }
     let recoveredActive = null;
     const scopeMonitor = startWorkspaceScopeMonitor(task.workspace, {
@@ -886,7 +987,7 @@ export class CursorCdpConnector {
       baseline: task.baseline_snapshot,
       client,
       page,
-      profile: { ui_flavor: task.remote_identity?.ui_profile },
+      profile: { ui_flavor: uiFlavor },
       process: null,
       stderrTail: [],
       scopeMonitor,
@@ -903,6 +1004,7 @@ export class CursorCdpConnector {
       remote_identity: {
         ...task.remote_identity,
         target_id: page.id,
+        ui_flavor: uiFlavor,
         recovered_attachment: true,
       },
       transport: {
@@ -925,7 +1027,10 @@ export class CursorCdpConnector {
       await this.store.update(task.task_id, {
         state: terminalState,
         scope,
-        terminal_evidence: { kind: 'stable_cursor_history', observed_at: new Date().toISOString(), agent_id: agentId },
+        terminal_evidence: {
+          kind: uiFlavor === 'agents_panel' ? 'stable_cursor_composer' : 'stable_cursor_history',
+          observed_at: new Date().toISOString(), agent_id: agentId,
+        },
         error: terminalState === 'scope_violation'
           ? publicConnectorError(connectorError('SCOPE_VIOLATION',
             'Cursor changed paths outside the declared connector scope.', { details: scope }))

@@ -109,15 +109,17 @@ It keeps the reliability mechanisms derived from the reference Bridge:
 - never force-close Cursor when it is already running without CDP;
 - launch with a loopback debugging port only from an explicitly approved start;
 - bind one exact Git workspace and fail on ambiguous pages/workspace sections;
-- create one fresh Agent and bind one exact `agent_id`/`target_id`;
-- require stable reply/history terminal evidence;
+- create one fresh Agent and bind one exact `agent_id`/`target_id`, including an ID
+  exposed only after submission by Cursor 3.16's Agents panel;
+- require stable reply plus exact composer/history terminal evidence;
 - cancel only the exact generating composer;
 - preserve timeout/connection-loss/restart ambiguity and reconcile by persisted identity.
 
 It intentionally omits CCE semantic search, parallel Agent queues, hidden-window mode,
 workbench compatibility layers, broad selector fallbacks, and lifecycle supervisors.
-The current UI profile is version-sensitive; automated CDP fixtures do not prove a real
-user installation is compatible.
+The current UI profile is version-sensitive. Cursor 3.16.29 on Windows passed local
+read-only, bounded-write, and exact-cancel smoke tests on 2026-08-20; automated CDP
+fixtures and that baseline do not prove a different installation is compatible.
 
 ## Minimal Grok connection
 
