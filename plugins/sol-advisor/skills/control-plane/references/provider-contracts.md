@@ -60,15 +60,18 @@ exact workspace. It does not force-close an already-running Cursor that lacks CD
 - The supported UI profile is `agents_v2_2026_08`; a profile mismatch fails closed.
 - Start creates one fresh Agent in one exact workspace and returns `task_id`,
   `agent_id`, `target_id`, and `cdp_port`.
-- Agent history and composer identity must agree; zero or multiple new identities fail
-  as `REMOTE_IDENTITY_AMBIGUOUS`.
+- On the history-backed UI, Agent history and composer identity must agree. On Cursor
+  3.16's Agents panel, the connector binds the one exact composer ID published after
+  submission. Zero or multiple identities fail closed.
 - Completion requires a stable stopped generation plus stable final reply/history
   evidence, not merely a visible Markdown fragment.
 - Cancellation requires `confirm=true` and the exact returned `expected_agent_id`.
   Stop is clicked only in the exact matching generating composer and becomes terminal
   only after a stable stopped observation.
 - Timeout or CDP loss enters `needs_attention`. After restart, `reconcile` reopens the
-  persisted exact Agent; it never creates a replacement.
+  persisted exact Agent on history-backed surfaces. The Agents panel reattaches only
+  when its currently visible composer has the persisted exact ID; it never guesses or
+  creates a replacement.
 - Cursor has no permission request hook in this transport. Before dispatch the
   connector validates workspace/path policy, holds a one-task lease, embeds the access
   boundary in the prompt, and monitors recursive filesystem events. Outside or
@@ -76,9 +79,10 @@ exact workspace. It does not force-close an already-running Cursor that lacks CD
   content plus Git HEAD, refs, semantic index, local config, and reflog.
 
 Automated tests use a real child process that implements loopback HTTP, WebSocket
-framing, CDP commands, Agent state, cancellation, and workspace mutations. This does
-not prove a user's Cursor build, login, or UI profile. Until user-machine smoke succeeds,
-describe the connector as built-in but compatibility-pending, not broadly compatible.
+framing, CDP commands, Agent state, cancellation, restart recovery, and workspace
+mutations. Cursor 3.16.29 on Windows passed local read-only, bounded-write, and
+exact-cancel smoke tests on 2026-08-20. This is a known-good baseline, not proof for a
+different Cursor build, login, or UI profile.
 
 ## `builtin_connector`: Grok ACP
 
@@ -106,7 +110,8 @@ The connector starts a dedicated Leader and ACP child and uses `initialize`,
 
 Automated tests use real Leader/ACP child processes and NDJSON request/notification
 exchange. They do not prove the user's Grok binary, authentication, proxy environment,
-or desktop behavior.
+or desktop behavior. Grok CLI 1.0.4 on Windows passed local read-only, bounded-write,
+and exact-cancel smoke tests on 2026-08-20.
 
 ## `external_mcp`
 

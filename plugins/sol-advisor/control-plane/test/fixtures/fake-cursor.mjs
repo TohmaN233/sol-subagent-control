@@ -11,6 +11,8 @@ const port = Number(portArg?.split('=')[1] || process.env.FAKE_CURSOR_PORT || 0)
 const workspace = args.filter((arg) => !arg.startsWith('--')).at(-1) || process.cwd();
 const workspaceName = basename(workspace).toLowerCase();
 const logPath = process.env.FAKE_CURSOR_LOG;
+const identityReadyAt = Date.now() + Number(process.env.FAKE_CURSOR_IDENTITY_DELAY_MS || 0);
+const uiProfile = process.env.FAKE_CURSOR_UI_PROFILE || 'agents_v2';
 if (logPath) await appendFile(logPath, `${JSON.stringify({ pid: process.pid, args, workspace })}\n`);
 
 let agentCounter = 0;
@@ -63,6 +65,11 @@ async function finish(text = 'cursor fixture result', agentState = 'completed') 
 
 async function startTask() {
   if (state.sent) return;
+  if (uiProfile === 'agents_panel' && !state.agentId) {
+    agentCounter += 1;
+    const suffix = String(agentCounter).padStart(12, '0');
+    state.agentId = `local:33333333-3333-7333-8333-${suffix}`;
+  }
   state.sent = true;
   state.agentState = 'running';
   state.composerStatus = 'generating';
@@ -107,6 +114,19 @@ function history() {
 
 async function evaluate(expression) {
   if (expression.includes('/*sol:probe*/')) {
+    if (uiProfile === 'agents_panel') {
+      return JSON.stringify({
+        ok: true,
+        ui_flavor: 'agents_panel',
+        has_input: true,
+        workspace_ready: true,
+        workspace_count: 1,
+        available: [workspaceName],
+        adapter_ready: false,
+        adapter_kind: null,
+        document_title: 'Cursor Agents',
+      });
+    }
     return JSON.stringify({
       ok: true,
       ui_flavor: 'agents_v2',
@@ -120,9 +140,29 @@ async function evaluate(expression) {
     });
   }
   if (expression.includes('/*sol:history*/')) {
+    if (uiProfile === 'agents_panel') {
+      return JSON.stringify({ ok: false, error: 'AGENT_ADAPTER_UNAVAILABLE' });
+    }
     return JSON.stringify({ ok: true, kind: 'agents_v2', entries: history() });
   }
   if (expression.includes('/*sol:create-agent*/')) {
+    if (uiProfile === 'agents_panel') {
+      const previousComposerId = state.agentId;
+      state.agentId = null;
+      state.agentState = 'unknown';
+      state.composerStatus = null;
+      state.prompt = '';
+      state.stop = 0;
+      state.messageCount = 0;
+      state.reply = '';
+      state.sent = false;
+      return JSON.stringify({
+        ok: true,
+        state: previousComposerId ? 'panel_new_agent_clicked' : 'panel_ready',
+        deferred_identity: true,
+        previous_composer_id: previousComposerId,
+      });
+    }
     agentCounter += 1;
     const suffix = String(agentCounter).padStart(12, '0');
     state.agentId = `local:22222222-2222-7222-8222-${suffix}`;
@@ -176,17 +216,21 @@ async function evaluate(expression) {
 
 const server = http.createServer((req, res) => {
   if (req.url === '/json/version') {
-    const body = JSON.stringify({ Browser: 'Cursor/Fake', 'Protocol-Version': '1.3' });
+    const identityReady = Date.now() >= identityReadyAt;
+    const body = JSON.stringify(identityReady
+      ? { Browser: 'Chrome/Fake', 'User-Agent': 'Fake Cursor/3.16.29', 'Protocol-Version': '1.3' }
+      : { Browser: 'Chrome/Fake', 'User-Agent': 'Fake Chrome/144', 'Protocol-Version': '1.3' });
     res.writeHead(200, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) });
     res.end(body);
     return;
   }
   if (req.url === '/json/list') {
-    const body = JSON.stringify([{
+    const identityReady = Date.now() >= identityReadyAt;
+    const body = JSON.stringify(identityReady ? [{
       id: 'fake-cursor-page', type: 'page', title: `Cursor Agents - ${workspaceName}`,
       url: `vscode-file://cursor/${workspaceName}`,
       webSocketDebuggerUrl: `ws://127.0.0.1:${port}/devtools/page/fake-cursor-page`,
-    }]);
+    }] : []);
     res.writeHead(200, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) });
     res.end(body);
     return;

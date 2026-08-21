@@ -9,12 +9,23 @@ import test from 'node:test';
 
 import { loadConfig, saveConfig } from '../lib/config.mjs';
 import { ConnectorRegistry } from '../connectors/registry.mjs';
+import {
+  cursorCreateAgentExpression,
+  cursorProbeExpression,
+} from '../connectors/cursor-profile.mjs';
 import { startConnectorSelection } from '../lib/control.mjs';
 import { DEFAULT_CONFIG_PATH } from '../server.mjs';
 
 const execFileAsync = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
 const fakeSource = join(here, 'fixtures', 'fake-grok.mjs');
+
+test('Cursor profile emits valid browser JavaScript for a Windows workspace', () => {
+  const workspace = String.raw`C:\Users\fixture\Documents\repo`;
+  for (const expression of [cursorProbeExpression(workspace), cursorCreateAgentExpression(workspace)]) {
+    assert.doesNotThrow(() => new Function(`return ${expression};`));
+  }
+});
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'sol-grok-connector-'));

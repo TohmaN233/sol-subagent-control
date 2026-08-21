@@ -278,6 +278,29 @@ test('Cursor launches through CDP, binds exact agent identity, and completes rea
   assert.equal(launch.workspace, fx.workspace);
 });
 
+test('Cursor launch waits for verified identity and a usable target after CDP HTTP becomes ready', async (t) => {
+  const fx = await fixture(t, { envOverrides: { FAKE_CURSOR_IDENTITY_DELAY_MS: '350' } });
+  const started = await startScenario(fx, 'cursor-readonly-advice', 'CURSOR_NORMAL');
+  assert.match(started.remote_identity.agent_id, /^local:/);
+  assert.equal((await fx.registry.status(started.task_id, 5000)).state, 'completed');
+});
+
+test('Cursor Agents panel binds the exact composer identity exposed only after submission', async (t) => {
+  const fx = await fixture(t, { envOverrides: { FAKE_CURSOR_UI_PROFILE: 'agents_panel' } });
+  const started = await startScenario(fx, 'cursor-readonly-advice', 'CURSOR_NORMAL');
+  assert.match(started.remote_identity.agent_id, /^local:33333333-/);
+  assert.equal((await fx.registry.status(started.task_id, 5000)).state, 'completed');
+});
+
+test('Cursor Agents panel creates a fresh exact composer for each sequential task', async (t) => {
+  const fx = await fixture(t, { envOverrides: { FAKE_CURSOR_UI_PROFILE: 'agents_panel' } });
+  const first = await startScenario(fx, 'cursor-readonly-advice', 'CURSOR_NORMAL');
+  assert.equal((await fx.registry.status(first.task_id, 5000)).state, 'completed');
+  const second = await startScenario(fx, 'cursor-readonly-advice', 'CURSOR_NORMAL');
+  assert.equal((await fx.registry.status(second.task_id, 5000)).state, 'completed');
+  assert.notEqual(second.remote_identity.agent_id, first.remote_identity.agent_id);
+});
+
 test('Cursor bounded write completes for an allowed path and reports the observed path', async (t) => {
   const fx = await fixture(t);
   const started = await startScenario(fx, 'cursor-bounded-change', 'CURSOR_WRITE_ALLOWED', {
@@ -358,6 +381,33 @@ test('Cursor timeout remains unconfirmed and restart reconcile reuses the exact 
   assert.equal(cancelled.state, 'cancelled');
   const stored = JSON.parse(await readFile(join(fx.root, 'connector-tasks.json'), 'utf8'));
   assert.equal(stored.tasks.length, 1);
+});
+
+test('Cursor Agents panel restart reconcile reattaches the exact visible composer without history', async (t) => {
+  const fx = await fixture(t, { envOverrides: { FAKE_CURSOR_UI_PROFILE: 'agents_panel' } });
+  const config = await loadConfig({ configPath: fx.configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
+  config.providers.find((item) => item.id === 'cursor-local').config.task_timeout_ms = 1000;
+  await saveConfig(config, { configPath: fx.configPath });
+  const started = await startScenario(fx, 'cursor-readonly-advice', 'CURSOR_HANG');
+  await new Promise((resolveWait) => setTimeout(resolveWait, 1200));
+  assert.equal((await fx.registry.status(started.task_id)).error.code, 'TIMEOUT_UNCONFIRMED');
+
+  const restarted = new ConnectorRegistry({
+    configPath: fx.configPath,
+    env: fx.env,
+    spawnImpl: fx.spawnImpl,
+    processRunningImpl: async () => false,
+  });
+  await restarted.initialize();
+  const reconciled = await restarted.control(started.task_id, { action: 'reconcile' });
+  assert.equal(reconciled.state, 'running');
+  assert.equal(reconciled.remote_identity.agent_id, started.remote_identity.agent_id);
+  assert.equal(reconciled.remote_identity.ui_flavor, 'agents_panel');
+  const cancelled = await restarted.control(started.task_id, {
+    action: 'cancel', confirm: true,
+    expected_agent_id: started.remote_identity.agent_id,
+  });
+  assert.equal(cancelled.state, 'cancelled');
 });
 
 test('Cursor transport loss redacts credential-shaped process diagnostics', async (t) => {

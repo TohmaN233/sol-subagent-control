@@ -8,7 +8,7 @@ const INPUT_SELECTOR = [
 
 const INPUT_PICKER = `
   const pickInput=()=>[...document.querySelectorAll(${JSON.stringify(INPUT_SELECTOR)})]
-    .filter(e=>e.offsetParent!==null&&!e.disabled&&e.getAttribute('aria-disabled')!=='true'&&e.getAttribute('contenteditable')!=='false')
+    .filter(e=>e.offsetParent!==null&&!e.disabled&&e.getAttribute('aria-disabled')!=='true'&&(e.getAttribute('contenteditable')==='true'||e.tagName==='INPUT'||e.tagName==='TEXTAREA'))
     .sort((a,b)=>(b.classList&&b.classList.contains('ui-prompt-input-editor__input')?1:0)-(a.classList&&a.classList.contains('ui-prompt-input-editor__input')?1:0))[0]||null;`;
 
 const WORKSPACE_SECTIONS = `
@@ -86,10 +86,16 @@ export function cursorProbeExpression(workspace) {
   const label = JSON.stringify(basename(workspace).toLowerCase());
   return marker('probe', `${INPUT_PICKER}${WORKSPACE_SECTIONS}${REACT_ADAPTER}
     const input=pickInput();const sections=collectWorkspaceSections();const wanted=${label};const matches=sections.filter(s=>s.head.toLowerCase()===wanted);
+    const panels=[...document.querySelectorAll('.agent-panel[data-component="agent-panel"][data-layout="panel"]')].filter(e=>e.offsetParent!==null);
+    const panel=panels.length===1?panels[0]:null;
+    const panelWorkspaces=panel?[...panel.querySelectorAll('button.ui-select-trigger,.composer-messages-standalone-sidecar-host')].filter(e=>{if(e.offsetParent===null)return false;const text=String(e.innerText||e.textContent||'').trim().toLowerCase();return text===wanted||text.split('\\n').some(line=>line.trim()===('on '+wanted));}):[];
+    const panelReady=String(document.title||'')==='Cursor Agents'&&String(document.body.className||'').includes('cursor-glass')&&!!panel&&panelWorkspaces.length===1&&!!input&&panel.contains(input);
     const hasNewAgent=matches.length===1&&!!matches[0].button;
-    const ui=document.querySelector('.glass-sidebar-agent-list-container')?'agents_v2':document.querySelector('.aislash-editor-input')?'legacy':'unknown';
-    const supported=ui==='agents_v2'&&adapter&&adapter.kind==='agents_v2';
-    return JSON.stringify({ok:matches.length===1&&supported&&(!!input||hasNewAgent),ui_flavor:ui,has_input:!!input,has_new_agent:hasNewAgent,workspace_ready:matches.length===1,workspace_count:matches.length,available:sections.map(s=>s.head),adapter_ready:!!adapter,adapter_kind:adapter&&adapter.kind,supported_profile:supported,document_title:String(document.title||'')});`);
+    const ui=panelReady?'agents_panel':document.querySelector('.glass-sidebar-agent-list-container')?'agents_v2':document.querySelector('.aislash-editor-input')?'legacy':'unknown';
+    const supported=panelReady||(ui==='agents_v2'&&adapter&&adapter.kind==='agents_v2');
+    const workspaceCount=panelReady?panelWorkspaces.length:matches.length;
+    const available=panelReady?[...new Set([...sections.map(s=>s.head),...panelWorkspaces.map(e=>String(e.innerText||e.textContent||'').trim())])]:sections.map(s=>s.head);
+    return JSON.stringify({ok:supported&&workspaceCount===1&&(!!input||hasNewAgent),ui_flavor:ui,has_input:!!input,has_new_agent:hasNewAgent,workspace_ready:workspaceCount===1,workspace_count:workspaceCount,available,adapter_ready:!!adapter,adapter_kind:adapter&&adapter.kind,supported_profile:supported,document_title:String(document.title||'')});`);
 }
 
 export function cursorHistoryExpression() {
@@ -98,7 +104,7 @@ export function cursorHistoryExpression() {
 
 export function cursorCreateAgentExpression(workspace) {
   const label = JSON.stringify(basename(workspace).toLowerCase());
-  return marker('create-agent', `${WORKSPACE_SECTIONS}const wanted=${label};const sections=collectWorkspaceSections();const matches=sections.filter(s=>s.head.toLowerCase()===wanted);if(matches.length!==1)return JSON.stringify({ok:false,state:matches.length?'workspace_ambiguous':'workspace_missing',available:sections.map(s=>s.head)});if(!matches[0].button)return JSON.stringify({ok:false,state:'new_agent_missing'});matches[0].button.click();return JSON.stringify({ok:true,state:'created'});`);
+  return marker('create-agent', `${INPUT_PICKER}${WORKSPACE_SECTIONS}const wanted=${label};const input=pickInput();const panels=[...document.querySelectorAll('.agent-panel[data-component="agent-panel"][data-layout="panel"]')].filter(e=>e.offsetParent!==null);const panel=panels.length===1?panels[0]:null;const panelWorkspaces=panel?[...panel.querySelectorAll('button.ui-select-trigger,.composer-messages-standalone-sidecar-host')].filter(e=>{if(e.offsetParent===null)return false;const text=String(e.innerText||e.textContent||'').trim().toLowerCase();return text===wanted||text.split('\\n').some(line=>line.trim()===('on '+wanted));}):[];if(String(document.title||'')==='Cursor Agents'&&String(document.body.className||'').includes('cursor-glass')&&panel&&panelWorkspaces.length===1&&input&&panel.contains(input)){const composers=[...panel.querySelectorAll('.composer-bar[data-composer-id]')].filter(e=>e.offsetParent!==null&&e.dataset.composerId);if(composers.length>1)return JSON.stringify({ok:false,state:'composer_ambiguous',count:composers.length});if(composers.length===1){const buttons=[...panel.querySelectorAll('button[aria-label="New Agent"]')].filter(e=>e.offsetParent!==null&&!e.disabled);if(buttons.length!==1)return JSON.stringify({ok:false,state:buttons.length?'new_agent_ambiguous':'new_agent_missing',count:buttons.length});const previous='local:'+composers[0].dataset.composerId;buttons[0].click();return JSON.stringify({ok:true,state:'panel_new_agent_clicked',deferred_identity:true,previous_composer_id:previous});}return JSON.stringify({ok:true,state:'panel_ready',deferred_identity:true,previous_composer_id:null});}const sections=collectWorkspaceSections();const matches=sections.filter(s=>s.head.toLowerCase()===wanted);if(matches.length!==1)return JSON.stringify({ok:false,state:matches.length?'workspace_ambiguous':'workspace_missing',available:sections.map(s=>s.head)});if(!matches[0].button)return JSON.stringify({ok:false,state:'new_agent_missing'});matches[0].button.click();return JSON.stringify({ok:true,state:'created',deferred_identity:false});`);
 }
 
 export function cursorComposerExpression() {

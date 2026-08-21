@@ -15,7 +15,7 @@ This fork preserves Sol Advisor's native Codex workflow and adds a user-owned co
 | Safety | Exact role/runtime evidence fails closed. | Writes require provider write capability, a non-read-only scenario, explicit current-task approval, and non-empty `allowed_paths`; a live workspace monitor plus Git content/HEAD/index/ref/config/reflog evidence rejects scope violations. |
 | External cost | Native use follows the user's Codex access. | Cursor, Grok, ChatGPT web Pro, and custom APIs are all disabled by default and are never called merely because they are installed. |
 
-Cursor uses loopback CDP and one pinned Agents UI profile; Grok uses a dedicated Leader and ACP over stdio. Neither connector includes the full reference Bridge/Supervisor. Automated fixtures cover both transports, but real desktop compatibility still requires the live smoke steps below.
+Cursor uses loopback CDP and one pinned Agents UI profile; Grok uses a dedicated Leader and ACP over stdio. Neither connector includes the full reference Bridge/Supervisor. Automated fixtures cover both transports. The maintained Windows baseline has also passed the live smoke steps below with Cursor 3.16.29 and Grok CLI 1.0.4; other local versions still fail closed until the same checks pass.
 
 ## Go deeper
 
@@ -67,7 +67,7 @@ Solo is the default. One auxiliary is the default maximum. The primary emits a r
 
 After pulling `main`, first enable only the provider/scenario being tested. For each connector run: (1) one read-only task and confirm Git is unchanged; (2) one bounded-write task limited to a disposable path and confirm only that path changed; (3) one long task followed by exact-identity cancellation. Record the returned `task_id` plus Cursor `agent_id` or Grok `session_id`/`run_id`. A model response alone is not success; Sol must inspect scope evidence, Git state, and the requested checks.
 
-The repository CI does not prove the user's actual Cursor UI version, login state, Grok installation, authentication, or desktop behavior. Those six live checks remain the user's post-merge verification boundary.
+The repository CI does not prove the user's actual Cursor UI version, login state, Grok installation, authentication, or desktop behavior. On 2026-08-20, the maintained Windows baseline passed read-only, bounded-write, and exact-cancel tests with Cursor 3.16.29 and Grok CLI 1.0.4. Treat that as a known-good baseline, not a guarantee for another installation; rerun the six checks after either desktop tool changes.
 
 ## Updating
 
