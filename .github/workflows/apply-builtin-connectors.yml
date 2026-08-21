@@ -101,7 +101,7 @@ jobs:
           printf '%s  %s\n' '3f1a527d2e2e010c7499a7e71a99a9972c142a9685d514bfb27d1616e25832a2' /tmp/builtin-connectors.patch | sha256sum --check --strict
           git apply --check --whitespace=error-all /tmp/builtin-connectors.patch
           git apply --index --whitespace=error-all /tmp/builtin-connectors.patch
-          git rm -r .github/connector-upload
+          git rm -rf .github/connector-upload
           git rm .github/workflows/apply-builtin-connectors.yml
           git diff --cached --check
       - uses: actions/setup-node@v4
