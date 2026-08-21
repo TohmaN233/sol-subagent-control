@@ -1,0 +1,25 @@
+name: export-cursor-followup-source
+
+on:
+  push:
+    branches:
+      - fix/cursor-31629-panel-profile
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cursor-followup-source
+          path: .
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
