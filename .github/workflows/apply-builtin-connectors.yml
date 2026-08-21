@@ -6,12 +6,18 @@ on:
       - feat/builtin-cursor-grok-write
     paths:
       - .github/connector-upload/READY
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/connector-upload/**
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'feat/builtin-cursor-grok-write')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
