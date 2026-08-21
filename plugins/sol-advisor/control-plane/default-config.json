@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "global": {
     "enabled": true,
     "allow_direct_api": false,
@@ -71,11 +71,11 @@
       }
     },
     {
-      "id": "cursor-bridge",
-      "name": "External Cursor Bridge descriptor",
-      "kind": "external_mcp",
+      "id": "cursor-local",
+      "name": "Built-in Cursor CDP connector",
+      "kind": "builtin_connector",
       "enabled": false,
-      "description": "Requires a separately installed Cursor Bridge MCP plugin. This repository does not yet bundle a Cursor connection.",
+      "description": "Repository-owned Cursor connector using loopback CDP and one supported Agents UI profile. Requires desktop live smoke on the user machine.",
       "requires_user_approval": true,
       "capabilities": {
         "read": true,
@@ -83,31 +83,29 @@
         "background": true
       },
       "config": {
-        "protocol": "external-cursor-bridge-v1",
-        "model_label": "Cursor user-selected model",
-        "tools": {
-          "initialize": "cursor_init",
-          "dispatch": "cursor_do",
-          "status": "cursor_status",
-          "control": "cursor_task_control"
-        },
-        "defaults": {
-          "execution": "fifo",
-          "background": true
-        },
-        "notes": "Availability is unverified until the external tools are observed. Allowed paths are not an operating-system sandbox."
+        "connector": "cursor_cdp",
+        "executable_env": "CURSOR_EXE",
+        "transport": "cdp_ui",
+        "cdp_port": 9223,
+        "launch_if_closed": true,
+        "ui_profile": "agents_v2_2026_08",
+        "startup_timeout_ms": 30000,
+        "command_timeout_ms": 30000,
+        "task_timeout_ms": 600000,
+        "max_result_chars": 131072,
+        "single_active_run": true
       }
     },
     {
       "id": "grok-local",
-      "name": "Experimental built-in Grok ACP connector",
+      "name": "Built-in Grok ACP connector",
       "kind": "builtin_connector",
       "enabled": false,
-      "description": "Repository-owned read-only Grok connection using a dedicated Leader and ACP over stdio. Desktop live smoke is still required.",
+      "description": "Repository-owned Grok connector using a dedicated Leader and ACP over stdio for read-only and explicitly approved bounded-write work. Requires desktop live smoke.",
       "requires_user_approval": true,
       "capabilities": {
         "read": true,
-        "write": false,
+        "write": true,
         "background": true
       },
       "config": {
@@ -176,7 +174,7 @@
       "route": "delegate",
       "provider_id": "native-luna",
       "read_only": false,
-      "requires_user_approval": false,
+      "requires_user_approval": true,
       "tags": [
         "implementation",
         "bounded",
@@ -192,7 +190,7 @@
       "route": "delegate",
       "provider_id": "native-terra",
       "read_only": false,
-      "requires_user_approval": false,
+      "requires_user_approval": true,
       "tags": [
         "implementation",
         "high-risk",
@@ -251,19 +249,67 @@
     },
     {
       "id": "grok-readonly-advice",
-      "name": "Experimental Grok read-only advice",
+      "name": "Grok read-only subagent",
       "enabled": false,
-      "description": "Use the built-in Grok ACP connector for one bounded read-only analysis. Requires explicit current-task approval.",
+      "description": "Use the built-in Grok ACP connector for one bounded read-only task. Disabled by default and requires explicit current-task approval.",
       "route": "delegate",
       "provider_id": "grok-local",
       "read_only": true,
       "requires_user_approval": true,
       "tags": [
         "grok",
-        "read-only",
-        "experimental"
+        "built-in",
+        "read-only"
       ],
       "template": "ROLE\nAct as a bounded read-only Grok subagent. Do not modify files or approve permissions on your own.\n\nOBJECTIVE\n{{task}}\n\nCONTEXT\n{{context}}\n\nCONSTRAINTS\n{{constraints}}\n\nVERIFICATION\n{{verification}}\n\nRETURN\nReturn observed evidence, uncertainties, the smallest next check, and a concise final recommendation. Do not claim that commands or file changes occurred unless they are directly evidenced.\n"
+    },
+    {
+      "id": "grok-bounded-change",
+      "name": "Grok bounded repository change",
+      "enabled": false,
+      "description": "Use the built-in Grok ACP connector for an explicitly approved write task restricted to caller-supplied allowed_paths.",
+      "route": "delegate",
+      "provider_id": "grok-local",
+      "read_only": false,
+      "requires_user_approval": true,
+      "tags": [
+        "grok",
+        "built-in",
+        "bounded-write"
+      ],
+      "template": "ROLE\nAct as a bounded Grok implementation subagent. Work only inside the exact allowed paths supplied by the connector and never publish changes.\n\nOBJECTIVE\n{{task}}\n\nCONTEXT\n{{context}}\n\nFIXED CONSTRAINTS\n{{constraints}}\n\nVERIFICATION\n{{verification}}\n\nRETURN\nList changed files, checks actually run, failures or uncertainty, and a concise implementation claim for Sol to verify. Do not claim acceptance authority.\n"
+    },
+    {
+      "id": "cursor-readonly-advice",
+      "name": "Cursor read-only subagent",
+      "enabled": false,
+      "description": "Use the built-in Cursor CDP connector for one bounded read-only task in the exact workspace. Disabled by default and requires explicit current-task approval.",
+      "route": "delegate",
+      "provider_id": "cursor-local",
+      "read_only": true,
+      "requires_user_approval": true,
+      "tags": [
+        "cursor",
+        "built-in",
+        "read-only"
+      ],
+      "template": "ROLE\nAct as a bounded read-only Cursor subagent in the exact workspace selected by the connector. Do not modify repository state.\n\nOBJECTIVE\n{{task}}\n\nCONTEXT\n{{context}}\n\nCONSTRAINTS\n{{constraints}}\n\nVERIFICATION\n{{verification}}\n\nRETURN\nReturn observed evidence, uncertainties, checks actually performed, and a concise recommendation for Sol to verify.\n"
+    },
+    {
+      "id": "cursor-bounded-change",
+      "name": "Cursor bounded repository change",
+      "enabled": false,
+      "description": "Use the built-in Cursor CDP connector for an explicitly approved write task restricted to caller-supplied allowed_paths.",
+      "route": "delegate",
+      "provider_id": "cursor-local",
+      "read_only": false,
+      "requires_user_approval": true,
+      "tags": [
+        "cursor",
+        "built-in",
+        "bounded-write"
+      ],
+      "template": "ROLE\nAct as a bounded Cursor implementation subagent in the exact workspace. Modify only the allowed paths supplied by the connector and never publish changes.\n\nOBJECTIVE\n{{task}}\n\nCONTEXT\n{{context}}\n\nFIXED CONSTRAINTS\n{{constraints}}\n\nVERIFICATION\n{{verification}}\n\nRETURN\nList changed files, checks actually run, failures or uncertainty, and a concise implementation claim for Sol to verify. Do not claim acceptance authority.\n"
     }
   ]
 }

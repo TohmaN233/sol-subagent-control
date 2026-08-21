@@ -1,13 +1,13 @@
 {
   "name": "sol-advisor-control-plane",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Local scenario/provider control plane with an experimental built-in Grok Leader + ACP connector.",
+  "description": "Local scenario/provider control plane with repository-owned Cursor CDP and Grok Leader + ACP connectors.",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node test/run-tests.mjs"
   }
 }

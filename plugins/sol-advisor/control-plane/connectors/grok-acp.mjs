@@ -2,10 +2,17 @@ import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { access, mkdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { JsonRpcPeer } from './json-rpc-peer.mjs';
 import { connectorError, publicConnectorError } from './errors.mjs';
-import { captureReadOnlySnapshot, validateWorkspace, verifyReadOnlySnapshot } from './scope-guard.mjs';
+import {
+  captureWorkspaceSnapshot,
+  pathAllowed,
+  startWorkspaceScopeMonitor,
+  validateAllowedPaths,
+  validateWorkspace,
+  verifyWorkspaceScope,
+} from './scope-guard.mjs';
 
 const RESULT_STATES = new Set(['completed', 'failed', 'cancelled', 'scope_violation', 'abandoned']);
 
@@ -73,6 +80,79 @@ function validateInputContent(schema, content) {
   return output;
 }
 
+
+
+function collectStrings(value, output = [], depth = 0, key = '') {
+  if (depth > 6 || output.length >= 100) return output;
+  if (typeof value === 'string') {
+    output.push({ key, value });
+    return output;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((child, index) => collectStrings(child, output, depth + 1, `${key}[${index}]`));
+    return output;
+  }
+  if (value && typeof value === 'object') {
+    Object.entries(value).forEach(([childKey, child]) =>
+      collectStrings(child, output, depth + 1, key ? `${key}.${childKey}` : childKey));
+  }
+  return output;
+}
+
+function normalizePermissionPath(workspace, candidate) {
+  const raw = String(candidate || '').trim().replace(/\\/g, '/');
+  if (!raw || raw.includes('\n') || raw.length > 2048) return null;
+  const pathLike = /(?:^|[\\/])[^\\/]+/.test(raw)
+    || /^[A-Za-z]:[\\/]/.test(raw)
+    || /\.[A-Za-z0-9]{1,12}$/.test(raw);
+  if (!pathLike) return null;
+  const absolute = isAbsolute(raw) ? resolve(raw) : resolve(workspace, raw);
+  const relativePath = relative(workspace, absolute).replace(/\\/g, '/');
+  if (!relativePath || relativePath === '.' || relativePath === '..' || relativePath.startsWith('../')) {
+    return null;
+  }
+  return relativePath;
+}
+
+function permissionIntent(params, workspace) {
+  const strings = collectStrings(params?.toolCall || {});
+  const combined = strings.map((item) => `${item.key}:${item.value}`).join('\n');
+  const writeLike = /\b(write|edit|modify|delete|remove|rename|move|mkdir|create|patch|apply|save|replace|overwrite)\b/i.test(combined)
+    || /(?:fs\/write|write_text_file|apply_patch)/i.test(combined);
+  const paths = [...new Set(strings
+    .filter((item) => /path|file|location|cwd|target|uri/i.test(item.key) || /[\\/]/.test(item.value))
+    .map((item) => normalizePermissionPath(workspace, item.value))
+    .filter(Boolean))];
+  return {
+    write_like: writeLike,
+    paths,
+    tool_title: String(params?.toolCall?.title || 'Unnamed Grok tool call'),
+  };
+}
+
+function accessEnvelope(prompt, workspace, readOnly, allowedPaths) {
+  const boundary = readOnly
+    ? [
+      'Access mode: READ ONLY.',
+      'Do not create, modify, rename, or delete files and do not run commands that change repository state.',
+    ]
+    : [
+      'Access mode: BOUNDED WRITE.',
+      'You may modify only these workspace-relative paths:',
+      ...allowedPaths.map((path) => `- ${path}`),
+      'Do not modify any other path. Ask through the normal ACP permission flow before consequential tools.',
+    ];
+  return [
+    '[Sol connector access boundary]',
+    `Workspace: ${workspace}`,
+    ...boundary,
+    'Sol remains the final verifier. Your completion statement is only an implementation claim.',
+    '[/Sol connector access boundary]',
+    '',
+    prompt,
+  ].join('\n');
+}
+
 function textChunk(params) {
   const update = params?.update;
   if (update?.sessionUpdate !== 'agent_message_chunk') return '';
@@ -115,17 +195,25 @@ export class GrokAcpConnector {
         binary_present: true,
         workspace: workspace ? await validateWorkspace(workspace) : null,
       },
-      action_required: 'Start an explicitly approved read-only scenario to establish a live ACP session.',
+      action_required: 'Start an explicitly approved read-only or bounded-write scenario to establish a live ACP session.',
       error: null,
     };
   }
 
-  async start({ provider, scenario, prompt, workspace, scenarioId }) {
-    if (!scenario.read_only || provider.capabilities.write) {
-      throw connectorError('READ_ONLY_REQUIRED',
-        'The experimental built-in Grok connector supports read-only scenarios only.');
-    }
+  async start({ provider, scenario, prompt, workspace, scenarioId, allowedPaths = [] }) {
     const fullWorkspace = await validateWorkspace(workspace);
+    const readOnly = scenario.read_only === true;
+    const boundedPaths = readOnly
+      ? await validateAllowedPaths(fullWorkspace, allowedPaths)
+      : await validateAllowedPaths(fullWorkspace, allowedPaths, { required: true });
+    if (readOnly && boundedPaths.length > 0) {
+      throw connectorError('ALLOWED_PATHS_READ_ONLY_CONFLICT',
+        'read-only connector tasks must not declare allowed_paths');
+    }
+    if (!readOnly && provider.capabilities.write !== true) {
+      throw connectorError('WRITE_CAPABILITY_REQUIRED',
+        `Provider ${provider.id} does not advertise bounded-write capability`);
+    }
     const conflicts = await this.store.activeForWorkspace(fullWorkspace);
     if (conflicts.length > 0) {
       throw connectorError('CONNECTOR_BUSY',
@@ -136,16 +224,17 @@ export class GrokAcpConnector {
     await access(binary).catch(() => {
       throw connectorError('GROK_BINARY_MISSING', `Grok binary not found: ${binary}`);
     });
-    const baseline = await captureReadOnlySnapshot(fullWorkspace);
+    const baseline = await captureWorkspaceSnapshot(fullWorkspace);
+    const boundedPrompt = accessEnvelope(prompt, fullWorkspace, readOnly, boundedPaths);
     const task = await this.store.create({
       scenario_id: scenarioId,
       provider_id: provider.id,
       connector: 'grok_acp',
       workspace: fullWorkspace,
-      read_only: true,
-      allowed_paths: [],
-      prompt_sha256: createHash('sha256').update(prompt).digest('hex'),
-      baseline_digest: baseline,
+      read_only: readOnly,
+      allowed_paths: boundedPaths,
+      prompt_sha256: createHash('sha256').update(boundedPrompt).digest('hex'),
+      baseline_snapshot: baseline,
       deadline_at: new Date(Date.now() + provider.config.task_timeout_ms).toISOString(),
     });
     const runtimeRoot = join(dirname(this.configPath), 'grok-runtime');
@@ -156,6 +245,7 @@ export class GrokAcpConnector {
     let acp;
     let peer;
     let active = null;
+    let scopeMonitor = null;
     let startupError = null;
     const observeProcessError = (processName) => (error) => {
       if (active) {
@@ -166,12 +256,17 @@ export class GrokAcpConnector {
       }
     };
     try {
+      scopeMonitor = startWorkspaceScopeMonitor(fullWorkspace, {
+        readOnly,
+        allowedPaths: boundedPaths,
+        onViolation: (attempt) => this.#runtimeScopeViolation(active, attempt),
+      });
       leader = this.spawnImpl(binary, [
         'agent', 'leader', '--no-exit-on-disconnect', '--relay-on-demand', '--no-auto-update',
         '--leader-socket', leaderSocket,
       ], {
         cwd: fullWorkspace,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['ignore', 'ignore', 'pipe'],
         windowsHide: true,
         env: this.env,
       });
@@ -211,12 +306,17 @@ export class GrokAcpConnector {
         scenario,
         workspace: fullWorkspace,
         baseline,
+        readOnly,
+        allowedPaths: boundedPaths,
+        preventedAttempts: [],
         binary,
         leaderSocket,
         leader,
         acp,
         peer,
         stderrTail,
+        scopeMonitor,
+        scopeViolationTriggered: false,
         pendingRequest: null,
         resultText: '',
         intentionalCleanup: false,
@@ -227,6 +327,7 @@ export class GrokAcpConnector {
       peer.onNotification('session/update', (params) => this.#onSessionUpdate(active, params));
       peer.onRequest('session/request_permission', (params) => this.#onPermission(active, params));
       peer.onRequest('elicitation/create', (params) => this.#onInput(active, params));
+      leader.once('exit', (code, signal) => this.#onProcessExit(active, 'leader', code, signal));
       acp.once('exit', (code, signal) => this.#onProcessExit(active, 'acp', code, signal));
       const initialized = await peer.request('initialize', {
         protocolVersion: 1,
@@ -241,6 +342,12 @@ export class GrokAcpConnector {
       const runId = randomUUID();
       active.sessionId = sessionId;
       active.runId = runId;
+      if (scopeMonitor.violations.length > 0) {
+        throw connectorError('SCOPE_VIOLATION',
+          'The workspace changed outside the declared scope before Grok prompt submission.', {
+            details: { prevented_attempts: scopeMonitor.violations },
+          });
+      }
       await this.store.update(task.task_id, {
         state: 'running',
         remote_identity: {
@@ -248,24 +355,34 @@ export class GrokAcpConnector {
           run_id: runId,
           protocol_version: initialized?.protocolVersion ?? 1,
         },
+        transport: {
+          leader_socket: leaderSocket,
+          binary,
+        },
       });
       this.#signal(task.task_id);
       active.timeout = setTimeout(() => this.#timeout(active), provider.config.task_timeout_ms);
       peer.request('session/prompt', {
         sessionId,
-        prompt: [{ type: 'text', text: prompt }],
+        prompt: [{ type: 'text', text: boundedPrompt }],
       }, provider.config.task_timeout_ms + 60_000)
         .then((result) => this.#complete(active, result))
         .catch((error) => this.#fail(active, error));
       return this.publicTask(await this.store.get(task.task_id));
     } catch (error) {
-      if (peer) peer.close(error instanceof Error ? error : new Error(String(error)));
+      const safeError = typeof error?.code === 'string'
+        ? error
+        : connectorError('ACP_INIT_FAILED', redactDiagnostic(error?.message || error), {
+          details: { stderr_tail: stderrTail.filter(Boolean).slice(-5) },
+        });
+      if (peer) peer.close(safeError);
+      scopeMonitor?.close();
       try { acp?.kill(); } catch {}
       try { leader?.kill(); } catch {}
-      const publicError = publicConnectorError(error);
+      const publicError = publicConnectorError(safeError);
       await this.store.update(task.task_id, { state: 'failed', error: publicError }).catch(() => {});
       this.active.delete(task.task_id);
-      throw error;
+      throw safeError;
     }
   }
 
@@ -273,10 +390,14 @@ export class GrokAcpConnector {
     let task = await this.store.get(taskId);
     if (!task) throw connectorError('TASK_NOT_FOUND', `Unknown connector task: ${taskId}`);
     const boundedWait = Math.max(0, Math.min(Number(waitMs) || 0, 25_000));
-    if (boundedWait > 0 && !RESULT_STATES.has(task.state)
+    const deadline = Date.now() + boundedWait;
+    while (boundedWait > 0 && !RESULT_STATES.has(task.state)
       && !['needs_permission', 'needs_input', 'needs_attention', 'unknown_after_restart'].includes(task.state)) {
-      await this.#waitForChange(taskId, task.updated_at, boundedWait);
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      await this.#waitForChange(taskId, task.updated_at, remaining);
       task = await this.store.get(taskId);
+      if (!task) break;
     }
     return this.publicTask(task);
   }
@@ -284,8 +405,16 @@ export class GrokAcpConnector {
   async control(taskId, args) {
     const task = await this.store.get(taskId);
     if (!task) throw connectorError('TASK_NOT_FOUND', `Unknown connector task: ${taskId}`);
-    const active = this.active.get(taskId);
+    let active = this.active.get(taskId);
     const action = String(args.action || '');
+    if (action === 'reconcile') {
+      if (!['unknown_after_restart', 'needs_attention'].includes(task.state)) {
+        throw connectorError('RECONCILE_NOT_ALLOWED',
+          'reconcile is only available for unknown_after_restart or needs_attention tasks');
+      }
+      active = await this.#reconcile(task);
+      return this.publicTask(await this.store.get(taskId));
+    }
     if (RESULT_STATES.has(task.state)) {
       throw connectorError('TASK_ALREADY_TERMINAL',
         `Connector task is already terminal: ${task.state}`);
@@ -385,7 +514,7 @@ export class GrokAcpConnector {
       return this.publicTask(await this.store.get(taskId));
     }
     throw connectorError('CONTROL_ACTION_INVALID',
-      'action must be respond_permission, respond_input, cancel, disconnect, or abandon');
+      'action must be reconcile, respond_permission, respond_input, cancel, disconnect, or abandon');
   }
 
   publicTask(task) {
@@ -398,6 +527,7 @@ export class GrokAcpConnector {
       state: task.state,
       workspace: task.workspace,
       read_only: task.read_only,
+      allowed_paths: task.allowed_paths || [],
       remote_identity: task.remote_identity || {},
       pending_request: task.pending_request || null,
       created_at: task.created_at,
@@ -418,9 +548,65 @@ export class GrokAcpConnector {
     active.resultText = `${active.resultText}${chunk}`.slice(-max);
   }
 
-  #onPermission(active, params) {
+  async #onPermission(active, params) {
     if (params?.sessionId && params.sessionId !== active.sessionId) {
       return { outcome: { outcome: 'cancelled' } };
+    }
+    const intent = permissionIntent(params, active.workspace);
+    if (intent.write_like) {
+      const outside = active.readOnly
+        ? (intent.paths.length ? intent.paths : ['<unscoped-write>'])
+        : intent.paths.length === 0
+          ? ['<unscoped-write>']
+          : intent.paths.filter((path) => !pathAllowed(path, active.allowedPaths));
+      if (outside.length > 0) {
+        const attempted = outside.map((path) => ({
+          source: 'acp_permission',
+          tool_title: intent.tool_title,
+          path,
+          reason: active.readOnly ? 'read_only' : 'outside_allowed_paths',
+          observed_at: new Date().toISOString(),
+        }));
+        active.preventedAttempts.push(...attempted);
+        const scope = await verifyWorkspaceScope(active.workspace, active.baseline, {
+          readOnly: active.readOnly,
+          allowedPaths: active.allowedPaths,
+          preventedAttempts: active.preventedAttempts,
+          runtimeAttempts: active.scopeMonitor?.violations || [],
+        }).catch(() => ({
+          read_only: active.readOnly,
+          allowed_paths: [...active.allowedPaths],
+          changed_paths: [],
+          outside_paths: [],
+          prevented_attempts: [...active.preventedAttempts],
+          compliant: false,
+          unchanged: false,
+          baseline_digest: active.baseline?.digest || null,
+          observed_digest: null,
+        }));
+        await this.store.update(active.taskId, {
+          state: 'scope_violation',
+          scope,
+          pending_request: null,
+          terminal_evidence: {
+            kind: 'acp_permission_denied',
+            observed_at: new Date().toISOString(),
+            session_id: active.sessionId,
+            run_id: active.runId,
+          },
+          result: null,
+          error: publicConnectorError(connectorError('SCOPE_VIOLATION',
+            'Grok requested a write outside the declared connector scope; the ACP permission was denied before execution.', {
+              details: { prevented_attempts: attempted },
+            })),
+        });
+        this.#signal(active.taskId);
+        setImmediate(() => {
+          try { active.peer?.notify('session/cancel', { sessionId: active.sessionId }); } catch {}
+          void this.#cleanup(active);
+        });
+        return { outcome: { outcome: 'cancelled' } };
+      }
     }
     if (active.pendingRequest) {
       throw connectorError('MULTIPLE_PENDING_REQUESTS', 'Grok issued overlapping permission/input requests');
@@ -437,7 +623,10 @@ export class GrokAcpConnector {
         state: 'needs_permission',
         pending_request: {
           kind: 'permission', request_id: requestId,
-          tool_title: params.toolCall?.title || 'Unnamed Grok tool call', options,
+          tool_title: intent.tool_title,
+          paths: intent.paths,
+          write_like: intent.write_like,
+          options,
         },
       }).then(() => this.#signal(active.taskId));
     });
@@ -468,14 +657,23 @@ export class GrokAcpConnector {
 
   async #complete(active, result) {
     const current = await this.store.get(active.taskId);
+    if (current && RESULT_STATES.has(current.state)) {
+      await this.#cleanup(active);
+      return;
+    }
     const cancelled = current?.state === 'cancelling'
       || String(result?.stopReason || '').toLowerCase().includes('cancel');
-    const scope = await verifyReadOnlySnapshot(active.workspace, active.baseline);
-    const state = !scope.unchanged ? 'scope_violation' : cancelled ? 'cancelled' : 'completed';
+    const scope = await verifyWorkspaceScope(active.workspace, active.baseline, {
+      readOnly: active.readOnly,
+      allowedPaths: active.allowedPaths,
+      preventedAttempts: active.preventedAttempts,
+      runtimeAttempts: active.scopeMonitor?.violations || [],
+    });
+    const state = !scope.compliant ? 'scope_violation' : cancelled ? 'cancelled' : 'completed';
     await this.store.update(active.taskId, {
       state,
       pending_request: null,
-      scope: { read_only: true, unchanged: scope.unchanged },
+      scope,
       terminal_evidence: {
         kind: 'acp_prompt_result',
         observed_at: new Date().toISOString(),
@@ -484,7 +682,13 @@ export class GrokAcpConnector {
       result: state === 'scope_violation' ? null : { text: active.resultText.trim(), artifact_path: null },
       error: state === 'scope_violation'
         ? publicConnectorError(connectorError('SCOPE_VIOLATION',
-          'The Git workspace changed during a read-only Grok task.'))
+          'Grok attempted or produced repository changes outside the declared connector scope.', {
+            details: {
+              changed_paths: scope.changed_paths,
+              outside_paths: scope.outside_paths,
+              prevented_attempts: scope.prevented_attempts,
+            },
+          }))
         : null,
     });
     this.#signal(active.taskId);
@@ -494,19 +698,68 @@ export class GrokAcpConnector {
   async #fail(active, error) {
     const current = await this.store.get(active.taskId);
     if (!current || RESULT_STATES.has(current.state)) return;
-    const scope = await verifyReadOnlySnapshot(active.workspace, active.baseline).catch(() => null);
-    const state = scope && !scope.unchanged ? 'scope_violation' : 'failed';
+    const scope = await verifyWorkspaceScope(active.workspace, active.baseline, {
+      readOnly: active.readOnly,
+      allowedPaths: active.allowedPaths,
+      preventedAttempts: active.preventedAttempts,
+      runtimeAttempts: active.scopeMonitor?.violations || [],
+    }).catch(() => null);
+    const state = scope && !scope.compliant ? 'scope_violation' : 'failed';
     await this.store.update(active.taskId, {
       state,
-      scope: scope ? { read_only: true, unchanged: scope.unchanged } : null,
+      scope,
       error: publicConnectorError(state === 'scope_violation'
-        ? connectorError('SCOPE_VIOLATION', 'The Git workspace changed during a read-only Grok task.')
+        ? connectorError('SCOPE_VIOLATION',
+          'Grok attempted or produced repository changes outside the declared connector scope.', {
+            details: {
+              changed_paths: scope.changed_paths,
+              outside_paths: scope.outside_paths,
+              prevented_attempts: scope.prevented_attempts,
+            },
+          })
         : connectorError('ACP_PROMPT_FAILED', redactDiagnostic(error instanceof Error ? error.message : error), {
           details: { stderr_tail: active.stderrTail.filter(Boolean).slice(-5) },
         })),
     });
     this.#signal(active.taskId);
     await this.#cleanup(active);
+  }
+
+  async #runtimeScopeViolation(active, attempt) {
+    if (!active || active.intentionalCleanup || active.scopeViolationTriggered) return;
+    active.scopeViolationTriggered = true;
+    const current = await this.store.get(active.taskId).catch(() => null);
+    if (!current || RESULT_STATES.has(current.state)) return;
+    let cancelSent = false;
+    if (active.sessionId) {
+      try {
+        active.peer?.notify('session/cancel', { sessionId: active.sessionId });
+        cancelSent = true;
+      } catch {}
+    }
+    await this.store.update(active.taskId, {
+      state: cancelSent ? 'cancelling' : 'needs_attention',
+      scope: {
+        read_only: active.readOnly,
+        allowed_paths: [...active.allowedPaths],
+        changed_paths: [],
+        metadata_changes: [],
+        outside_paths: [attempt.path],
+        prevented_attempts: [
+          ...active.preventedAttempts,
+          ...(active.scopeMonitor?.violations || [attempt]),
+        ],
+        compliant: false,
+        unchanged: false,
+        evidence_status: 'runtime_observed_terminal_unconfirmed',
+      },
+      error: publicConnectorError(connectorError('RUNTIME_SCOPE_VIOLATION',
+        'A workspace write outside the declared Grok scope was observed while the task was active.', {
+          details: { prevented_attempts: [attempt] },
+          actionRequired: 'The connector requested exact session cancellation; inspect final scope evidence before acceptance.',
+        })),
+    }).catch(() => {});
+    this.#signal(active.taskId);
   }
 
   async #timeout(active) {
@@ -553,10 +806,114 @@ export class GrokAcpConnector {
     this.#signal(active.taskId);
   }
 
+  async #reconcile(task) {
+    const identity = task.remote_identity || {};
+    if (!identity.session_id || !identity.run_id) {
+      throw connectorError('IDENTITY_REQUIRED',
+        'restart reconciliation requires the persisted exact session_id and run_id');
+    }
+    const transport = task.transport || {};
+    if (!transport.leader_socket || !transport.binary) {
+      throw connectorError('RECOVERY_UNAVAILABLE',
+        'persisted Grok transport identity is unavailable for this task');
+    }
+    const existing = this.active.get(task.task_id);
+    if (existing) await this.#cleanup(existing);
+    const stderrTail = [];
+    const acp = this.spawnImpl(transport.binary, [
+      '--permission-mode', 'default', 'agent', '--leader',
+      '--leader-socket', transport.leader_socket, 'stdio',
+    ], {
+      cwd: task.workspace,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+      env: this.env,
+    });
+    acp.stderr?.on('data', (chunk) => {
+      stderrTail.push(redactDiagnostic(chunk));
+      if (stderrTail.length > 10) stderrTail.shift();
+    });
+    const peer = new JsonRpcPeer({ input: acp.stdout, output: acp.stdin, defaultTimeoutMs: 15_000 });
+    let recoveredActive = null;
+    const scopeMonitor = startWorkspaceScopeMonitor(task.workspace, {
+      readOnly: task.read_only === true,
+      allowedPaths: task.allowed_paths || [],
+      onViolation: (attempt) => this.#runtimeScopeViolation(recoveredActive, attempt),
+    });
+    const active = {
+      taskId: task.task_id,
+      provider: { config: { max_result_chars: 131_072 } },
+      scenario: { read_only: task.read_only },
+      workspace: task.workspace,
+      baseline: task.baseline_snapshot,
+      readOnly: task.read_only === true,
+      allowedPaths: task.allowed_paths || [],
+      preventedAttempts: task.scope?.prevented_attempts || [],
+      binary: transport.binary,
+      leaderSocket: transport.leader_socket,
+      leader: null,
+      ownsLeader: false,
+      acp,
+      peer,
+      stderrTail,
+      scopeMonitor,
+      scopeViolationTriggered: false,
+      pendingRequest: null,
+      resultText: '',
+      intentionalCleanup: false,
+      timeout: null,
+      sessionId: identity.session_id,
+      runId: identity.run_id,
+      recovered: true,
+    };
+    recoveredActive = active;
+    this.active.set(task.task_id, active);
+    peer.onNotification('session/update', (params) => this.#onSessionUpdate(active, params));
+    peer.onRequest('session/request_permission', (params) => this.#onPermission(active, params));
+    peer.onRequest('elicitation/create', (params) => this.#onInput(active, params));
+    acp.once('exit', (code, signal) => this.#onProcessExit(active, 'acp', code, signal));
+    try {
+      const initialized = await peer.request('initialize', {
+        protocolVersion: 1,
+        clientCapabilities: { elicitation: { form: {} } },
+      }, 15_000);
+      if (initialized?.agentCapabilities?.loadSession !== true) {
+        throw connectorError('RECOVERY_UNAVAILABLE',
+          'Grok ACP did not advertise exact session/load recovery support');
+      }
+      await peer.request('session/load', {
+        sessionId: identity.session_id,
+        cwd: task.workspace,
+        mcpServers: [],
+      }, 15_000);
+      await this.store.update(task.task_id, {
+        state: 'needs_attention',
+        remote_identity: {
+          ...identity,
+          protocol_version: initialized?.protocolVersion ?? identity.protocol_version ?? 1,
+          recovered_attachment: true,
+        },
+        error: publicConnectorError(connectorError('RECOVERED_RUN_STATE_UNKNOWN',
+          'The exact Grok session was reattached, but ACP does not prove the prior run terminal state.', {
+            actionRequired: 'Inspect or cancel the exact session/run; do not resubmit automatically.',
+          })),
+      });
+      this.#signal(task.task_id);
+      return active;
+    } catch (error) {
+      await this.#cleanup(active);
+      throw connectorError('RECOVERY_FAILED',
+        `Could not reattach the exact Grok session: ${redactDiagnostic(error?.message || error)}`, {
+          details: { stderr_tail: stderrTail.filter(Boolean).slice(-5) },
+        });
+    }
+  }
+
   async #cleanup(active) {
     if (!this.active.has(active.taskId)) return;
     active.intentionalCleanup = true;
     clearTimeout(active.timeout);
+    active.scopeMonitor?.close();
     if (active.pendingRequest) {
       active.pendingRequest.resolve(active.pendingRequest.kind === 'permission'
         ? { outcome: { outcome: 'cancelled' } }
@@ -565,8 +922,10 @@ export class GrokAcpConnector {
     }
     active.peer?.close();
     try { active.acp?.kill(); } catch {}
-    try { active.leader?.kill(); } catch {}
-    try {
+    if (active.ownsLeader !== false) {
+      try { active.leader?.kill(); } catch {}
+    }
+    if (active.ownsLeader !== false) try {
       const killer = this.spawnImpl(active.binary,
         ['leader', '--leader-socket', active.leaderSocket, 'kill'], {
           cwd: active.workspace, stdio: 'ignore', windowsHide: true, env: this.env,
