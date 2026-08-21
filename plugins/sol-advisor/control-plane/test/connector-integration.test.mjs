@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,8 +32,9 @@ async function freePort() {
 
 async function fixture(t, { processRunningImpl = async () => false, cursorLaunchIfClosed = true, envOverrides = {} } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'sol-connectors-'));
-  const workspace = join(root, 'repo');
-  await mkdir(workspace, { recursive: true });
+  const workspaceInput = join(root, 'repo');
+  await mkdir(workspaceInput, { recursive: true });
+  const workspace = await realpath(workspaceInput);
   await execFileAsync('git', ['-C', workspace, 'init', '-q']);
   await execFileAsync('git', ['-C', workspace, 'config', 'user.email', 'fixture@example.test']);
   await execFileAsync('git', ['-C', workspace, 'config', 'user.name', 'Fixture']);
