@@ -2,10 +2,10 @@
 
 import { pathToFileURL } from 'node:url';
 
-import { startConsole, stopConsole } from './server.mjs';
+import { DEFAULT_CONSOLE_PORT, startConsole, stopConsole } from './server.mjs';
 
 export function parseOptions(args = []) {
-  let port = 0;
+  let port = DEFAULT_CONSOLE_PORT;
   let open = true;
   let help = false;
   for (let index = 0; index < args.length; index += 1) {
@@ -36,6 +36,7 @@ function usage() {
     'Usage: open-control-console [--port PORT] [--no-open]',
     '',
     'Starts the loopback Sol Subagent Control console using the real user config.',
+    `Defaults to 127.0.0.1:${DEFAULT_CONSOLE_PORT}; pass --port 0 to request a random free port.`,
     'Keep this process running while the page is open; press Ctrl+C to stop it.',
   ].join('\n');
 }

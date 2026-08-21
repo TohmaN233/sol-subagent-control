@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import readline from 'node:readline';
 
@@ -29,9 +29,18 @@ const CONTROL_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = join(CONTROL_DIR, 'default-config.json');
 const WEB_DIR = join(CONTROL_DIR, 'web');
 const SERVER_VERSION = '0.4.4';
+const DEFAULT_CONSOLE_PORT = 58712;
 const MAX_HTTP_BODY = 512 * 1024;
 
 let consoleState = null;
+
+function samePath(left, right) {
+  const resolvedLeft = resolve(left);
+  const resolvedRight = resolve(right);
+  return process.platform === 'win32'
+    ? resolvedLeft.toLowerCase() === resolvedRight.toLowerCase()
+    : resolvedLeft === resolvedRight;
+}
 
 function textToolResult(value, isError = false) {
   const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
@@ -156,7 +165,9 @@ export async function startConsole({
     return { ...consoleState, browser: opened };
   }
   const configPath = requestedConfigPath || resolveConfigPath(env);
-  const usesOverride = Boolean(requestedConfigPath || env.SOL_CONTROL_CONFIG);
+  const globalConfigPath = resolveConfigPath({ ...env, SOL_CONTROL_CONFIG: '' });
+  const usesOverride = Boolean(env.SOL_CONTROL_CONFIG)
+    || Boolean(requestedConfigPath && !samePath(configPath, globalConfigPath));
   const storage = {
     scope: usesOverride ? 'override' : 'global',
     config_path: configPath,
@@ -269,7 +280,7 @@ export function buildToolDefinitions() {
       inputSchema: {
         type: 'object',
         properties: {
-          port: { type: 'integer', minimum: 0, maximum: 65535, default: 0 },
+          port: { type: 'integer', minimum: 0, maximum: 65535, default: DEFAULT_CONSOLE_PORT },
           reveal_url: { type: 'boolean', default: false },
         },
         additionalProperties: false,
@@ -416,7 +427,7 @@ export async function handleRpc(request, {
         const state = await startConsole({
           configPath,
           defaultConfigPath,
-          port: Number.isInteger(args.port) ? args.port : 0,
+          port: Number.isInteger(args.port) ? args.port : DEFAULT_CONSOLE_PORT,
           open: true,
           env,
         });
@@ -509,4 +520,4 @@ if (isMain) {
   });
 }
 
-export { CONTROL_DIR, DEFAULT_CONFIG_PATH, SERVER_VERSION };
+export { CONTROL_DIR, DEFAULT_CONFIG_PATH, DEFAULT_CONSOLE_PORT, SERVER_VERSION };

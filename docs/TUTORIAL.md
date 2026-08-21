@@ -77,7 +77,7 @@ test -n "$plugin_dir" && test "$plugin_dir" != null || { echo 'sol-advisor is no
 sh "$plugin_dir/scripts/open-control-console.sh"
 ```
 
-The script binds to a random `127.0.0.1` port and opens the browser. Keep the terminal running; pressing `Ctrl+C` stops the local service. Do not share a local URL that may contain the console token. You can also choose a fixed port, for example:
+The script binds to the stable loopback port `127.0.0.1:58712` and opens the browser. Keep the terminal running; pressing `Ctrl+C` stops the local service. Do not share a local URL that may contain the console token. Use `--port 0` only when you explicitly want a random free port, or choose another fixed port, for example:
 
 ```powershell
 & "$($plugin.source.path)\scripts\open-control-console.cmd" --port 58046
@@ -105,6 +105,25 @@ A Provider describes “who does the work and through which connection”; a Tas
 Bundled presets are starting points, not a closed list. You can delete, restore, copy, rename, or edit them, change their templates, or create entirely custom Task Types. Cursor, Grok, web review, and native agents are Providers; they should not be encoded into Task Type names.
 
 When upgrading an earlier configuration, a legacy judgment-heavy preset with the standard task identity gains an independent review Stage while preserving its customized implementation Stage. If you changed the Task Type's name, description, tags, or broader semantics, its workflow is preserved instead.
+
+### Example: translation with independent proofreading
+
+Translation is a useful custom Task Type because producing the target text and accepting its quality are separate responsibilities:
+
+1. Copy **Implementation with independent review**, rename it `translation-with-review`, and enable it.
+2. Pin the implementation Stage to a translation-capable Provider. Use `bounded_write`, require current-task approval, and limit `allowed_paths` to the target-language files.
+3. In its template, require the Provider to preserve line order and count, placeholders, tags, and control codes; follow the supplied glossary and character notes; and report uncertain terms instead of silently guessing.
+4. Pin the review Stage to a separate read-only Reviewer. Require a source/target comparison for omissions, mistranslations, inconsistent names or terminology, tone drift, and damaged placeholders. The Reviewer reports findings but does not rewrite its own findings.
+5. Keep final acceptance with the primary agent: run structural validation, inspect the actual diff, and resolve every blocking review finding.
+
+For example:
+
+```text
+Use $sol-advisor:sol-control-plane.
+Select my translation-with-review Task Type to translate localization/source.txt into localization/zh-CN.txt.
+I approve only localization/zh-CN.txt for writes. Preserve one output line per source line, all placeholders/tags/control codes, and the supplied glossary.
+After the translation Stage, run the pinned independent read-only review Stage. Do not accept the result until structural checks and every blocking finding are resolved.
+```
 
 ## First real-world test
 

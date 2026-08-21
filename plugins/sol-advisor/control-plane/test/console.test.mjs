@@ -82,6 +82,25 @@ test('ordinary console reports global storage under CODEX_HOME', async (t) => {
   });
 });
 
+test('an explicitly passed resolved global path is still reported as global', async (t) => {
+  const codexHome = await mkdtemp(join(tmpdir(), 'sol-control-explicit-global-'));
+  const configPath = join(codexHome, 'sol-advisor', 'control-plane.json');
+  const state = await startConsole({
+    configPath,
+    defaultConfigPath: DEFAULT_CONFIG_PATH,
+    open: false,
+    env: { ...process.env, CODEX_HOME: codexHome, SOL_CONTROL_CONFIG: '' },
+  });
+  t.after(stopConsole);
+  const payload = await (await fetch(`http://127.0.0.1:${state.port}/api/config`, {
+    headers: { authorization: `Bearer ${state.token}` },
+  })).json();
+  assert.deepEqual(payload.storage, {
+    scope: 'global',
+    config_path: configPath,
+  });
+});
+
 test('SOL_CONTROL_CONFIG is visibly reported as an override', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'sol-control-env-override-'));
   const configPath = join(dir, 'control-plane.json');

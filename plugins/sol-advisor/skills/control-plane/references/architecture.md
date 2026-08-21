@@ -56,6 +56,9 @@ The authenticated human console reports the active scope and path: normal launch
 marked `global`; an explicit path override is marked `override` so test state cannot be
 mistaken for the user's shared policy. This storage detail is not exposed by sanitized
 agent-facing status.
+The human console uses the stable loopback address `127.0.0.1:58712` by default. An
+explicit port still overrides it, and port `0` requests an automatically selected free
+port for parallel tests or exceptional local conflicts.
 Version-1 and version-2 files migrate atomically to version 3. Legacy scenarios become
 Task Types; untouched disabled provider-specific connector defaults are removed, while
 enabled or customized policy is preserved for manual editing. Ambiguous legacy `full`

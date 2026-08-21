@@ -81,8 +81,8 @@ test -n "$plugin_dir" && test "$plugin_dir" != null || { echo 'sol-advisor is no
 sh "$plugin_dir/scripts/open-control-console.sh"
 ```
 
-脚本会绑定随机的 `127.0.0.1` 端口并打开浏览器。终端必须保持运行；按 `Ctrl+C` 会关闭本地服务。
-不要分享终端可能显示的带 token 本地 URL。也可以指定固定端口，例如：
+脚本默认绑定固定回环地址 `127.0.0.1:58712` 并打开浏览器。终端必须保持运行；按 `Ctrl+C` 会关闭本地服务。
+不要分享终端可能显示的带 token 本地 URL。只有明确需要随机空闲端口时才使用 `--port 0`，也可以指定其他固定端口，例如：
 
 ```powershell
 & "$($plugin.source.path)\scripts\open-control-console.cmd" --port 58046
@@ -114,6 +114,25 @@ Provider 只描述“由谁、通过什么连接工作”；Task Type 描述“�
 Cursor、Grok、网页审阅和 native agent 都是 Provider，不应该出现在任务类型名称里。
 
 从旧配置升级时，仍保留标准任务身份的 judgment-heavy 预设会增加独立审阅 Stage，同时保留自定义的实现 Provider、权限、批准规则和模板；如果改过 Task Type 的名称、说明、标签或整体语义，则保持原工作流。
+
+### 示例：翻译与独立校对
+
+翻译很适合作为自定义 Task Type，因为“产出译文”和“验收译文质量”应由不同职责完成：
+
+1. 复制 **Implementation with independent review**，改名为 `translation-with-review` 并启用。
+2. 将 implementation Stage 固定到具备翻译能力的 Provider；选择 `bounded_write`，要求当前任务批准，并把 `allowed_paths` 限定为目标语言文件。
+3. 在模板中要求 Provider 保持原有行序与行数、占位符、标签和控制码，遵循提供的术语表与角色说明；遇到不确定术语必须报告，不能静默猜测。
+4. 将 review Stage 固定到另一个只读 Reviewer；要求逐项对照源文和译文，检查漏译、误译、人名或术语不一致、语气偏移以及占位符损坏。Reviewer 只报告问题，不修改自己的审阅结果。
+5. 最终验收仍由主 Agent 负责：运行结构校验、检查真实 diff，并解决所有阻塞性审阅发现。
+
+例如：
+
+```text
+Use $sol-advisor:sol-control-plane.
+选择我配置的 translation-with-review Task Type，把 localization/source.txt 翻译到 localization/zh-CN.txt。
+我只批准写入 localization/zh-CN.txt。每个源文本行必须对应一个输出行，并保留所有占位符、标签、控制码以及提供的术语表。
+翻译 Stage 完成后，执行固定绑定的独立只读 review Stage；结构检查通过且所有阻塞问题解决前，不得接受结果。
+```
 
 ## 第一次实际测试
 
