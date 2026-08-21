@@ -104,7 +104,7 @@ A Provider describes “who does the work and through which connection”; a Tas
 
 Bundled presets are starting points, not a closed list. You can delete, restore, copy, rename, or edit them, change their templates, or create entirely custom Task Types. Cursor, Grok, web review, and native agents are Providers; they should not be encoded into Task Type names.
 
-When upgrading from the earlier v3 configuration, an untouched legacy judgment-heavy preset is upgraded to implementation plus independent review. If you customized that Task Type, its Stage structure is preserved instead.
+When upgrading an earlier configuration, a legacy judgment-heavy preset with the standard task identity gains an independent review Stage while preserving its customized implementation Stage. If you changed the Task Type's name, description, tags, or broader semantics, its workflow is preserved instead.
 
 ## First real-world test
 

@@ -1,6 +1,6 @@
 {
   "name": "sol-advisor",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Primary-agent-led routing with pluggable Task Types, pinned Stage providers, and opt-in Cursor/Grok connectors.",
   "author": {
     "name": "TohmaN233",

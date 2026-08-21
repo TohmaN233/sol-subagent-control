@@ -35,7 +35,7 @@ test('default config path is user-global and independent of the project director
 
 test('bundled defaults use delegate for light work and full for difficult work', async () => {
   const { config } = await fixture();
-  assert.equal(config.version, 4);
+  assert.equal(config.version, 5);
   assert.equal('scenarios' in config, false);
   const external = config.providers.filter((provider) => provider.kind !== 'native_agent');
   assert.ok(external.length >= 4);
@@ -203,11 +203,11 @@ test('version-2 config migrates task types and removes untouched disabled provid
   await writeFile(configPath, `${JSON.stringify(legacy, null, 2)}\n`);
 
   const migrated = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
-  assert.equal(migrated.version, 4);
+  assert.equal(migrated.version, 5);
   assert.equal(migrated.task_types.find((taskType) => taskType.id === 'brainstorm').description,
     'USER CUSTOM DESCRIPTION');
   assert.equal(migrated.task_types.some((taskType) => taskType.id === 'cursor-bounded-change'), false);
-  assert.equal(JSON.parse(await readFile(configPath, 'utf8')).version, 4);
+  assert.equal(JSON.parse(await readFile(configPath, 'utf8')).version, 5);
 });
 
 test('version-2 full route migrates disabled with a separate read-only reviewer', async () => {
@@ -228,23 +228,26 @@ test('version-2 full route migrates disabled with a separate read-only reviewer'
   ]);
 });
 
-test('version-3 untouched difficult default migrates to full without resetting other choices', async () => {
+test('version-3 difficult default preserves a customized implementation while adding review', async () => {
   const { configPath, config } = await fixture();
   config.version = 3;
   const difficult = config.task_types.find((taskType) => taskType.id === 'judgment-heavy-change');
   difficult.route = 'delegate';
   difficult.stages = difficult.stages.slice(0, 1);
+  difficult.stages[0].template = 'CUSTOM IMPLEMENTATION {{task}} {{context}} {{constraints}} {{verification}}';
   const crossReview = config.task_types.find((taskType) => taskType.id === 'cross-review');
   crossReview.stages[0].provider_id = 'grok-local';
   config.providers.find((provider) => provider.id === 'grok-local').enabled = true;
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
 
   const migrated = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
-  assert.equal(migrated.version, 4);
+  assert.equal(migrated.version, 5);
   assert.deepEqual(migrated.task_types.find((taskType) => taskType.id === 'judgment-heavy-change')
     .stages.map((stage) => [stage.id, stage.provider_id]), [
     ['implementation', 'native-terra'], ['review', 'native-sol-reviewer'],
   ]);
+  assert.match(migrated.task_types.find((taskType) => taskType.id === 'judgment-heavy-change')
+    .stages[0].template, /CUSTOM IMPLEMENTATION/);
   assert.equal(migrated.task_types.find((taskType) => taskType.id === 'cross-review')
     .stages[0].provider_id, 'grok-local');
   assert.equal(migrated.providers.find((provider) => provider.id === 'grok-local').enabled, true);
@@ -260,9 +263,27 @@ test('version-3 customized difficult Task Type keeps its user-owned workflow', a
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
 
   const migrated = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
-  assert.equal(migrated.version, 4);
+  assert.equal(migrated.version, 5);
   assert.equal(migrated.task_types.find((taskType) => taskType.id === 'judgment-heavy-change').route,
     'delegate');
+});
+
+test('version-4 difficult workflow retries migration after the strict v3 migration skipped it', async () => {
+  const { configPath, config } = await fixture();
+  config.version = 4;
+  const difficult = config.task_types.find((taskType) => taskType.id === 'judgment-heavy-change');
+  difficult.route = 'delegate';
+  difficult.stages = difficult.stages.slice(0, 1);
+  difficult.stages[0].template = 'PREVIOUSLY CUSTOMIZED {{task}} {{context}} {{constraints}} {{verification}}';
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+  const migrated = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
+  const migratedDifficult = migrated.task_types.find(
+    (taskType) => taskType.id === 'judgment-heavy-change');
+  assert.equal(migrated.version, 5);
+  assert.equal(migratedDifficult.route, 'full');
+  assert.deepEqual(migratedDifficult.stages.map((stage) => stage.id), ['implementation', 'review']);
+  assert.match(migratedDifficult.stages[0].template, /PREVIOUSLY CUSTOMIZED/);
 });
 
 test('full resolves implementation then review with pinned providers and no fallback', async () => {
@@ -316,5 +337,5 @@ test('version-1 migration adds both built-in connectors disabled when legacy con
     assert.equal(provider.requires_user_approval, true);
     assert.equal(provider.capabilities.write, true);
   }
-  assert.equal(migrated.version, 4);
+  assert.equal(migrated.version, 5);
 });
