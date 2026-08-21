@@ -5,8 +5,8 @@
 GPT-5.6 Sol is the default. GPT-5.6 Terra also qualifies. GPT-5.6 Luna never qualifies. The reasoning effort must be high, xhigh, or max.
 
 
-Keep a qualifying primary agent as the only task owner while the user configures which
-auxiliary provider is mapped to each reusable scenario. The control plane is a policy,
+Keep a qualifying primary agent as the only task owner while the user defines reusable
+Task Types and pins exactly one Provider to each ordered Stage. The control plane is a policy,
 prompt, transport, and evidence boundary—not an autonomous manager that can accept its
 own work.
 
@@ -15,13 +15,12 @@ own work.
 1. **Primary root session**
    - owns requirements, architecture, route declaration, scope, verification, and
      acceptance;
-   - sees sanitized scenario/provider metadata;
-   - receives one selected template, or starts one built-in connector whose template is
-     delivered internally.
+   - sees sanitized Task Type/Stage/Provider metadata;
+   - resolves one selected Task Type and executes its fixed Stage plan in order.
 2. **Human-owned configuration plane**
    - stores configuration under the user state directory outside plugin caches;
    - exposes a token-protected console bound to `127.0.0.1`;
-   - is the only supported writer for provider/scenario mappings and switches.
+   - is the only supported writer for Task Types, Stage bindings, and Provider switches.
 3. **Provider adapters and connectors**
    - native Codex role, repository-owned Cursor/Grok connector, external-MCP
      descriptor, packet web review, or direct OpenAI-compatible advisory API;
@@ -38,9 +37,9 @@ enabled/approval state, and template revision fingerprints. It does not return p
 templates, endpoints, credential-variable names, or console tokens.
 
 `sol_control_resolve` interpolates only `task`, `context`, `constraints`,
-`verification`, `scenario_id`, and `provider_name` for one selected non-built-in
-provider. `sol_connector_start` performs the same one-template compilation internally
-for a built-in connector and persists only a prompt SHA-256.
+`verification`, `task_type_id`, `stage_id`, and `provider_name` for the ordered Stages
+of one selected Task Type. `sol_connector_start` performs the same one-Stage compilation
+internally for a built-in connector and persists only a prompt SHA-256.
 
 This is minimization, not a hostile-model secrecy sandbox. A local coding agent may
 have broad operating-system access. Stronger secrecy requires an OS isolation boundary
@@ -52,7 +51,10 @@ The default configuration path is `$CODEX_HOME/sol-advisor/control-plane.json`, 
 `~/.codex/sol-advisor/control-plane.json` when `CODEX_HOME` is unset. An absolute
 `SOL_CONTROL_CONFIG` overrides it. Saves are validated, atomic, restrictive-permission,
 and revision-checked.
-Version-1 files migrate atomically: custom providers, mappings, and templates are preserved, while missing built-in Cursor/Grok providers and connector scenarios are appended disabled.
+Version-1 and version-2 files migrate atomically to version 3. Legacy scenarios become
+Task Types; untouched disabled provider-specific connector defaults are removed, while
+enabled or customized policy is preserved for manual editing. Ambiguous legacy `full`
+routes migrate disabled and require explicit review of both Stage bindings.
 
 Connector task records live beside the configuration and contain task identity,
 workspace, read/write mode, allowed paths, prompt digest, baseline snapshot, remote
@@ -63,11 +65,11 @@ reserved.
 
 ## Effective permission gate
 
-A route is usable only when global, scenario, provider, and environment switches allow
+A route is usable only when global, Task Type, every pinned Provider, and environment switches allow
 it. A write task additionally requires all of:
 
 - provider `capabilities.write=true`;
-- scenario `read_only=false`;
+- Stage `access=bounded_write`;
 - explicit current-task `user_approved=true`;
 - a non-empty validated `allowed_paths` list.
 
@@ -162,6 +164,9 @@ External MCP entries remain descriptors whose availability is unverified. ChatGP
 Pro stays packet-first. Direct OpenAI-compatible calls remain read-only, text-only,
 credential-from-environment, no-redirect, bounded-time/response advisory lanes.
 
-The original route model remains `solo`, `delegate`, `audit`, and exceptional sequential
-`full`. One auxiliary is still the default maximum; provider diversity is configurable
-policy, not a reason to fan out automatically.
+The route model remains `solo`, `delegate`, `audit`, and exceptional sequential `full`.
+Route topology is strict: `solo` has no Stages, `delegate` has one implementation Stage,
+`audit` has one review Stage, and `full` has implementation then review. Task Type prompts
+contain reusable work semantics; Provider adapters own transport and provider-specific
+safety behavior. Each Stage has one pinned Provider—there are no candidate lists or
+automatic fallbacks.

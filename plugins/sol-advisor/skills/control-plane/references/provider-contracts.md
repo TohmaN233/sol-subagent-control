@@ -1,6 +1,6 @@
 # Provider contracts
 
-Read this after selecting one scenario. Dispatch by `adapter.kind`,
+Read this after selecting one Task Type. Dispatch each ordered Stage by `adapter.kind`,
 `adapter.execution`, and `adapter.connector`; never infer a provider from its display
 name.
 
@@ -8,7 +8,7 @@ name.
 
 For every provider:
 
-1. preserve the declared scenario, route, read/write intent, approval state, workspace,
+1. preserve the declared Task Type, Stage, route, access intent, approval state, workspace,
    and path boundary;
 2. send only the selected compiled prompt and minimum required artifacts;
 3. retain the provider's real task/session/Agent identity;
@@ -30,7 +30,7 @@ policy. Reviewers remain behaviorally read-only and do not implement their own f
 Both built-in connectors use:
 
 - `sol_connector_probe(provider_id, workspace?)`;
-- `sol_connector_start(scenario_id, task, context, constraints, verification,
+- `sol_connector_start(task_type_id, stage_id, task, context, constraints, verification,
   workspace, user_approved, allowed_paths?)`;
 - `sol_connector_status(task_id, wait_ms?)`;
 - `sol_connector_control(task_id, action, exact identity fields...)`.
@@ -40,7 +40,7 @@ Both built-in connectors use:
 cancellation, disconnect, and acknowledged abandon; Grok also supports exact permission
 and input responses.
 
-Write tasks require provider write capability, a non-read-only scenario, current-task
+Write tasks require Provider write capability, a `bounded_write` Stage, current-task
 approval, and non-empty validated `allowed_paths`. Read-only tasks omit paths. Every
 task requires an absolute Git root and acquires the workspace's single active-task
 reservation.
@@ -133,7 +133,7 @@ substitution. A web review never proves code execution or correctness.
 
 Call `sol_control_invoke`; do not bypass it with shell HTTP. The endpoint must be HTTPS
 except loopback HTTP, credentials come from an environment variable, redirects are
-rejected, response/time are bounded, and no host/file tools are supplied. The scenario
+rejected, response/time are bounded, and no host/file tools are supplied. The Stage
 must be read-only and all switches/approval gates must be satisfied.
 
 ## Primary acceptance

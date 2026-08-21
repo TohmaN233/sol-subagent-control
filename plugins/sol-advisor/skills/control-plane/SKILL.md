@@ -1,6 +1,6 @@
 ---
 name: sol-control-plane
-description: "Keep one qualifying primary architect in charge while a user-owned scenario selects a native role, built-in Cursor/Grok connector, or opt-in external provider. All non-native lanes fail closed and are never auto-enabled."
+description: "Keep one qualifying primary architect in charge while a user-owned Task Type pins one Provider to each ordered Stage. All non-native lanes fail closed and are never auto-enabled."
 ---
 
 # Sol Subagent Control Plane
@@ -22,12 +22,12 @@ never invent model or effort evidence. A proven mismatch stops the controlled ro
 ## Read metadata, not the prompt library
 
 Before repository/task tools, call `sol_control_status` at most once. It returns only
-sanitized provider/scenario metadata, mappings, capabilities, approval flags, and
+sanitized Provider/Task Type/Stage metadata, pinned bindings, capabilities, approval flags, and
 revision fingerprints. It omits prompt templates, endpoints, credential-variable
 names, and console tokens.
 
 Do not open, grep, print, or rewrite the user configuration file. Only the human-owned
-loopback console may create, enable, disable, remap, or delete providers and scenarios.
+loopback console may create, enable, disable, remap, or delete Providers and Task Types.
 Never auto-enable an external provider or built-in connector, never infer that an
 installed paid model should be called, and never bypass `SOL_CONTROL_DISABLED`.
 
@@ -42,31 +42,31 @@ After sanitized preflight and before repository/task tools, emit:
 ~~~text
 SELECTIVE ROUTE
 mode: solo | delegate | audit | full
-scenario: <enabled scenario id or none>
-provider: <mapped provider id or none>
+task_type: <enabled Task Type id or none>
+stages: <ordered stage -> pinned provider bindings, or none>
 risk: <concise task-specific reason>
 ~~~
 
 Solo is the default. One auxiliary is the default maximum. `full` is an explicit broad
 or high-risk exception and resolves implementation/review stages sequentially. A later
 declaration may only escalate on newly observed evidence. Never silently downgrade or
-remap the provider.
+remap a Stage's pinned Provider.
 
-Choose only an enabled scenario whose public description matches the task. A user
-mapping is policy: do not replace it because another model seems stronger, cheaper,
-or more familiar. If the selected provider cannot satisfy its contract, fail that lane
-and make an explicit new route decision.
+Choose only an enabled Task Type whose public description matches the task. Its ordered
+Stages and Provider bindings are user policy: do not replace a pinned Provider because
+another model seems stronger, cheaper, or more familiar. If a pinned Provider cannot
+satisfy its contract, fail that lane; never auto-fallback.
 
-## Resolve or start exactly one selected scenario
+## Resolve exactly one Task Type; execute its Stages in order
 
-For native, external-MCP, packet-review, or direct-API providers, call
-`sol_control_resolve` once for the selected stage. Supply the observable objective,
-minimum sufficient context, fixed constraints, and concrete verification.
+Call `sol_control_resolve` once for the selected Task Type. It returns the fixed ordered
+Stage plan and each Stage's user-pinned Provider adapter. Supply the observable
+objective, minimum sufficient context, fixed constraints, and concrete verification.
 
 For a built-in connector, call `sol_connector_start`; it resolves and delivers the
 selected prompt internally. Supply:
 
-- `scenario_id`, task/context/constraints/verification;
+- `task_type_id`, exact `stage_id`, task/context/constraints/verification;
 - the absolute Git repository root as `workspace`;
 - `user_approved=true` only after explicit approval in the current task;
 - no `allowed_paths` for read-only work;
@@ -75,7 +75,7 @@ selected prompt internally. Supply:
 Write access opens only when all three facts are true:
 
 1. `provider.capabilities.write=true`;
-2. `scenario.read_only=false`;
+2. `stage.access=bounded_write`;
 3. the user explicitly approved this current task.
 
 Missing approval, missing write capability, read-only/write mismatch, empty paths,

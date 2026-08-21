@@ -9,11 +9,11 @@ This fork preserves Sol Advisor's native Codex workflow and adds a user-owned co
 | Area | Upstream behavior retained | This fork adds or changes |
 |---|---|---|
 | Primary owner | One root owns architecture, routing, verification, and acceptance. | Sol remains default; Terra may qualify; primary reasoning must be high or above. |
-| Routes | `solo`, `delegate`, `audit`, and exceptional `full`; native Luna / Max, Terra / High, and fresh Sol / High roles stay pinned. | A scenario selects one enabled provider without transferring final authority. |
-| Configuration | Native routing remains instruction- and role-driven. | A token-protected `127.0.0.1` console manages provider/scenario switches, mappings, approval gates, and private templates. |
+| Routes | `solo`, `delegate`, `audit`, and exceptional `full`; native Luna / Max, Terra / High, and fresh Sol / High roles stay pinned. | A Task Type defines a strict Stage topology; each Stage pins one Provider without transferring final authority. |
+| Configuration | Native routing remains instruction- and role-driven. | A token-protected `127.0.0.1` console manages pluggable Task Types, Stage bindings, Provider switches, approval gates, and private templates. |
 | Connectors | Codex-native custom agents. | Minimal built-in Cursor CDP and Grok Leader+ACP connectors support read-only and explicitly approved bounded-write work. |
-| Safety | Exact role/runtime evidence fails closed. | Writes require provider write capability, a non-read-only scenario, explicit current-task approval, and non-empty `allowed_paths`; a live workspace monitor plus Git content/HEAD/index/ref/config/reflog evidence rejects scope violations. |
-| External cost | Native use follows the user's Codex access. | Cursor, Grok, ChatGPT web Pro, and custom APIs are all disabled by default and are never called merely because they are installed. |
+| Safety | Exact role/runtime evidence fails closed. | Writes require Provider write capability, a `bounded_write` Stage, explicit current-task approval, and non-empty `allowed_paths`; a live workspace monitor plus Git content/HEAD/index/ref/config/reflog evidence rejects scope violations. |
+| External cost | Native use follows the user's Codex access. | Cursor, Grok, ChatGPT web review, and custom APIs are all disabled by default and are never called merely because they are installed. |
 
 Cursor uses loopback CDP and one pinned Agents UI profile; Grok uses a dedicated Leader and ACP over stdio. Neither connector includes the full reference Bridge/Supervisor. Automated fixtures cover both transports. The maintained Windows baseline has also passed the live smoke steps below with Cursor 3.16.29 and Grok CLI 1.0.4; other local versions still fail closed until the same checks pass.
 
@@ -39,33 +39,53 @@ Use $sol-advisor:sol-control-plane. Keep a qualifying primary agent in charge, r
 
 The native-only workflow remains `$sol-advisor:orchestration`.
 
+For activation semantics, one-click console scripts, configuration, and live smoke examples, read the [Chinese usage tutorial](docs/TUTORIAL.zh-CN.md).
+
 You do not need to select or manage a lane; the console stores reusable policy while the qualifying primary agent owns routing, verification, and acceptance.
 
 ## Console, connector enablement, and approval
 
-Ask Codex to open the Sol Subagent Control console. Both `cursor-local` and `grok-local`, all connector scenarios, ChatGPT web Pro, and custom API providers ship disabled. Enabling a provider does not call it; enable a matching scenario as a separate action. Every built-in connector scenario requires current-task user approval.
-Existing version-1 control-plane files migrate in place: user mappings and templates are preserved, while the new built-in Cursor provider and write scenarios are added disabled.
+Ask Codex to open the Sol Subagent Control console. Both `cursor-local` and `grok-local`, ChatGPT web review, and custom API Providers ship disabled. Enabling a Provider does not call it; bind it to an appropriate Task Type Stage as a separate action. Every built-in connector Provider requires current-task user approval. The ChatGPT web Provider deliberately leaves its model/thinking label empty because those settings are selected in the web session, not by this control plane.
+
+The console also ships with seven model-independent Task Type presets: bounded code change,
+judgment-heavy change, cross-review, brainstorm, repository analysis, implementation with
+independent review, and hard-path external review. They are an editable starting configuration,
+not a closed catalog. A user can use a preset as-is, remove it, add it again from the bundled
+preset library, duplicate and customize it, or create a blank Task Type. Provider selection lives
+inside each Stage, so the same Task Type can be remapped to a native agent, Cursor, Grok, or
+another compatible Provider without creating a model-named task category.
+Existing version-1 and version-2 control-plane files migrate in place to version 3. Generic policy and custom templates are preserved; untouched disabled Cursor/Grok-specific task presets are removed because model choice now belongs to Stage configuration. Ambiguous legacy `full` routes migrate disabled for manual review.
+
+Native Provider cards expose Model and Reasoning effort as normal form controls instead of requiring JSON edits. Supported effort choices are `low`, `medium`, `high`, `xhigh`, `max`, and Codex `ultra`; the form stays synchronized with the adapter JSON.
 
 For Cursor, install and sign in to Cursor; set `CURSOR_EXE` before the plugin starts only when standard Windows/macOS locations are not found. If Cursor is already open without CDP, save and exit it normally once—the connector never force-closes it. The supported profile is explicitly pinned and fails closed when selectors or Agent identity are ambiguous.
 
 For Grok, install and authenticate the Grok CLI; set `GROK_BIN` before plugin start when it is outside the standard location. The connector starts its own dedicated Leader and ACP child, preserves exact session/run identity, surfaces permission/input requests, and never uses approve-everything modes.
 
-Read-only starts omit `allowed_paths`. Bounded-write starts must provide the smallest workspace-relative path list. Write access opens only when `capabilities.write=true`, `scenario.read_only=false`, and `user_approved=true`; any other combination fails before the child model receives the task. While a connector is active, recursive filesystem events outside the boundary trigger exact cancellation, including writes to Git-ignored paths. Final acceptance also compares file content plus Git HEAD, refs, semantic index, local config, and reflog, so staging or committing does not erase the evidence.
+Read-only Stages omit `allowed_paths`. Bounded-write Stages must provide the smallest workspace-relative path list. Write access opens only when `capabilities.write=true`, `stage.access=bounded_write`, and `user_approved=true`; any other combination fails before the child model receives the task. While a connector is active, recursive filesystem events outside the boundary trigger exact cancellation, including writes to Git-ignored paths. Final acceptance also compares file content plus Git HEAD, refs, semantic index, local config, and reflog, so staging or committing does not erase the evidence.
+
+## Task Type, Stage, and Provider boundary
+
+- A **Task Type** is a pluggable workflow definition with a model-independent description, tags, and prompt semantics.
+- A **Stage** is an ordered implementation or review lane inside that Task Type. It owns access and approval policy.
+- A **Provider** is a model/transport adapter. Provider-specific safety and connection rules stay in the adapter.
+
+Route topology is fixed: `solo` has no Stages, `delegate` has one implementation Stage, `audit` has one review Stage, and `full` has implementation followed by review. Each Stage has exactly one Provider pinned by the user in the console. Sol may choose a matching enabled Task Type, but it may not choose among Providers, substitute one, or auto-fallback.
 
 ## Routes
 
 | Mode | Use it when | Delivery |
 |---|---|---|
 | `solo` | Default; risk is contained. | Root plans, implements, tests, and self-reviews. |
-| `delegate` | One bounded task benefits from an auxiliary. | The mapped provider executes or advises; root verifies. |
-| `audit` | Independent final scrutiny matters more than delegation. | Root implements; the mapped read-only reviewer audits. |
+| `delegate` | One bounded task benefits from an auxiliary. | The pinned implementation Provider executes or advises; root verifies. |
+| `audit` | Independent final scrutiny matters more than delegation. | Root implements; the pinned read-only review Provider audits. |
 | `full` | Explicit broad or high-risk exception. | One implementation stage, root verification, then one fresh review stage. |
 
 Solo is the default. One auxiliary is the default maximum. The primary emits a route before the first task tool call, escalates only on newly observed risk, and never silently downgrades or remaps the provider. Auxiliary work substitutes for root work; it does not duplicate it.
 
 ## Local live smoke boundary
 
-After pulling `main`, first enable only the provider/scenario being tested. For each connector run: (1) one read-only task and confirm Git is unchanged; (2) one bounded-write task limited to a disposable path and confirm only that path changed; (3) one long task followed by exact-identity cancellation. Record the returned `task_id` plus Cursor `agent_id` or Grok `session_id`/`run_id`. A model response alone is not success; Sol must inspect scope evidence, Git state, and the requested checks.
+After pulling `main`, first enable only the Provider being tested and pin it to one disposable test Task Type Stage. For each connector run: (1) one read-only task and confirm Git is unchanged; (2) one bounded-write task limited to a disposable path and confirm only that path changed; (3) one long task followed by exact-identity cancellation. Record the returned `task_id` plus Cursor `agent_id` or Grok `session_id`/`run_id`. A model response alone is not success; Sol must inspect scope evidence, Git state, and the requested checks.
 
 The repository CI does not prove the user's actual Cursor UI version, login state, Grok installation, authentication, or desktop behavior. On 2026-08-20, the maintained Windows baseline passed read-only, bounded-write, and exact-cancel tests with Cursor 3.16.29 and Grok CLI 1.0.4. Treat that as a known-good baseline, not a guarantee for another installation; rerun the six checks after either desktop tool changes.
 

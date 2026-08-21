@@ -10,6 +10,7 @@ const files = [
   'connectors.test.mjs',
   'console.test.mjs',
   'mcp.test.mjs',
+  'open-console.test.mjs',
   'providers.test.mjs',
 ].map((name) => join(root, name));
 

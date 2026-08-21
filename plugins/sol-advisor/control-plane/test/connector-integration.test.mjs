@@ -57,11 +57,24 @@ async function fixture(t, { processRunningImpl = async () => false, cursorLaunch
       provider.config.launch_if_closed = cursorLaunchIfClosed;
     }
   }
-  for (const id of [
-    'grok-readonly-advice', 'grok-bounded-change',
-    'cursor-readonly-advice', 'cursor-bounded-change',
+  for (const [id, providerId, access] of [
+    ['grok-readonly-advice', 'grok-local', 'read_only'],
+    ['grok-bounded-change', 'grok-local', 'bounded_write'],
+    ['cursor-readonly-advice', 'cursor-local', 'read_only'],
+    ['cursor-bounded-change', 'cursor-local', 'bounded_write'],
   ]) {
-    config.scenarios.find((item) => item.id === id).enabled = true;
+    config.task_types.push({
+      id,
+      name: `Fixture ${access}`,
+      enabled: true,
+      description: 'Connector integration fixture.',
+      route: 'delegate',
+      tags: ['fixture'],
+      stages: [{
+        id: 'implementation', role: 'implementer', provider_id: providerId, access,
+        requires_user_approval: true, template: 'Perform {{task}} under {{constraints}}. Verify with {{verification}}.',
+      }],
+    });
   }
   await saveConfig(config, { configPath });
 
@@ -109,12 +122,13 @@ async function fixture(t, { processRunningImpl = async () => false, cursorLaunch
   return { root, workspace, configPath, env, registry, spawnImpl, cursorPort, cursorLog };
 }
 
-function startScenario(fx, scenarioId, taskText, {
+function startScenario(fx, taskTypeId, taskText, {
   userApproved = true,
   allowedPaths,
 } = {}) {
   return startConnectorSelection({
-    scenario_id: scenarioId,
+    task_type_id: taskTypeId,
+    stage_id: 'implementation',
     task: taskText,
     context: 'Process/protocol fixture evidence only.',
     constraints: 'Respect the connector access boundary.',
@@ -163,12 +177,14 @@ test('registry defensively rejects a write connector start without current-task 
   const fx = await fixture(t);
   const config = await loadConfig({ configPath: fx.configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
   const provider = config.providers.find((item) => item.id === 'cursor-local');
-  const scenario = config.scenarios.find((item) => item.id === 'cursor-bounded-change');
+  const stage = config.task_types.find((item) => item.id === 'cursor-bounded-change').stages[0];
+  const scenario = { id: stage.id, read_only: false, requires_user_approval: true };
   await assert.rejects(
     fx.registry.start({
       provider,
-      scenario,
-      scenarioId: scenario.id,
+      stage: scenario,
+      taskTypeId: 'cursor-bounded-change',
+      stageId: 'implementation',
       prompt: 'MUST_NOT_START',
       workspace: fx.workspace,
       allowedPaths: ['allowed/'],
@@ -187,10 +203,9 @@ test('bounded write requires provider write capability and non-empty allowed_pat
   );
   const config = await loadConfig({ configPath: fx.configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
   config.providers.find((item) => item.id === 'grok-local').capabilities.write = false;
-  await saveConfig(config, { configPath: fx.configPath });
   await assert.rejects(
-    startScenario(fx, 'grok-bounded-change', 'NO_WRITE_CAPABILITY', { allowedPaths: ['allowed/'] }),
-    /not configured for write-capable work/,
+    saveConfig(config, { configPath: fx.configPath }),
+    /requires provider write capability/,
   );
 });
 

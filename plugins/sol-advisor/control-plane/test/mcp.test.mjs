@@ -59,6 +59,11 @@ test('stdio MCP lists control tools and returns sanitized status', async (t) => 
   const listed = await client.request({ jsonrpc: '2.0', id: 3, method: 'tools/list', params: {} });
   const names = listed.result.tools.map((tool) => tool.name);
   assert.deepEqual(names, ['sol_control_status', 'sol_control_console', 'sol_control_resolve', 'sol_connector_probe', 'sol_connector_start', 'sol_connector_status', 'sol_connector_control', 'sol_control_invoke']);
+  const resolveTool = listed.result.tools.find((tool) => tool.name === 'sol_control_resolve');
+  assert.deepEqual(resolveTool.inputSchema.required, ['task_type_id', 'task']);
+  assert.equal('scenario_id' in resolveTool.inputSchema.properties, false);
+  const startTool = listed.result.tools.find((tool) => tool.name === 'sol_connector_start');
+  assert.ok(startTool.inputSchema.required.includes('stage_id'));
 
   const statusResponse = await client.request({
     jsonrpc: '2.0',
@@ -68,7 +73,7 @@ test('stdio MCP lists control tools and returns sanitized status', async (t) => 
   });
   const status = JSON.parse(statusResponse.result.content[0].text);
   assert.equal(status.effective_enabled, true);
-  assert.ok(status.scenarios.some((scenario) => scenario.id === 'bounded-code-change'));
+  assert.ok(status.task_types.some((taskType) => taskType.id === 'bounded-code-change'));
   assert.doesNotMatch(statusResponse.result.content[0].text, /CONSTRAINTS AND OWNERSHIP/);
   assert.doesNotMatch(statusResponse.result.content[0].text, /example\.invalid/);
 

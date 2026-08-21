@@ -4,11 +4,13 @@ import { access, chmod, lstat, mkdir, readFile, rename, stat, writeFile } from '
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
-export const CONFIG_VERSION = 2;
+export const CONFIG_VERSION = 3;
 export const PROVIDER_KINDS = new Set(['native_agent', 'builtin_connector', 'external_mcp', 'mcp_tool', 'web_review', 'openai_compatible']);
 export const ROUTES = new Set(['solo', 'delegate', 'audit', 'full']);
+export const STAGE_ROLES = new Set(['implementer', 'reviewer']);
+export const STAGE_ACCESS = new Set(['read_only', 'bounded_write']);
 export const ALLOWED_TEMPLATE_FIELDS = new Set([
-  'task', 'context', 'constraints', 'verification', 'scenario_id', 'provider_name',
+  'task', 'context', 'constraints', 'verification', 'task_type_id', 'stage_id', 'provider_name',
 ]);
 
 const ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
@@ -215,7 +217,7 @@ function validateWeb(raw) {
     source_repository: text(raw.source_repository, 'provider.config.source_repository', { max: 512 }),
     path,
     reviewer: text(raw.reviewer, 'provider.config.reviewer', { required: true, max: 128 }),
-    model_label: text(raw.model_label, 'provider.config.model_label', { required: true, max: 128 }),
+    model_label: text(raw.model_label, 'provider.config.model_label', { max: 128 }),
   };
 }
 
@@ -300,39 +302,69 @@ function validateTemplate(value, field) {
   return template;
 }
 
-function validateScenario(raw, index) {
-  assert(object(raw), `scenarios[${index}] must be an object`);
-  const route = text(raw.route, `scenarios[${index}].route`, { required: true, max: 32 });
-  assert(ROUTES.has(route), `scenarios[${index}].route is unsupported`);
+function validateStage(raw, taskTypeIndex, stageIndex) {
+  const field = `task_types[${taskTypeIndex}].stages[${stageIndex}]`;
+  assert(object(raw), `${field} must be an object`);
+  const role = text(raw.role, `${field}.role`, { required: true, max: 32 });
+  const access = text(raw.access, `${field}.access`, { required: true, max: 32 });
+  assert(STAGE_ROLES.has(role), `${field}.role is unsupported`);
+  assert(STAGE_ACCESS.has(access), `${field}.access is unsupported`);
   return {
-    id: id(raw.id, `scenarios[${index}].id`),
-    name: text(raw.name, `scenarios[${index}].name`, { required: true, max: 128 }),
+    id: id(raw.id, `${field}.id`),
+    role,
+    provider_id: id(raw.provider_id, `${field}.provider_id`),
+    access,
+    requires_user_approval: bool(raw.requires_user_approval, access === 'bounded_write'),
+    template: validateTemplate(raw.template, `${field}.template`),
+  };
+}
+
+const ROUTE_STAGE_SHAPES = {
+  solo: [],
+  delegate: [['implementation', 'implementer']],
+  audit: [['review', 'reviewer']],
+  full: [['implementation', 'implementer'], ['review', 'reviewer']],
+};
+
+function validateTaskType(raw, index) {
+  assert(object(raw), `task_types[${index}] must be an object`);
+  const route = text(raw.route, `task_types[${index}].route`, { required: true, max: 32 });
+  assert(ROUTES.has(route), `task_types[${index}].route is unsupported`);
+  const stagesRaw = Array.isArray(raw.stages) ? raw.stages : [];
+  const expectedShape = ROUTE_STAGE_SHAPES[route];
+  assert(stagesRaw.length === expectedShape.length,
+    `task_types[${index}] route ${route} requires ${expectedShape.length} stage(s)`);
+  const stages = stagesRaw.map((stage, stageIndex) => validateStage(stage, index, stageIndex));
+  stages.forEach((stage, stageIndex) => {
+    const [expectedId, expectedRole] = expectedShape[stageIndex];
+    assert(stage.id === expectedId && stage.role === expectedRole,
+      `task_types[${index}] route ${route} stage ${stageIndex} must be ${expectedId}/${expectedRole}`);
+  });
+  return {
+    id: id(raw.id, `task_types[${index}].id`),
+    name: text(raw.name, `task_types[${index}].name`, { required: true, max: 128 }),
     enabled: bool(raw.enabled, true),
-    description: text(raw.description, `scenarios[${index}].description`, { max: 4000 }),
+    description: text(raw.description, `task_types[${index}].description`, { max: 4000 }),
     route,
-    provider_id: id(raw.provider_id, `scenarios[${index}].provider_id`),
-    read_only: bool(raw.read_only, false),
-    requires_user_approval: bool(raw.requires_user_approval, false),
+    stages,
     tags: Array.isArray(raw.tags)
-      ? raw.tags.map((tag, tagIndex) => text(tag, `scenarios[${index}].tags[${tagIndex}]`, { required: true, max: 64 }))
+      ? raw.tags.map((tag, tagIndex) => text(tag, `task_types[${index}].tags[${tagIndex}]`, { required: true, max: 64 }))
       : [],
-    template: validateTemplate(raw.template, `scenarios[${index}].template`),
   };
 }
 
 export function migrateConfigV1(raw, bundledDefaults) {
   assert(object(raw), 'config must be an object');
   assert(raw.version === 1, 'migrateConfigV1 accepts only config.version=1');
-  const defaults = validateConfig(bundledDefaults);
   const migrated = jsonClone(raw, 'legacy config');
-  migrated.version = CONFIG_VERSION;
+  migrated.version = 2;
   migrated.providers = Array.isArray(migrated.providers) ? migrated.providers : [];
   migrated.scenarios = Array.isArray(migrated.scenarios) ? migrated.scenarios : [];
 
   const providerIds = new Set(migrated.providers.map((provider) => provider && provider.id));
   for (const providerId of ['cursor-local', 'grok-local']) {
     if (providerIds.has(providerId)) continue;
-    const bundled = defaults.providers.find((provider) => provider.id === providerId);
+    const bundled = bundledDefaults.providers.find((provider) => provider.id === providerId);
     assert(bundled, `bundled migration provider is missing: ${providerId}`);
     migrated.providers.push(jsonClone(bundled, `bundled provider ${providerId}`));
     providerIds.add(providerId);
@@ -344,40 +376,114 @@ export function migrateConfigV1(raw, bundledDefaults) {
     grok.capabilities.write = true;
   }
 
-  const scenarioIds = new Set(migrated.scenarios.map((scenario) => scenario && scenario.id));
-  for (const scenarioId of ['grok-readonly-advice', 'grok-bounded-change', 'cursor-readonly-advice', 'cursor-bounded-change']) {
-    if (scenarioIds.has(scenarioId)) continue;
-    const bundled = defaults.scenarios.find((scenario) => scenario.id === scenarioId);
-    assert(bundled, `bundled migration scenario is missing: ${scenarioId}`);
-    migrated.scenarios.push(jsonClone(bundled, `bundled scenario ${scenarioId}`));
-    scenarioIds.add(scenarioId);
-  }
-
   return migrated;
+}
+
+function migrateLegacyTemplate(template) {
+  return String(template || '').replaceAll('{{scenario_id}}', '{{task_type_id}}');
+}
+
+function migratedStage(scenario, id, role, template = scenario.template) {
+  return {
+    id,
+    role,
+    provider_id: scenario.provider_id,
+    access: scenario.read_only ? 'read_only' : 'bounded_write',
+    requires_user_approval: Boolean(scenario.requires_user_approval),
+    template: migrateLegacyTemplate(template),
+  };
+}
+
+export function migrateConfigV2(raw) {
+  assert(object(raw), 'config must be an object');
+  assert(raw.version === 2, 'migrateConfigV2 accepts only config.version=2');
+  const migrated = jsonClone(raw, 'version-2 config');
+  const obsoleteBundledIds = new Set([
+    'grok-readonly-advice', 'grok-bounded-change',
+    'cursor-readonly-advice', 'cursor-bounded-change',
+  ]);
+  const migrationReviewer = migrated.providers.find((provider) =>
+    provider?.kind === 'native_agent' && provider?.config?.role === 'reviewer'
+      && provider?.capabilities?.read !== false)
+    || migrated.providers.find((provider) =>
+      provider?.capabilities?.read !== false && provider?.capabilities?.write === false);
+  const taskTypes = (Array.isArray(migrated.scenarios) ? migrated.scenarios : [])
+    .filter((scenario) => !(obsoleteBundledIds.has(scenario?.id) && scenario?.enabled === false))
+    .map((scenario) => {
+    const route = scenario.route;
+    let stages;
+    if (route === 'solo') stages = [];
+    else if (route === 'delegate') stages = [migratedStage(scenario, 'implementation', 'implementer')];
+    else if (route === 'audit') stages = [migratedStage(scenario, 'review', 'reviewer')];
+    else if (route === 'full') {
+      assert(migrationReviewer,
+        `cannot migrate full scenario ${scenario.id}: no read-only reviewer Provider is configured`);
+      stages = [
+        migratedStage(scenario, 'implementation', 'implementer'),
+        {
+          id: 'review', role: 'reviewer', provider_id: migrationReviewer.id,
+          access: 'read_only', requires_user_approval: true,
+          template: 'Review the completed work for {{task}} using {{context}}. Respect {{constraints}} and verify with {{verification}}.',
+        },
+      ];
+    } else {
+      throw new Error(`cannot migrate scenario ${scenario.id}: unsupported route ${route}`);
+    }
+    return {
+      id: scenario.id,
+      name: scenario.name,
+      enabled: route === 'full' ? false : scenario.enabled,
+      description: route === 'full'
+        ? `[Migration review required: choose separate implementation and review providers.] ${scenario.description || ''}`.trim()
+        : scenario.description,
+      route,
+      tags: Array.isArray(scenario.tags) ? scenario.tags : [],
+      stages,
+    };
+    });
+  return {
+    version: CONFIG_VERSION,
+    global: migrated.global,
+    providers: migrated.providers,
+    task_types: taskTypes,
+  };
 }
 
 export function validateConfig(raw) {
   assert(object(raw), 'config must be an object');
   assert(raw.version === CONFIG_VERSION, `config.version must be ${CONFIG_VERSION}`);
   const providersRaw = Array.isArray(raw.providers) ? raw.providers : [];
-  const scenariosRaw = Array.isArray(raw.scenarios) ? raw.scenarios : [];
+  const taskTypesRaw = Array.isArray(raw.task_types) ? raw.task_types : [];
   assert(providersRaw.length > 0 && providersRaw.length <= 100,
     'config must contain between 1 and 100 providers');
-  assert(scenariosRaw.length > 0 && scenariosRaw.length <= 200,
-    'config must contain between 1 and 200 scenarios');
+  assert(taskTypesRaw.length > 0 && taskTypesRaw.length <= 200,
+    'config must contain between 1 and 200 task types');
   const providers = providersRaw.map(validateProvider);
-  const scenarios = scenariosRaw.map(validateScenario);
+  const taskTypes = taskTypesRaw.map(validateTaskType);
   const providerIds = new Set();
   for (const provider of providers) {
     assert(!providerIds.has(provider.id), `duplicate provider id: ${provider.id}`);
     providerIds.add(provider.id);
   }
-  const scenarioIds = new Set();
-  for (const scenario of scenarios) {
-    assert(!scenarioIds.has(scenario.id), `duplicate scenario id: ${scenario.id}`);
-    scenarioIds.add(scenario.id);
-    assert(providerIds.has(scenario.provider_id),
-      `scenario ${scenario.id} references missing provider ${scenario.provider_id}`);
+  const taskTypeIds = new Set();
+  for (const taskType of taskTypes) {
+    assert(!taskTypeIds.has(taskType.id), `duplicate task type id: ${taskType.id}`);
+    taskTypeIds.add(taskType.id);
+    for (const stage of taskType.stages) {
+      assert(providerIds.has(stage.provider_id),
+        `task type ${taskType.id} stage ${stage.id} references missing provider ${stage.provider_id}`);
+      const provider = providers.find((item) => item.id === stage.provider_id);
+      assert(provider.capabilities.read,
+        `task type ${taskType.id} stage ${stage.id} requires provider read capability`);
+      if (stage.access === 'bounded_write') {
+        assert(provider.capabilities.write,
+          `task type ${taskType.id} stage ${stage.id} requires provider write capability`);
+      }
+      if (provider.kind === 'native_agent') {
+        assert(provider.config.role === stage.role || provider.config.role === 'advisor',
+          `task type ${taskType.id} stage ${stage.id} role is incompatible with provider ${provider.id}`);
+      }
+    }
   }
   const global = object(raw.global) ? raw.global : {};
   return {
@@ -391,7 +497,7 @@ export function validateConfig(raw) {
         'global.max_prompt_chars'),
     },
     providers,
-    scenarios,
+    task_types: taskTypes,
   };
 }
 
@@ -439,15 +545,20 @@ export async function loadConfig({ configPath, defaultConfigPath }) {
   assert(file.size <= MAX_CONFIG_BYTES, `control-plane config exceeds ${MAX_CONFIG_BYTES} bytes`);
   try {
     const raw = JSON.parse(await readFile(configPath, 'utf8'));
-    if (raw?.version === 1 && CONFIG_VERSION === 2) {
+    if (raw?.version === 1) {
       const bundled = JSON.parse(await readFile(defaultConfigPath, 'utf8'));
-      const migrated = validateConfig(migrateConfigV1(raw, bundled));
+      const migrated = validateConfig(migrateConfigV2(migrateConfigV1(raw, bundled)));
+      await writeConfigAtomic(migrated, configPath);
+      return migrated;
+    }
+    if (raw?.version === 2) {
+      const migrated = validateConfig(migrateConfigV2(raw));
       await writeConfigAtomic(migrated, configPath);
       return migrated;
     }
     return validateConfig(raw);
   } catch (error) {
-    if (/config|provider|scenario|control-plane|migration/.test(error.message)) throw error;
+    if (/config|provider|scenario|task type|stage|control-plane|migration/.test(error.message)) throw error;
     throw new Error(`control-plane config is invalid JSON: ${error.message}`);
   }
 }
@@ -503,32 +614,41 @@ export function sanitizeConfig(config, { env = process.env } = {}) {
       capabilities: provider.capabilities,
       model_label: modelLabel(provider),
     })),
-    scenarios: config.scenarios.map((scenario) => {
-      const provider = providerMap.get(scenario.provider_id);
+    task_types: config.task_types.map((taskType) => {
+      const stages = taskType.stages.map((stage) => {
+        const provider = providerMap.get(stage.provider_id);
+        return {
+          id: stage.id,
+          role: stage.role,
+          provider_id: stage.provider_id,
+          provider_kind: provider?.kind || 'missing',
+          access: stage.access,
+          requires_user_approval: Boolean(
+            stage.requires_user_approval || provider?.requires_user_approval || stage.access === 'bounded_write',
+          ),
+          effective_enabled: Boolean(provider?.enabled && config.global.enabled && !environmentDisabled),
+          template_revision: createHash('sha256').update(stage.template).digest('hex').slice(0, 12),
+        };
+      });
       return {
-        id: scenario.id,
-        name: scenario.name,
-        enabled: scenario.enabled,
+        id: taskType.id,
+        name: taskType.name,
+        enabled: taskType.enabled,
         effective_enabled: Boolean(
-          scenario.enabled && provider?.enabled && config.global.enabled && !environmentDisabled,
+          taskType.enabled && stages.every((stage) => stage.effective_enabled)
+            && config.global.enabled && !environmentDisabled,
         ),
-        description: scenario.description,
-        route: scenario.route,
-        provider_id: scenario.provider_id,
-        provider_kind: provider?.kind || 'missing',
-        read_only: scenario.read_only,
-        requires_user_approval: Boolean(
-          scenario.requires_user_approval || provider?.requires_user_approval || !scenario.read_only,
-        ),
-        tags: scenario.tags,
-        template_revision: createHash('sha256').update(scenario.template).digest('hex').slice(0, 12),
+        description: taskType.description,
+        route: taskType.route,
+        tags: taskType.tags,
+        stages,
       };
     }),
   };
 }
 
-export function findScenario(config, scenarioId) {
-  return config.scenarios.find((scenario) => scenario.id === scenarioId) || null;
+export function findTaskType(config, taskTypeId) {
+  return config.task_types.find((taskType) => taskType.id === taskTypeId) || null;
 }
 
 export function findProvider(config, providerId) {
@@ -539,7 +659,8 @@ export async function appendAuditEvent(configPath, event) {
   const safe = {
     at: new Date().toISOString(),
     event: text(event.event, 'audit.event', { required: true, max: 64 }),
-    scenario_id: event.scenario_id ? id(event.scenario_id, 'audit.scenario_id') : null,
+    task_type_id: event.task_type_id ? id(event.task_type_id, 'audit.task_type_id') : null,
+    stage_id: event.stage_id ? id(event.stage_id, 'audit.stage_id') : null,
     provider_id: event.provider_id ? id(event.provider_id, 'audit.provider_id') : null,
     outcome: text(event.outcome ?? 'ok', 'audit.outcome', { required: true, max: 64 }),
     detail: text(event.detail, 'audit.detail', { max: 1000 }),

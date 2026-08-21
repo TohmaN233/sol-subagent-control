@@ -46,13 +46,13 @@ export class ConnectorRegistry {
 
   async start(params) {
     await this.initialize();
-    const writeRequested = params?.scenario?.read_only !== true;
+    const writeRequested = params?.stage?.read_only !== true;
     const approvalRequired = writeRequested
       || params?.provider?.requires_user_approval === true
-      || params?.scenario?.requires_user_approval === true;
+      || params?.stage?.requires_user_approval === true;
     if (approvalRequired && params?.userApproved !== true) {
       throw connectorError('APPROVAL_REQUIRED',
-        `Connector scenario ${params?.scenarioId || params?.scenario?.id || 'unknown'} requires explicit current-task user approval`);
+        `Connector stage ${params?.taskTypeId || 'unknown'}.${params?.stageId || params?.stage?.id || 'unknown'} requires explicit current-task user approval`);
     }
     if (writeRequested && params?.provider?.capabilities?.write !== true) {
       throw connectorError('WRITE_CAPABILITY_REQUIRED',

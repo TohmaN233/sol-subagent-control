@@ -8,15 +8,15 @@ function endpointClass(endpoint) {
   return loopback ? 'loopback' : 'https';
 }
 
-export function buildProviderAdapter(provider, scenario, { env = process.env, allowDirectApi = false } = {}) {
+export function buildProviderAdapter(provider, stage, { env = process.env, allowDirectApi = false } = {}) {
   const base = {
     provider_id: provider.id,
     provider_name: provider.name,
     kind: provider.kind,
-    read_only: scenario.read_only,
+    read_only: stage.access === 'read_only',
     capabilities: provider.capabilities,
     requires_user_approval: Boolean(
-      provider.requires_user_approval || scenario.requires_user_approval || !scenario.read_only,
+      provider.requires_user_approval || stage.requires_user_approval || stage.access === 'bounded_write',
     ),
   };
 
@@ -77,7 +77,7 @@ export function buildProviderAdapter(provider, scenario, { env = process.env, al
       source_repository: provider.config.source_repository || null,
       review_path: provider.config.path,
       reviewer: provider.config.reviewer,
-      model_label: provider.config.model_label,
+      model_label: provider.config.model_label || null,
       ambient_repository_access: false,
       can_write: false,
     };

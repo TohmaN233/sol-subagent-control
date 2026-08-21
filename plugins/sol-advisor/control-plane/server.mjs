@@ -28,7 +28,7 @@ import {
 const CONTROL_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = join(CONTROL_DIR, 'default-config.json');
 const WEB_DIR = join(CONTROL_DIR, 'web');
-const SERVER_VERSION = '0.3.0';
+const SERVER_VERSION = '0.4.0';
 const MAX_HTTP_BODY = 512 * 1024;
 
 let consoleState = null;
@@ -244,17 +244,17 @@ export async function stopConsole() {
 
 export function buildToolDefinitions() {
   const sharedResolveProperties = {
-    scenario_id: { type: 'string', description: 'Exact enabled scenario id returned by sol_control_status.' },
-    task: { type: 'string', description: 'Task objective for the selected scenario.' },
+    task_type_id: { type: 'string', description: 'Exact enabled Task Type id returned by sol_control_status.' },
+    task: { type: 'string', description: 'Task objective for the selected Task Type.' },
     context: { description: 'Relevant task context. String or JSON value.' },
     constraints: { description: 'Fixed decisions, scope boundaries, prohibited actions, and ownership.' },
     verification: { description: 'Concrete checks and acceptance evidence.' },
-    user_approved: { type: 'boolean', default: false, description: 'Set true only when the user explicitly approved this approval-gated scenario/provider for the current task.' },
+    user_approved: { type: 'boolean', default: false, description: 'Set true only when the user explicitly approved every approval-gated Stage/Provider for the current task.' },
   };
   return [
     {
       name: 'sol_control_status',
-      description: 'Read sanitized control-plane metadata only: enabled providers, scenario ids, routes, mappings, capabilities, and approval flags. Prompt templates, provider endpoints, credential variable names, and console tokens are never returned.',
+      description: 'Read sanitized control-plane metadata only: enabled Providers, Task Type ids, routes, ordered Stage bindings, capabilities, and approval flags. Prompt templates, provider endpoints, credential variable names, and console tokens are never returned.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     },
     {
@@ -271,11 +271,11 @@ export function buildToolDefinitions() {
     },
     {
       name: 'sol_control_resolve',
-      description: 'After Sol selects exactly one enabled scenario, compile only that scenario template and return only its selected provider adapter contract. Do not use this to enumerate templates. Native/MCP/web-review providers are executed by Codex through the returned contract; this tool does not invoke them.',
+      description: 'After Sol selects exactly one enabled Task Type, compile only its ordered Stages and return each user-pinned Provider adapter contract. Sol must not substitute or fall back to another Provider. Native/MCP/web-review Providers are executed by Codex through their returned contracts; this tool does not invoke them.',
       inputSchema: {
         type: 'object',
         properties: sharedResolveProperties,
-        required: ['scenario_id', 'task'],
+        required: ['task_type_id', 'task'],
         additionalProperties: false,
       },
     },
@@ -294,15 +294,16 @@ export function buildToolDefinitions() {
     },
     {
       name: 'sol_connector_start',
-      description: 'Compile and internally deliver exactly one selected scenario to an enabled built-in Cursor or Grok connector. Bounded-write tasks require explicit current-task approval and non-empty workspace-relative allowed_paths.',
+      description: 'Compile and internally deliver exactly one Stage from a selected Task Type to its pinned built-in connector. Bounded-write Stages require explicit current-task approval and non-empty workspace-relative allowed_paths.',
       inputSchema: {
         type: 'object',
         properties: {
           ...sharedResolveProperties,
+          stage_id: { type: 'string', description: 'Exact Stage id returned for the selected Task Type.' },
           workspace: { type: 'string', description: 'Absolute existing Git repository root.' },
-          allowed_paths: { type: 'array', items: { type: 'string' }, description: 'Required non-empty workspace-relative path boundaries for bounded-write scenarios; omit for read-only scenarios.' },
+          allowed_paths: { type: 'array', items: { type: 'string' }, description: 'Required non-empty workspace-relative path boundaries for bounded-write Stages; omit for read-only Stages.' },
         },
-        required: ['scenario_id', 'task', 'workspace'],
+        required: ['task_type_id', 'stage_id', 'task', 'workspace'],
         additionalProperties: false,
       },
     },
@@ -344,11 +345,14 @@ export function buildToolDefinitions() {
     },
     {
       name: 'sol_control_invoke',
-      description: 'Resolve and directly call one enabled OpenAI-compatible advisory provider. Direct API invocation must be enabled in the console, credentials must exist only in the configured environment variable, the scenario must be read-only, and approval gates still apply. This tool never grants file or host tools to the external model.',
+      description: 'Resolve and directly call one enabled OpenAI-compatible advisory Provider pinned to a read-only Stage. Direct API invocation must be enabled in the console, credentials must exist only in the configured environment variable, and approval gates still apply. This tool never grants file or host tools to the external model.',
       inputSchema: {
         type: 'object',
-        properties: sharedResolveProperties,
-        required: ['scenario_id', 'task'],
+        properties: {
+          ...sharedResolveProperties,
+          stage_id: { type: 'string', description: 'Exact read-only Stage id to invoke.' },
+        },
+        required: ['task_type_id', 'stage_id', 'task'],
         additionalProperties: false,
       },
     },
