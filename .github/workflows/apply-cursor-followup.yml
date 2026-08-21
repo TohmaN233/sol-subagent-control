@@ -1,0 +1,59 @@
+name: apply-cursor-followup
+
+on:
+  push:
+    branches:
+      - fix/cursor-31629-panel-profile
+    paths:
+      - .github/cursor-followup-upload/READY
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/cursor-31629-panel-profile
+          fetch-depth: 0
+      - name: Reconstruct reviewed follow-up
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "bc7e971773b0cd1d8bee9c7b6078d58a8a704b84"
+          test "$(git merge-base HEAD bc7e971773b0cd1d8bee9c7b6078d58a8a704b84)" = "bc7e971773b0cd1d8bee9c7b6078d58a8a704b84"
+          test -f .github/cursor-followup-upload/READY
+          test "$(find .github/cursor-followup-upload -maxdepth 1 -type f -name 'part-*' | wc -l | tr -d ' ')" = 3
+          cat .github/cursor-followup-upload/part-* | base64 --decode | gzip --decompress --stdout > /tmp/cursor-followup.patch
+          printf '%s  %s\n' 'f302e25c523448c5853008588ad316fda3a360130a132912dbcb70f2a4534cde' /tmp/cursor-followup.patch | sha256sum --check --strict
+          git apply --check --whitespace=error-all /tmp/cursor-followup.patch
+          git apply --index --whitespace=error-all /tmp/cursor-followup.patch
+          git rm -r .github/cursor-followup-upload
+          git rm .github/workflows/apply-cursor-followup.yml
+          git rm .github/workflows/export-cursor-followup-source.yml
+          git diff --cached --check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run Cursor protocol and repository gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in plugins/sol-advisor/control-plane/connectors/*.mjs plugins/sol-advisor/control-plane/test/fixtures/*.mjs; do
+            node --check "$file"
+          done
+          node plugins/sol-advisor/control-plane/test/run-tests.mjs
+          sh plugins/sol-advisor/scripts/verify-control-plane.sh
+          sh plugins/sol-advisor/scripts/verify.sh
+          git diff --cached --check
+      - name: Commit repository-owned Cursor follow-up
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'TohmaN233'
+          git config user.email '271796371+TohmaN233@users.noreply.github.com'
+          git commit -m 'fix: harden Cursor 3.16.29 panel identity and startup'
+          git push origin HEAD:fix/cursor-31629-panel-profile
