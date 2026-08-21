@@ -1,7 +1,7 @@
 {
   "name": "sol-advisor",
-  "version": "0.6.0",
-  "description": "Primary-agent-led routing with a human-owned control plane and opt-in built-in Cursor CDP and Grok ACP connectors.",
+  "version": "0.7.0",
+  "description": "Primary-agent-led routing with pluggable Task Types, pinned Stage providers, and opt-in Cursor/Grok connectors.",
   "author": {
     "name": "TohmaN233",
     "url": "https://github.com/TohmaN233"
@@ -21,8 +21,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Sol Subagent Control",
-    "shortDescription": "Keep one qualifying primary agent in charge while scenarios select native, built-in, or external providers.",
-    "longDescription": "Sol Advisor defaults to GPT-5.6 Sol, permits GPT-5.6 Terra, rejects GPT-5.6 Luna, and requires high, xhigh, or max reasoning for architecture, root implementation, verification, and acceptance. Before the first task tool call, the primary agent declares a machine-auditable SELECTIVE ROUTE: solo is the default; delegate uses native GPT-5.6 Luna / Max for bounded work or GPT-5.6 Terra / High for higher-risk work; audit uses a fresh read-only GPT-5.6 Sol / High review; full combines one selected implementer with a fresh review only for a broad or high-risk exception. Public role metadata is authoritative and missing, conflicting, unavailable, or unobservable routing evidence fails closed. The optional control plane exposes sanitized scenario metadata and disabled-by-default repository-owned Cursor CDP and Grok Leader plus ACP connectors for read-only and explicitly approved bounded-write work. Writes require provider write capability, a non-read-only scenario, current-task approval, and bounded allowed_paths; Git scope evidence fails closed. Cursor and Grok compatibility still require user-machine live smoke, and no external or paid provider is called merely because it is installed.",
+    "shortDescription": "Keep one qualifying primary agent in charge while Task Type stages use user-pinned providers.",
+    "longDescription": "Sol Advisor defaults to GPT-5.6 Sol, permits GPT-5.6 Terra, rejects GPT-5.6 Luna, and requires high, xhigh, or max reasoning for architecture, root implementation, verification, and acceptance. Before the first task tool call, the primary agent declares a machine-auditable SELECTIVE ROUTE: solo is the default; delegate uses one implementation Stage; audit uses one review Stage; full combines implementation then review only for a broad or high-risk exception. Public role metadata is authoritative and missing, conflicting, unavailable, or unobservable routing evidence fails closed. The optional control plane exposes sanitized Task Type and ordered Stage metadata. Each Stage has exactly one Provider pinned by the user; Sol cannot substitute Providers or auto-fallback. Disabled-by-default repository-owned Cursor CDP and Grok Leader plus ACP connectors support read-only and explicitly approved bounded-write work. Writes require Provider write capability, a bounded-write Stage, current-task approval, and bounded allowed_paths; Git scope evidence fails closed. Cursor and Grok compatibility still require user-machine live smoke, and no external or paid Provider is called merely because it is installed.",
     "developerName": "TohmaN233",
     "category": "Productivity",
     "capabilities": [
@@ -32,7 +32,7 @@
     "websiteURL": "https://github.com/TohmaN233/sol-subagent-control",
     "defaultPrompt": [
       "Use $sol-advisor:sol-control-plane; keep a qualifying primary agent in charge and verify every auxiliary claim.",
-      "Keep built-in and paid providers off unless the user explicitly enabled and approved the selected scenario."
+      "Keep built-in and paid providers off unless the user enabled the Provider and pinned it to the selected Task Type."
     ]
   }
 }

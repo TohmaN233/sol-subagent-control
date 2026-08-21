@@ -195,14 +195,14 @@ export class GrokAcpConnector {
         binary_present: true,
         workspace: workspace ? await validateWorkspace(workspace) : null,
       },
-      action_required: 'Start an explicitly approved read-only or bounded-write scenario to establish a live ACP session.',
+      action_required: 'Start an explicitly approved read-only or bounded-write Stage to establish a live ACP session.',
       error: null,
     };
   }
 
-  async start({ provider, scenario, prompt, workspace, scenarioId, allowedPaths = [] }) {
+  async start({ provider, stage, prompt, workspace, taskTypeId, stageId, allowedPaths = [] }) {
     const fullWorkspace = await validateWorkspace(workspace);
-    const readOnly = scenario.read_only === true;
+    const readOnly = stage.read_only === true;
     const boundedPaths = readOnly
       ? await validateAllowedPaths(fullWorkspace, allowedPaths)
       : await validateAllowedPaths(fullWorkspace, allowedPaths, { required: true });
@@ -227,7 +227,8 @@ export class GrokAcpConnector {
     const baseline = await captureWorkspaceSnapshot(fullWorkspace);
     const boundedPrompt = accessEnvelope(prompt, fullWorkspace, readOnly, boundedPaths);
     const task = await this.store.create({
-      scenario_id: scenarioId,
+      task_type_id: taskTypeId,
+      stage_id: stageId,
       provider_id: provider.id,
       connector: 'grok_acp',
       workspace: fullWorkspace,
@@ -303,7 +304,7 @@ export class GrokAcpConnector {
       active = {
         taskId: task.task_id,
         provider,
-        scenario,
+        stage,
         workspace: fullWorkspace,
         baseline,
         readOnly,
@@ -521,7 +522,8 @@ export class GrokAcpConnector {
     if (!task) return null;
     return {
       task_id: task.task_id,
-      scenario_id: task.scenario_id,
+      task_type_id: task.task_type_id,
+      stage_id: task.stage_id,
       provider_id: task.provider_id,
       connector: task.connector,
       state: task.state,
@@ -843,7 +845,7 @@ export class GrokAcpConnector {
     const active = {
       taskId: task.task_id,
       provider: { config: { max_result_chars: 131_072 } },
-      scenario: { read_only: task.read_only },
+      stage: { read_only: task.read_only },
       workspace: task.workspace,
       baseline: task.baseline_snapshot,
       readOnly: task.read_only === true,

@@ -42,8 +42,19 @@ async function fixture() {
   const provider = config.providers.find((item) => item.id === 'grok-local');
   provider.enabled = true;
   provider.config.task_timeout_ms = 1000;
-  const scenario = config.scenarios.find((item) => item.id === 'grok-readonly-advice');
-  scenario.enabled = true;
+  config.task_types.push({
+    id: 'connector-readonly-fixture',
+    name: 'Connector read-only fixture',
+    enabled: true,
+    description: 'Connector test task type.',
+    route: 'delegate',
+    tags: ['fixture'],
+    stages: [{
+      id: 'implementation', role: 'implementer', provider_id: provider.id,
+      access: 'read_only', requires_user_approval: true,
+      template: 'Perform {{task}} under {{constraints}}. Verify with {{verification}}.',
+    }],
+  });
   await saveConfig(config, { configPath });
   const env = { ...process.env, GROK_BIN: fakeSource };
   const spawnImpl = (command, args, options) => {
@@ -57,7 +68,8 @@ async function fixture() {
 
 async function start(fx, task) {
   return startConnectorSelection({
-    scenario_id: 'grok-readonly-advice',
+    task_type_id: 'connector-readonly-fixture',
+    stage_id: 'implementation',
     task,
     context: 'Fixture evidence only.',
     constraints: 'Read-only. Do not change files.',

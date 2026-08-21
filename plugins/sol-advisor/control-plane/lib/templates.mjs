@@ -6,7 +6,8 @@ const FIELD_LIMITS = {
   context: 30_000,
   constraints: 20_000,
   verification: 20_000,
-  scenario_id: 128,
+  task_type_id: 128,
+  stage_id: 128,
   provider_name: 256,
 };
 

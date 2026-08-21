@@ -1,4 +1,4 @@
 interface:
   display_name: "Sol Subagent Control"
-  short_description: "Keep one qualifying primary agent in charge while resolving one configured scenario/provider template"
-  default_prompt: "Use $sol-control-plane; read metadata once, declare one route, resolve one scenario, and verify every auxiliary claim."
+  short_description: "Keep one qualifying primary agent in charge while resolving one Task Type with pinned Stage providers"
+  default_prompt: "Use $sol-control-plane; read metadata once, resolve one Task Type, and verify every auxiliary claim."

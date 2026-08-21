@@ -23,16 +23,21 @@ h2 { margin: 0; font-size: 1.35rem; }
 .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: .72rem; font-weight: 800; letter-spacing: .16em; }
 .header-actions, .section-heading { display: flex; gap: 12px; align-items: center; }
 .section-heading { justify-content: space-between; margin-bottom: 18px; }
+.task-type-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.task-type-controls select { width: min(280px, 100%); }
 main { padding-bottom: 64px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-bottom: 18px; box-shadow: 0 16px 40px rgba(0,0,0,.18); }
 .grid { display: grid; gap: 14px; }
 .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.provider-native-options[hidden] { display: none; }
 .stack { display: grid; gap: 12px; }
 .card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .card summary { cursor: pointer; display: flex; justify-content: space-between; gap: 16px; padding: 16px; font-weight: 700; }
 .card summary::marker { color: var(--accent); }
 .card-body { padding: 0 16px 16px; border-top: 1px solid var(--line); }
+.stage-card { margin-top: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.025); }
+.stage-card h3 { margin: 0 0 10px; font-size: 1rem; }
 .card-meta { color: var(--muted); font-size: .86rem; font-weight: 500; }
 label { display: grid; gap: 7px; color: var(--muted); font-size: .86rem; }
 input, select, textarea, button { font: inherit; }
@@ -61,5 +66,8 @@ button.small { padding: 7px 10px; font-size: .78rem; }
 @media (max-width: 760px) {
   header { align-items: flex-start; flex-direction: column; }
   .grid.two, .grid.three { grid-template-columns: 1fr; }
+  .section-heading { align-items: flex-start; flex-direction: column; }
+  .task-type-controls { justify-content: flex-start; width: 100%; }
+  .task-type-controls select { width: 100%; }
   .danger-zone { align-items: flex-start; flex-direction: column; }
 }

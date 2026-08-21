@@ -46,13 +46,14 @@ test('direct OpenAI-compatible invocation is text-only and env-authenticated', a
   provider.enabled = true;
   provider.config.endpoint = `http://127.0.0.1:${address.port}/v1/chat/completions`;
   provider.config.model = 'mock-model';
-  const scenario = config.scenarios.find((item) => item.id === 'brainstorm');
-  scenario.provider_id = provider.id;
-  scenario.requires_user_approval = true;
+  const stage = config.task_types.find((item) => item.id === 'brainstorm').stages[0];
+  stage.provider_id = provider.id;
+  stage.requires_user_approval = true;
   await saveConfig(config, { configPath });
 
   const result = await invokeSelection({
-    scenario_id: 'brainstorm',
+    task_type_id: 'brainstorm',
+    stage_id: 'implementation',
     task: 'Compare two parser designs.',
     context: 'Observed facts only.',
     constraints: 'No file changes.',
@@ -80,12 +81,13 @@ test('direct API stays disabled until both provider and global switch allow it',
   const config = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
   const provider = config.providers.find((item) => item.id === 'custom-openai-compatible');
   provider.enabled = true;
-  const scenario = config.scenarios.find((item) => item.id === 'brainstorm');
-  scenario.provider_id = provider.id;
+  const stage = config.task_types.find((item) => item.id === 'brainstorm').stages[0];
+  stage.provider_id = provider.id;
   await saveConfig(config, { configPath });
   await assert.rejects(
     invokeSelection({
-      scenario_id: 'brainstorm',
+      task_type_id: 'brainstorm',
+      stage_id: 'implementation',
       task: 'Advise.',
       user_approved: true,
     }, {

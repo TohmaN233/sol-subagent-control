@@ -20,14 +20,38 @@ async function fixture() {
   return { dir, configPath, config };
 }
 
-test('bundled defaults are valid and external providers are off', async () => {
+test('bundled defaults use pluggable task types with route-shaped stages', async () => {
   const { config } = await fixture();
-  assert.equal(config.version, 2);
+  assert.equal(config.version, 3);
+  assert.equal('scenarios' in config, false);
   const external = config.providers.filter((provider) => provider.kind !== 'native_agent');
   assert.ok(external.length >= 4);
   assert.ok(external.every((provider) => provider.enabled === false));
-  assert.equal(config.scenarios.find((scenario) => scenario.id === 'bounded-code-change').provider_id, 'native-luna');
-  assert.equal(config.scenarios.find((scenario) => scenario.id === 'cross-review').provider_id, 'native-sol-reviewer');
+  const webReview = config.providers.find((provider) => provider.id === 'chatgpt-web-pro');
+  assert.equal(webReview.config.model_label, '');
+  assert.equal('reasoning_effort' in webReview.config, false);
+  assert.equal(sanitizeConfig(config, { env: {} }).providers
+    .find((provider) => provider.id === 'chatgpt-web-pro').model_label, null);
+  const bounded = config.task_types.find((taskType) => taskType.id === 'bounded-code-change');
+  assert.deepEqual(bounded.stages.map((stage) => [stage.id, stage.role, stage.provider_id]), [
+    ['implementation', 'implementer', 'native-luna'],
+  ]);
+  const review = config.task_types.find((taskType) => taskType.id === 'cross-review');
+  assert.deepEqual(review.stages.map((stage) => [stage.id, stage.role, stage.provider_id]), [
+    ['review', 'reviewer', 'native-sol-reviewer'],
+  ]);
+  const analysis = config.task_types.find((taskType) => taskType.id === 'repository-analysis');
+  assert.deepEqual(analysis.stages.map((stage) => [stage.role, stage.access]), [
+    ['implementer', 'read_only'],
+  ]);
+  const full = config.task_types.find((taskType) => taskType.id === 'implementation-with-review');
+  assert.deepEqual(full.stages.map((stage) => [stage.id, stage.role]), [
+    ['implementation', 'implementer'], ['review', 'reviewer'],
+  ]);
+  for (const taskType of config.task_types) {
+    const providerSpecificText = `${taskType.id} ${taskType.name} ${taskType.description} ${taskType.tags.join(' ')}`;
+    assert.doesNotMatch(providerSpecificText, /cursor|grok|chatgpt|luna|terra|openai/i);
+  }
 });
 
 test('sanitized status omits templates, endpoints, and credential names', async () => {
@@ -40,43 +64,44 @@ test('sanitized status omits templates, endpoints, and credential names', async 
   assert.doesNotMatch(text, /CONSTRAINTS AND OWNERSHIP/);
   assert.match(text, /bounded-code-change/);
   assert.match(text, /template_revision/);
-  assert.equal(status.scenarios.find((scenario) => scenario.id === 'bounded-code-change').requires_user_approval, true);
+  const bounded = status.task_types.find((taskType) => taskType.id === 'bounded-code-change');
+  assert.equal(bounded.stages[0].requires_user_approval, true);
 });
 
 test('resolution returns only the selected compiled prompt and adapter', async () => {
   const { configPath } = await fixture();
   const { result } = await resolveSelection({
-    scenario_id: 'bounded-code-change',
+    task_type_id: 'bounded-code-change',
     task: 'Implement the parser guard.',
     context: { files: ['src/parser.ts'] },
     constraints: 'Own only src/parser.ts.',
     verification: 'Run npm test.',
     user_approved: true,
   }, { configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: {} });
-  assert.equal(result.adapter.execution, 'native_agent');
-  assert.equal(result.adapter.agent_type, 'sol_advisor_luna_implementer');
-  assert.match(result.compiled_prompt, /Implement the parser guard/);
-  assert.match(result.compiled_prompt, /src\/parser\.ts/);
+  assert.equal(result.stages[0].adapter.execution, 'native_agent');
+  assert.equal(result.stages[0].adapter.agent_type, 'sol_advisor_luna_implementer');
+  assert.match(result.stages[0].compiled_prompt, /Implement the parser guard/);
+  assert.match(result.stages[0].compiled_prompt, /src\/parser\.ts/);
   assert.doesNotMatch(JSON.stringify(result), /Hard-path ChatGPT/);
-  assert.doesNotMatch(result.compiled_prompt, /{{task}}/);
+  assert.doesNotMatch(result.stages[0].compiled_prompt, /{{task}}/);
 });
 
 test('disabled and approval-gated routes fail closed', async () => {
   const { configPath, config } = await fixture();
   await assert.rejects(
-    resolveSelection({ scenario_id: 'hard-path-web-advice', task: 'Review the blocker.' }, {
+    resolveSelection({ task_type_id: 'hard-path-web-advice', task: 'Review the blocker.' }, {
       configPath,
       defaultConfigPath: DEFAULT_CONFIG_PATH,
       env: {},
     }),
-    /scenario is disabled/,
+    /task type is disabled/,
   );
 
   config.providers.find((provider) => provider.id === 'chatgpt-web-pro').enabled = true;
-  config.scenarios.find((scenario) => scenario.id === 'hard-path-web-advice').enabled = true;
+  config.task_types.find((taskType) => taskType.id === 'hard-path-web-advice').enabled = true;
   await saveConfig(config, { configPath });
   await assert.rejects(
-    resolveSelection({ scenario_id: 'hard-path-web-advice', task: 'Review the blocker.' }, {
+    resolveSelection({ task_type_id: 'hard-path-web-advice', task: 'Review the blocker.' }, {
       configPath,
       defaultConfigPath: DEFAULT_CONFIG_PATH,
       env: {},
@@ -84,17 +109,18 @@ test('disabled and approval-gated routes fail closed', async () => {
     /requires explicit current-task user approval/,
   );
   const { result } = await resolveSelection({
-    scenario_id: 'hard-path-web-advice',
+    task_type_id: 'hard-path-web-advice',
     task: 'Review the blocker.',
     user_approved: true,
   }, { configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: {} });
-  assert.equal(result.adapter.execution, 'packet_review');
+  assert.equal(result.stages[0].adapter.execution, 'packet_review');
+  assert.equal(result.stages[0].adapter.model_label, null);
 });
 
 test('environment kill switch cannot be bypassed', async () => {
   const { configPath } = await fixture();
   await assert.rejects(
-    resolveSelection({ scenario_id: 'bounded-code-change', task: 'Change one file.' }, {
+    resolveSelection({ task_type_id: 'bounded-code-change', task: 'Change one file.' }, {
       configPath,
       defaultConfigPath: DEFAULT_CONFIG_PATH,
       env: { SOL_CONTROL_DISABLED: '1' },
@@ -110,68 +136,115 @@ test('configuration rejects stored MCP secrets and unknown placeholders', async 
   assert.throws(() => validateConfig(secretConfig), /looks like a stored secret/);
 
   const placeholderConfig = structuredClone(config);
-  placeholderConfig.scenarios[0].template += '\n{{unknown_field}}';
+  placeholderConfig.task_types[0].stages[0].template += '\n{{unknown_field}}';
   assert.throws(() => validateConfig(placeholderConfig), /unsupported placeholder/);
+
 });
 
 
-test('version-1 user config migrates built-in connectors without enabling or remapping user policy', async () => {
+function asVersion2(config) {
+  return {
+    version: 2,
+    global: structuredClone(config.global),
+    providers: structuredClone(config.providers),
+    scenarios: config.task_types.map((taskType) => {
+      const stage = taskType.stages[0];
+      return {
+        id: taskType.id,
+        name: taskType.name,
+        enabled: taskType.enabled,
+        description: taskType.description,
+        route: taskType.route,
+        provider_id: stage?.provider_id || 'native-luna',
+        read_only: stage ? stage.access === 'read_only' : true,
+        requires_user_approval: stage?.requires_user_approval || false,
+        tags: taskType.tags,
+        template: stage?.template || 'Handle {{task}}.',
+      };
+    }),
+  };
+}
+
+test('version-2 config migrates task types and removes untouched disabled provider-specific defaults', async () => {
   const { configPath, config } = await fixture();
-  const legacy = structuredClone(config);
-  legacy.version = 1;
-  legacy.providers = legacy.providers.filter((provider) => provider.id !== 'cursor-local');
-  legacy.scenarios = legacy.scenarios.filter((scenario) => ![
-    'grok-bounded-change', 'cursor-readonly-advice', 'cursor-bounded-change',
-  ].includes(scenario.id));
-  const grok = legacy.providers.find((provider) => provider.id === 'grok-local');
-  grok.capabilities.write = false;
-  grok.enabled = false;
-  legacy.providers.push({
-    id: 'cursor-bridge',
-    name: 'User legacy Cursor bridge',
-    kind: 'external_mcp',
-    enabled: false,
-    description: 'User-owned legacy descriptor that migration must preserve.',
-    requires_user_approval: true,
-    capabilities: { read: true, write: true, background: true },
-    config: {
-      protocol: 'user-cursor-v1',
-      model_label: 'User Cursor',
-      tools: { dispatch: 'cursor_do' },
-      defaults: {},
-      notes: 'custom',
-    },
-  });
+  const legacy = asVersion2(config);
   const brainstorm = legacy.scenarios.find((scenario) => scenario.id === 'brainstorm');
   brainstorm.description = 'USER CUSTOM DESCRIPTION';
+  legacy.scenarios.push({
+    id: 'cursor-bounded-change', name: 'Cursor bounded repository change', enabled: false,
+    description: 'old bundled task', route: 'delegate', provider_id: 'cursor-local',
+    read_only: false, requires_user_approval: true, tags: ['cursor'], template: 'Do {{task}}.',
+  });
   await writeFile(configPath, `${JSON.stringify(legacy, null, 2)}\n`);
 
   const migrated = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
-  assert.equal(migrated.version, 2);
-  assert.equal(migrated.providers.find((provider) => provider.id === 'grok-local').capabilities.write, true);
-  assert.equal(migrated.providers.find((provider) => provider.id === 'grok-local').enabled, false);
-  assert.equal(migrated.providers.find((provider) => provider.id === 'cursor-local').enabled, false);
-  assert.equal(migrated.providers.find((provider) => provider.id === 'cursor-bridge').config.protocol, 'user-cursor-v1');
-  assert.equal(migrated.scenarios.find((scenario) => scenario.id === 'brainstorm').description,
+  assert.equal(migrated.version, 3);
+  assert.equal(migrated.task_types.find((taskType) => taskType.id === 'brainstorm').description,
     'USER CUSTOM DESCRIPTION');
-  for (const scenarioId of ['grok-bounded-change', 'cursor-readonly-advice', 'cursor-bounded-change']) {
-    const scenario = migrated.scenarios.find((item) => item.id === scenarioId);
-    assert.ok(scenario);
-    assert.equal(scenario.enabled, false);
-    assert.equal(scenario.requires_user_approval, true);
-  }
-  assert.equal(JSON.parse(await readFile(configPath, 'utf8')).version, 2);
+  assert.equal(migrated.task_types.some((taskType) => taskType.id === 'cursor-bounded-change'), false);
+  assert.equal(JSON.parse(await readFile(configPath, 'utf8')).version, 3);
+});
+
+test('version-2 full route migrates disabled with a separate read-only reviewer', async () => {
+  const { configPath, config } = await fixture();
+  const legacy = asVersion2(config);
+  legacy.scenarios.push({
+    id: 'legacy-full', name: 'Legacy full', enabled: true, description: 'Needs review.',
+    route: 'full', provider_id: 'native-luna', read_only: false,
+    requires_user_approval: true, tags: ['legacy'], template: 'Implement {{task}}.',
+  });
+  await writeFile(configPath, `${JSON.stringify(legacy, null, 2)}\n`);
+  const migrated = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
+  const taskType = migrated.task_types.find((item) => item.id === 'legacy-full');
+  assert.equal(taskType.enabled, false);
+  assert.deepEqual(taskType.stages.map((stage) => [stage.id, stage.provider_id, stage.access]), [
+    ['implementation', 'native-luna', 'bounded_write'],
+    ['review', 'native-sol-reviewer', 'read_only'],
+  ]);
+});
+
+test('full resolves implementation then review with pinned providers and no fallback', async () => {
+  const { configPath, config } = await fixture();
+  config.task_types.push({
+    id: 'full-fixture', name: 'Full fixture', enabled: true,
+    description: 'Two-stage test workflow.', route: 'full', tags: ['fixture'],
+    stages: [
+      {
+        id: 'implementation', role: 'implementer', provider_id: 'native-luna',
+        access: 'bounded_write', requires_user_approval: true,
+        template: 'Implement {{task}} with {{context}} and {{constraints}}; verify {{verification}}.',
+      },
+      {
+        id: 'review', role: 'reviewer', provider_id: 'native-sol-reviewer',
+        access: 'read_only', requires_user_approval: false,
+        template: 'Review {{task}} with {{context}} and {{constraints}}; verify {{verification}}.',
+      },
+    ],
+  });
+  await saveConfig(config, { configPath });
+  const { result } = await resolveSelection({
+    task_type_id: 'full-fixture', task: 'Change and review.', user_approved: true,
+  }, { configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: {} });
+  assert.deepEqual(result.stages.map((stage) => [stage.stage.id, stage.provider.id]), [
+    ['implementation', 'native-luna'], ['review', 'native-sol-reviewer'],
+  ]);
+
+  config.providers.find((provider) => provider.id === 'native-sol-reviewer').enabled = false;
+  await saveConfig(config, { configPath });
+  await assert.rejects(
+    resolveSelection({ task_type_id: 'full-fixture', task: 'Change and review.', user_approved: true }, {
+      configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: {},
+    }),
+    /provider is disabled: native-sol-reviewer/,
+  );
 });
 
 
 test('version-1 migration adds both built-in connectors disabled when legacy config has only external descriptors', async () => {
   const { configPath, config } = await fixture();
-  const legacy = structuredClone(config);
+  const legacy = asVersion2(config);
   legacy.version = 1;
   legacy.providers = legacy.providers.filter((provider) => !['cursor-local', 'grok-local'].includes(provider.id));
-  legacy.scenarios = legacy.scenarios.filter((scenario) => ![
-    'grok-readonly-advice', 'grok-bounded-change', 'cursor-readonly-advice', 'cursor-bounded-change',
-  ].includes(scenario.id));
   await writeFile(configPath, `${JSON.stringify(legacy, null, 2)}\n`);
   const migrated = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
   for (const providerId of ['cursor-local', 'grok-local']) {
@@ -181,4 +254,5 @@ test('version-1 migration adds both built-in connectors disabled when legacy con
     assert.equal(provider.requires_user_approval, true);
     assert.equal(provider.capabilities.write, true);
   }
+  assert.equal(migrated.version, 3);
 });

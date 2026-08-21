@@ -11,7 +11,7 @@
     <div>
       <p class="eyebrow">LOCAL CONTROL PLANE</p>
       <h1 id="page-title">Sol Subagent Control</h1>
-      <p class="lede">Sol stays in charge. Configure which provider each scenario may use; templates enter the model context only after that scenario is selected.</p>
+      <p class="lede">Define reusable Task Types, then pin exactly one Provider to each implementation or review Stage. Sol may select a Task Type, but cannot change its Provider bindings or fall back silently.</p>
     </div>
     <div class="header-actions">
       <button id="reload" class="secondary">Reload</button>
@@ -53,19 +53,24 @@
         </div>
         <button id="add-provider" class="secondary">Add provider</button>
       </div>
+      <p class="hint">Native Providers expose Model and Reasoning effort as normal controls. Connector and web-review Providers inherit model settings from their own client; their local reasoning value remains empty and unsupported knobs are not shown.</p>
       <div id="providers" class="stack"></div>
     </section>
 
-    <section class="panel" aria-labelledby="scenarios-heading">
+    <section class="panel" aria-labelledby="task-types-heading">
       <div class="section-heading">
         <div>
           <p class="eyebrow">WHEN TO USE WHAT</p>
-          <h2 id="scenarios-heading">Scenarios and templates</h2>
+          <h2 id="task-types-heading">Task Types and stages</h2>
         </div>
-        <button id="add-scenario" class="secondary">Add scenario</button>
+        <div class="task-type-controls">
+          <select id="task-type-preset" aria-label="Bundled Task Type preset"></select>
+          <button id="add-task-type-from-preset" class="secondary">Add from preset</button>
+          <button id="add-task-type" class="secondary">Add blank Task Type</button>
+        </div>
       </div>
-      <p class="hint">Scenario descriptions and mappings are visible to Sol. Full template text stays here until Sol resolves that exact scenario.</p>
-      <div id="scenarios" class="stack"></div>
+      <p class="hint">The plugin ships with ready-to-use, model-independent Task Types. Use them as-is, remove any you do not need, duplicate and remap their Stages to other Providers, add one again from the preset library, or start from a blank Task Type. Routes create a fixed Stage topology: solo has none, delegate has implementation, audit has review, and full has both.</p>
+      <div id="task-types" class="stack"></div>
     </section>
 
     <section class="panel danger-zone" aria-labelledby="defaults-heading">

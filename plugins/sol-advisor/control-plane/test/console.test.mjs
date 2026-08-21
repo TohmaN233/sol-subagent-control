@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { DEFAULT_CONFIG_PATH, startConsole, stopConsole } from '../server.mjs';
+import { DEFAULT_CONFIG_PATH, SERVER_VERSION, startConsole, stopConsole } from '../server.mjs';
 
 test('loopback console requires token and revision-checks saves', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'sol-control-console-'));
@@ -12,15 +12,29 @@ test('loopback console requires token and revision-checks saves', async (t) => {
   const state = await startConsole({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, open: false });
   t.after(stopConsole);
   const base = `http://127.0.0.1:${state.port}`;
+  assert.equal(SERVER_VERSION, '0.4.0');
+  assert.deepEqual(await (await fetch(`${base}/health`)).json(), {
+    status: 'ok', version: SERVER_VERSION,
+  });
 
   const unauthorized = await fetch(`${base}/api/config`);
   assert.equal(unauthorized.status, 401);
+
+  const appSource = await (await fetch(`${base}/app.js`)).text();
+  const stylesSource = await (await fetch(`${base}/styles.css`)).text();
+  assert.match(appSource, /provider-reasoning-effort/);
+  assert.match(appSource, /reasoning_effort \|\| ''/);
+  assert.match(appSource, /task-type-card/);
+  assert.match(appSource, /add-task-type-from-preset/);
+  assert.match(appSource, /duplicate-task-type/);
+  assert.doesNotMatch(appSource, /scenario-card/);
+  assert.match(stylesSource, /\.provider-native-options\[hidden\]\s*\{\s*display:\s*none/);
 
   const headers = { authorization: `Bearer ${state.token}` };
   const loadedResponse = await fetch(`${base}/api/config`, { headers });
   assert.equal(loadedResponse.status, 200);
   const loaded = await loadedResponse.json();
-  assert.ok(loaded.config.scenarios[0].template.includes('{{task}}'));
+  assert.ok(loaded.config.task_types[0].stages[0].template.includes('{{task}}'));
 
   loaded.config.global.enabled = false;
   const savedResponse = await fetch(`${base}/api/config`, {

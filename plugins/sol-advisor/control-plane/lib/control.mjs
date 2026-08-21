@@ -1,7 +1,7 @@
 import {
   appendAuditEvent,
   findProvider,
-  findScenario,
+  findTaskType,
   isEnvironmentDisabled,
   loadConfig,
   sanitizeConfig,
@@ -23,6 +23,48 @@ export async function getControlStatus({ configPath, defaultConfigPath, env = pr
   return sanitizeConfig(config, { env });
 }
 
+function resolveStage(config, taskType, stage, args, env) {
+  const provider = findProvider(config, stage.provider_id);
+  assert(provider, `task type ${taskType.id} stage ${stage.id} provider is missing: ${stage.provider_id}`);
+  assert(provider.enabled, `provider is disabled: ${provider.id}`);
+  const approvalRequired = Boolean(
+    stage.requires_user_approval || provider.requires_user_approval || stage.access === 'bounded_write',
+  );
+  if (approvalRequired) {
+    assert(normalizeApproval(args.user_approved),
+      `task type ${taskType.id} stage ${stage.id} requires explicit current-task user approval`);
+  }
+  assert(provider.capabilities.read, `provider ${provider.id} cannot read task context`);
+  if (stage.access === 'bounded_write') {
+    assert(provider.capabilities.write, `provider ${provider.id} is not configured for write-capable work`);
+  }
+  const compiledPrompt = renderTemplate(stage.template, {
+    task: String(args.task || '').trim(),
+    context: args.context,
+    constraints: args.constraints,
+    verification: args.verification,
+    task_type_id: taskType.id,
+    stage_id: stage.id,
+    provider_name: provider.name,
+  }, config.global.max_prompt_chars);
+  const adapter = buildProviderAdapter(provider, stage, {
+    env,
+    allowDirectApi: config.global.allow_direct_api,
+  });
+  return {
+    stage: { id: stage.id, role: stage.role, access: stage.access },
+    provider: { id: provider.id, name: provider.name, kind: provider.kind },
+    approval_required: approvalRequired,
+    adapter,
+    ...(provider.kind === 'builtin_connector'
+      ? { prompt_delivery: 'internal', next_operation: 'sol_connector_start' }
+      : { compiled_prompt: compiledPrompt }),
+    _stage: stage,
+    _provider: provider,
+    _compiledPrompt: compiledPrompt,
+  };
+}
+
 export async function resolveSelection(args, {
   configPath,
   defaultConfigPath,
@@ -33,78 +75,33 @@ export async function resolveSelection(args, {
   assert(!isEnvironmentDisabled(env), 'Sol control plane is disabled by SOL_CONTROL_DISABLED');
   assert(config.global.enabled, 'Sol control plane is disabled in the user configuration');
 
-  const scenarioId = String(args?.scenario_id || '').trim();
+  const taskTypeId = String(args?.task_type_id || '').trim();
   const task = String(args?.task || '').trim();
-  assert(scenarioId, 'scenario_id is required');
+  assert(taskTypeId, 'task_type_id is required');
   assert(task, 'task is required');
 
-  const scenario = findScenario(config, scenarioId);
-  assert(scenario, `unknown scenario: ${scenarioId}`);
-  assert(scenario.enabled, `scenario is disabled: ${scenarioId}`);
-  const provider = findProvider(config, scenario.provider_id);
-  assert(provider, `scenario provider is missing: ${scenario.provider_id}`);
-  assert(provider.enabled, `provider is disabled: ${provider.id}`);
-
-  const approvalRequired = Boolean(
-    scenario.requires_user_approval || provider.requires_user_approval || !scenario.read_only,
-  );
-  if (approvalRequired) {
-    assert(normalizeApproval(args.user_approved),
-      `scenario ${scenario.id} requires explicit current-task user approval`);
-  }
-
-  if (!scenario.read_only) {
-    assert(provider.capabilities.write,
-      `provider ${provider.id} is not configured for write-capable work`);
-  }
-  if (!scenario.read_only) {
-    assert(normalizeApproval(args.user_approved),
-      `bounded-write scenario ${scenario.id} requires explicit current-task user approval`);
-  }
-  assert(provider.capabilities.read, `provider ${provider.id} cannot read task context`);
-
-  const compiledPrompt = renderTemplate(scenario.template, {
-    task,
-    context: args.context,
-    constraints: args.constraints,
-    verification: args.verification,
-    scenario_id: scenario.id,
-    provider_name: provider.name,
-  }, config.global.max_prompt_chars);
-
-  const adapter = buildProviderAdapter(provider, scenario, {
-    env,
-    allowDirectApi: config.global.allow_direct_api,
-  });
+  const taskType = findTaskType(config, taskTypeId);
+  assert(taskType, `unknown task type: ${taskTypeId}`);
+  assert(taskType.enabled, `task type is disabled: ${taskTypeId}`);
+  const resolvedStages = taskType.stages.map((stage) => resolveStage(config, taskType, stage, args, env));
   const result = {
-    scenario: {
-      id: scenario.id,
-      name: scenario.name,
-      route: scenario.route,
-      read_only: scenario.read_only,
-      tags: scenario.tags,
+    task_type: {
+      id: taskType.id,
+      name: taskType.name,
+      route: taskType.route,
+      tags: taskType.tags,
     },
-    provider: {
-      id: provider.id,
-      name: provider.name,
-      kind: provider.kind,
-    },
-    approval_required: approvalRequired,
-    adapter,
-    ...(provider.kind === 'builtin_connector'
-      ? { prompt_delivery: 'internal', next_operation: 'sol_connector_start' }
-      : { compiled_prompt: compiledPrompt }),
+    stages: resolvedStages.map(({ _stage, _provider, _compiledPrompt, ...stageResult }) => stageResult),
   };
 
   if (audit) {
     await appendAuditEvent(configPath, {
       event: 'resolve',
-      scenario_id: scenario.id,
-      provider_id: provider.id,
+      task_type_id: taskType.id,
       outcome: 'ok',
     }).catch(() => {});
   }
-  return { result, config, scenario, provider, compiledPrompt };
+  return { result, config, taskType, resolvedStages };
 }
 
 export async function invokeSelection(args, {
@@ -119,35 +116,44 @@ export async function invokeSelection(args, {
     env,
     audit: false,
   });
-  const { config, scenario, provider, result } = resolved;
+  const stageId = String(args?.stage_id || '').trim();
+  assert(stageId, 'stage_id is required');
+  const selected = resolved.resolvedStages.find((item) => item.stage.id === stageId);
+  assert(selected, `unknown stage for task type ${resolved.taskType.id}: ${stageId}`);
+  const { config, taskType, result } = resolved;
+  const provider = selected._provider;
+  const stage = selected._stage;
   assert(provider.kind === 'openai_compatible',
     'sol_control_invoke supports only openai_compatible providers; native and MCP providers must be executed by Codex through their returned adapter contract');
   assert(config.global.allow_direct_api,
     'direct API invocation is disabled in the user configuration');
-  assert(scenario.read_only,
-    'direct API providers are advisory-only and require a read-only scenario');
+  assert(stage.access === 'read_only',
+    'direct API providers are advisory-only and require a read-only stage');
 
   try {
-    const invocation = await invokeOpenAICompatible(provider, result.compiled_prompt, {
+    const invocation = await invokeOpenAICompatible(provider, selected._compiledPrompt, {
       env,
       fetchImpl,
     });
     await appendAuditEvent(configPath, {
       event: 'invoke',
-      scenario_id: scenario.id,
+      task_type_id: taskType.id,
+      stage_id: stage.id,
       provider_id: provider.id,
       outcome: 'ok',
     }).catch(() => {});
     return {
-      scenario: result.scenario,
-      provider: result.provider,
+      task_type: result.task_type,
+      stage: selected.stage,
+      provider: selected.provider,
       advisory_only: true,
       response: invocation,
     };
   } catch (error) {
     await appendAuditEvent(configPath, {
       event: 'invoke',
-      scenario_id: scenario.id,
+      task_type_id: taskType.id,
+      stage_id: stage.id,
       provider_id: provider.id,
       outcome: 'error',
       detail: error.message,
@@ -184,20 +190,32 @@ export async function startConnectorSelection(args, {
   const resolved = await resolveSelection(args, {
     configPath, defaultConfigPath, env, audit: false,
   });
-  const { config, scenario, provider, compiledPrompt } = resolved;
+  const stageId = String(args?.stage_id || '').trim();
+  assert(stageId, 'stage_id is required');
+  const selected = resolved.resolvedStages.find((item) => item.stage.id === stageId);
+  assert(selected, `unknown stage for task type ${resolved.taskType.id}: ${stageId}`);
+  const { taskType } = resolved;
+  const stage = selected._stage;
+  const provider = selected._provider;
   assert(provider.kind === 'builtin_connector',
-    `scenario provider is not a built-in connector: ${provider.id}`);
+    `stage provider is not a built-in connector: ${provider.id}`);
+  const connectorStage = {
+    id: stage.id,
+    read_only: stage.access === 'read_only',
+    requires_user_approval: stage.requires_user_approval,
+  };
   const task = await registry.start({
     provider,
-    scenario,
-    prompt: compiledPrompt,
+    stage: connectorStage,
+    prompt: selected._compiledPrompt,
     workspace: args.workspace,
-    scenarioId: scenario.id,
+    taskTypeId: taskType.id,
+    stageId: stage.id,
     allowedPaths: args.allowed_paths,
     userApproved: args.user_approved === true,
   });
   await appendAuditEvent(configPath, {
-    event: 'connector-start', scenario_id: scenario.id, provider_id: provider.id,
+    event: 'connector-start', task_type_id: taskType.id, stage_id: stage.id, provider_id: provider.id,
     task_id: task.task_id, outcome: 'ok',
   }).catch(() => {});
   return task;
