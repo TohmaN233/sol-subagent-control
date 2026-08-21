@@ -27,11 +27,53 @@ jobs:
           test "$(git merge-base HEAD bc7e971773b0cd1d8bee9c7b6078d58a8a704b84)" = "bc7e971773b0cd1d8bee9c7b6078d58a8a704b84"
           test -f .github/cursor-followup-upload/READY
           test "$(find .github/cursor-followup-upload -maxdepth 1 -type f -name 'part-*' | wc -l | tr -d ' ')" = 3
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          root = Path('.github/cursor-followup-upload')
+
+          def blob_sha(text):
+              data = text.encode('ascii')
+              return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+
+          expected = {
+              'part-00': 'f0cafce82562eb8bf5895ff11505585b05f88f42',
+              'part-01': 'bc2891d6f0b4dc37c4995512254d9a98c35da250',
+              'part-02': '0aeef3ee2b1934c975a28be7897d310ae8361f67',
+          }
+
+          part0_path = root / 'part-00'
+          part0 = part0_path.read_text(encoding='ascii')
+          if blob_sha(part0) != expected['part-00']:
+              repairs = [part0[:index] + part0[index + 1:] for index in range(len(part0))
+                         if blob_sha(part0[:index] + part0[index + 1:]) == expected['part-00']]
+              if len(repairs) != 1:
+                  raise SystemExit(f'part-00 repair was not unique: {len(repairs)}')
+              part0 = repairs[0]
+              part0_path.write_text(part0, encoding='ascii')
+
+          part2_path = root / 'part-02'
+          part2 = part2_path.read_text(encoding='ascii')
+          if blob_sha(part2) != expected['part-02']:
+              if len(part2) != 10936:
+                  raise SystemExit(f'unexpected part-02 length: {len(part2)}')
+              if hashlib.sha256(part2.encode('ascii')).hexdigest() != '3f45ee015e9a5f42a58a3d7b207afb10cee2afa80236e9f396a3069c6408d4a1':
+                  raise SystemExit('part-02 prefix hash mismatch')
+              suffix = 'xPuIIG9P4Hz9Szoumkeyi0LYMnvopb+QXhjl9ELoQyE1bgit4ERO0dRPjI7u4Fk2W+5C2b8TdCzW/EJ21Eh9Dbu1vPDOTjFu8RHhskRNQ0+wY6q7RoHasLZJGAYR+aRJzwKcOBiyeExqG+CPUtUu4CEHM5ATyjPETFPn1YnYJSOJlvMhWvUZJUx2YJblxBVhr8LyEUltCtYZq9N55TPiuDM4fvncoyKPaFW5BNqGlmKm4O6nAu3FnA0ZJqHCNc+V8UYPQDUWBKnwCQJhkRqWmFTiTCdT0ziNcAWb611Np4kG6p/YYCRNemym9kxpSxidI01gd0zzM/Q8Ji8E0C+2EIxDn1JyXfdDwW05NoXDQzulGoh27SbXbnhsmUnMfaFcimhO+vXo4CUG7Q9BR1S6PMnZJVZ9hYgnncTD8fSSdIkDpZuwpruMlC4CODTWVQNpDiMkK9cEbpaJtmTYWctAAa7JmI+4ARAGswkiKflEXB3O9JmUrOqyqFiV7FJ+W+VrEFjJ/JVV0/dWKvrCL7tW00f84vgY36NQlPLldBoo7b4k9bfpkGsCb5W1gi9rCC9hE/EMQJIm95vhRN8qbr5V1sZ4xr7QTBGutoqmVokKJYiMGWbjvSfJBBuUr30koKHYGfKkAqCXtopBiLHp/dCROgEnVXRVf7mw7UBlLN5Dq8SJkW0DSFBcp71YFTkD38jIJqxnUdtl5HJc01QijRwPAQZWADS8ojBA2jboRcA0/kVBGRe6tioI+UBkXgKDGvCVCo9j8OA4AMHKfNknUIIbARO/8/BOBlWFUcfB56RClJQ4YFAtGbXkDcMwENt5fT0VrkOknrCERSqOEoby4nb0wgSyClPUm5d4QU3Sxx3YfSDIHG+CGMDrIx5yaxsjSIRiwKH9B9HIJ6xcoqS0EH3QVc8vt1gQdzSfTpAsgKJEMajRJ2TS/fDK/zyazivcy+GrY69WqVZ2N0farXJ281wFXcrpa0NGc/vQ1RUTVyedX6S8OkuV61QWQbFgvdSt4gaWSIUr4RcQKrC8+fVghk6i/wdVkhWQx84BAA=='
+              part2 = part2 + suffix
+              part2_path.write_text(part2, encoding='ascii')
+
+          for name, sha in expected.items():
+              actual = blob_sha((root / name).read_text(encoding='ascii'))
+              if actual != sha:
+                  raise SystemExit(f'{name} blob mismatch: {actual}')
+          PY
           cat .github/cursor-followup-upload/part-* | base64 --decode | gzip --decompress --stdout > /tmp/cursor-followup.patch
           printf '%s  %s\n' 'f302e25c523448c5853008588ad316fda3a360130a132912dbcb70f2a4534cde' /tmp/cursor-followup.patch | sha256sum --check --strict
           git apply --check --whitespace=error-all /tmp/cursor-followup.patch
           git apply --index --whitespace=error-all /tmp/cursor-followup.patch
-          git rm -r .github/cursor-followup-upload
+          git rm -rf .github/cursor-followup-upload
           git rm .github/workflows/apply-cursor-followup.yml
           git rm .github/workflows/export-cursor-followup-source.yml
           git diff --cached --check
