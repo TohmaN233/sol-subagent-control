@@ -239,10 +239,10 @@ print("three exact role pins are valid")
 PY
 pass "exact three-role TOML inventory"
 
-grep -Fq "legacy_luna_sha256=$legacy_luna_sha256" "$installer" || fail "installer legacy Luna digest mismatch"
-grep -Fq "legacy_terra_sha256=$legacy_terra_sha256" "$installer" || fail "installer legacy Terra digest mismatch"
-grep -Fq "legacy_luna_v050_sha256=$legacy_luna_v050_sha256" "$installer" || fail "installer v0.5.0 Luna digest mismatch"
-grep -Fq "legacy_terra_v050_sha256=$legacy_terra_v050_sha256" "$installer" || fail "installer v0.5.0 Terra digest mismatch"
+grep -Fq "$legacy_luna_sha256" "$node_installer" || fail "installer legacy Luna digest mismatch"
+grep -Fq "$legacy_terra_sha256" "$node_installer" || fail "installer legacy Terra digest mismatch"
+grep -Fq "$legacy_luna_v050_sha256" "$node_installer" || fail "installer v0.5.0 Luna digest mismatch"
+grep -Fq "$legacy_terra_v050_sha256" "$node_installer" || fail "installer v0.5.0 Terra digest mismatch"
 pass "immutable historical migration fingerprints"
 
 clean_target=$tmp_dir/clean
