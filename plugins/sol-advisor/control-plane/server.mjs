@@ -28,7 +28,7 @@ import {
 const CONTROL_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = join(CONTROL_DIR, 'default-config.json');
 const WEB_DIR = join(CONTROL_DIR, 'web');
-const SERVER_VERSION = '0.4.2';
+const SERVER_VERSION = '0.4.3';
 const MAX_HTTP_BODY = 512 * 1024;
 
 let consoleState = null;

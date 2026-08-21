@@ -55,7 +55,7 @@ jq empty "$manifest"
 jq empty "$mcp_manifest"
 jq empty "$config"
 jq empty "$control/package.json"
-[ "$(jq -r '.version' "$manifest")" = 0.7.2 ] || fail "native manifest version drifted"
+[ "$(jq -r '.version' "$manifest")" = 0.7.3 ] || fail "native manifest version drifted"
 [ "$(jq -r '.mcpServers' "$manifest")" = './.mcp.json' ] || fail "plugin manifest does not load control-plane MCP"
 [ "$(jq -r '.mcpServers["sol-control-plane"].command' "$mcp_manifest")" = node ] || fail "control-plane MCP does not use node"
 [ "$(jq -r '.mcpServers["sol-control-plane"].enabled' "$mcp_manifest")" = true ] || fail "control-plane MCP is disabled"
@@ -82,7 +82,7 @@ print("default prompts fit the 128-character host cap")
 PY
 pass "plugin and skill prompt lengths"
 
-jq -e '.version == 3 and .global.enabled == true and .global.allow_direct_api == false and (.scenarios | not)' "$config" >/dev/null || fail "default global switches or schema are unsafe"
+jq -e '.version == 4 and .global.enabled == true and .global.allow_direct_api == false and (.scenarios | not)' "$config" >/dev/null || fail "default global switches or schema are unsafe"
 jq -e '[.providers[] | select(.kind != "native_agent") | .enabled] | all(. == false)' "$config" >/dev/null || fail "a non-native provider is enabled by default"
 jq -e '.providers[] | select(.id == "native-luna" and .enabled == true)' "$config" >/dev/null || fail "native Luna default missing"
 jq -e '.providers[] | select(.id == "native-terra" and .enabled == true)' "$config" >/dev/null || fail "native Terra default missing"

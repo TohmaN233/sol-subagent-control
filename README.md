@@ -76,6 +76,8 @@ Read-only Stages omit `allowed_paths`. Bounded-write Stages must provide the sma
 
 Route topology is derived from Stages: no Stages means `solo`, implementation means `delegate`, review means `audit`, and implementation followed by review means `full`. The console no longer exposes a separate Route selector. New Task Types default to delegate; enable an independent review Stage for difficult work to produce full. Each Stage has exactly one Provider pinned by the user. Sol may choose a matching enabled Task Type, but it may not choose among Providers, substitute one, or auto-fallback.
 
+On upgrade, the untouched legacy judgment-heavy preset is migrated to the full two-Stage workflow. A customized Task Type remains user-owned and is never reset by that migration.
+
 ## Routes
 
 | Mode | Use it when | Delivery |

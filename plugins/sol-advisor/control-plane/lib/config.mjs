@@ -4,7 +4,7 @@ import { access, chmod, lstat, mkdir, readFile, rename, stat, writeFile } from '
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
-export const CONFIG_VERSION = 3;
+export const CONFIG_VERSION = 4;
 export const PROVIDER_KINDS = new Set(['native_agent', 'builtin_connector', 'external_mcp', 'mcp_tool', 'web_review', 'openai_compatible']);
 export const ROUTES = new Set(['solo', 'delegate', 'audit', 'full']);
 export const STAGE_ROLES = new Set(['implementer', 'reviewer']);
@@ -441,11 +441,55 @@ export function migrateConfigV2(raw) {
     };
     });
   return {
-    version: CONFIG_VERSION,
+    version: 3,
     global: migrated.global,
     providers: migrated.providers,
     task_types: taskTypes,
   };
+}
+
+function sameStrings(actual, expected) {
+  return Array.isArray(actual) && Array.isArray(expected)
+    && actual.length === expected.length
+    && actual.every((value, index) => value === expected[index]);
+}
+
+function isLegacyJudgmentHeavyDefault(taskType, bundledTaskType) {
+  if (!object(taskType) || !object(bundledTaskType)) return false;
+  const stage = Array.isArray(taskType.stages) && taskType.stages.length === 1
+    ? taskType.stages[0] : null;
+  const bundledStage = Array.isArray(bundledTaskType.stages) ? bundledTaskType.stages[0] : null;
+  return taskType.id === 'judgment-heavy-change'
+    && taskType.name === bundledTaskType.name
+    && taskType.enabled === bundledTaskType.enabled
+    && taskType.description === bundledTaskType.description
+    && taskType.route === 'delegate'
+    && sameStrings(taskType.tags, bundledTaskType.tags)
+    && object(stage) && object(bundledStage)
+    && stage.id === bundledStage.id
+    && stage.role === bundledStage.role
+    && stage.provider_id === bundledStage.provider_id
+    && stage.access === bundledStage.access
+    && stage.requires_user_approval === bundledStage.requires_user_approval
+    && stage.template === bundledStage.template;
+}
+
+export function migrateConfigV3(raw, bundledDefaults) {
+  assert(object(raw), 'config must be an object');
+  assert(raw.version === 3, 'migrateConfigV3 accepts only config.version=3');
+  assert(object(bundledDefaults) && bundledDefaults.version === CONFIG_VERSION,
+    `bundled defaults must use config.version=${CONFIG_VERSION}`);
+  const migrated = jsonClone(raw, 'version-3 config');
+  migrated.version = CONFIG_VERSION;
+  const bundledTaskType = bundledDefaults.task_types?.find(
+    (taskType) => taskType?.id === 'judgment-heavy-change');
+  assert(bundledTaskType, 'bundled difficult Task Type is missing');
+  const index = migrated.task_types?.findIndex(
+    (taskType) => taskType?.id === 'judgment-heavy-change') ?? -1;
+  if (index >= 0 && isLegacyJudgmentHeavyDefault(migrated.task_types[index], bundledTaskType)) {
+    migrated.task_types[index] = jsonClone(bundledTaskType, 'bundled difficult Task Type');
+  }
+  return migrated;
 }
 
 export function validateConfig(raw) {
@@ -546,12 +590,19 @@ export async function loadConfig({ configPath, defaultConfigPath }) {
     const raw = JSON.parse(await readFile(configPath, 'utf8'));
     if (raw?.version === 1) {
       const bundled = JSON.parse(await readFile(defaultConfigPath, 'utf8'));
-      const migrated = validateConfig(migrateConfigV2(migrateConfigV1(raw, bundled)));
+      const migrated = validateConfig(migrateConfigV3(migrateConfigV2(migrateConfigV1(raw, bundled)), bundled));
       await writeConfigAtomic(migrated, configPath);
       return migrated;
     }
     if (raw?.version === 2) {
-      const migrated = validateConfig(migrateConfigV2(raw));
+      const bundled = JSON.parse(await readFile(defaultConfigPath, 'utf8'));
+      const migrated = validateConfig(migrateConfigV3(migrateConfigV2(raw), bundled));
+      await writeConfigAtomic(migrated, configPath);
+      return migrated;
+    }
+    if (raw?.version === 3) {
+      const bundled = JSON.parse(await readFile(defaultConfigPath, 'utf8'));
+      const migrated = validateConfig(migrateConfigV3(raw, bundled));
       await writeConfigAtomic(migrated, configPath);
       return migrated;
     }

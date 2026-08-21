@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "global": {
     "enabled": true,
     "allow_direct_api": false,

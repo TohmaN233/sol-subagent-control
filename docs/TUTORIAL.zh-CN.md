@@ -113,6 +113,8 @@ Provider 只描述“由谁、通过什么连接工作”；Task Type 描述“�
 内置预设是起点，不是封闭清单。可以删除、重新添加、复制、改名、改模板或创建完全自定义的任务类型。
 Cursor、Grok、网页审阅和 native agent 都是 Provider，不应该出现在任务类型名称里。
 
+从旧版 v3 配置升级时，未修改过的 judgment-heavy 预设会自动升级为“实现 + 独立审阅”；如果你自定义过这个 Task Type，它的 Stage 结构会原样保留。
+
 ## 第一次实际测试
 
 建议使用一次性 Git 仓库，先只启用一个 Provider。
