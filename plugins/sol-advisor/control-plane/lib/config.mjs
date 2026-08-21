@@ -4,7 +4,7 @@ import { access, chmod, lstat, mkdir, readFile, rename, stat, writeFile } from '
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
-export const CONFIG_VERSION = 1;
+export const CONFIG_VERSION = 2;
 export const PROVIDER_KINDS = new Set(['native_agent', 'builtin_connector', 'external_mcp', 'mcp_tool', 'web_review', 'openai_compatible']);
 export const ROUTES = new Set(['solo', 'delegate', 'audit', 'full']);
 export const ALLOWED_TEMPLATE_FIELDS = new Set([
@@ -135,20 +135,12 @@ function validateNative(raw) {
 
 function validateBuiltinConnector(raw) {
   assert(object(raw), 'built-in connector config must be an object');
+  rejectSecretKeys(raw);
   const connector = text(raw.connector, 'provider.config.connector', { required: true, max: 64 });
-  assert(connector === 'grok_acp', 'provider.config.connector must be grok_acp in this release');
-  const binaryEnv = text(raw.binary_env ?? 'GROK_BIN',
-    'provider.config.binary_env', { required: true, max: 128 });
-  assert(ENV_RE.test(binaryEnv),
-    'provider.config.binary_env must name an uppercase environment variable');
-  const transport = text(raw.transport ?? 'leader_acp_stdio',
-    'provider.config.transport', { required: true, max: 64 });
-  assert(transport === 'leader_acp_stdio',
-    'provider.config.transport must be leader_acp_stdio');
-  return {
+  assert(['grok_acp', 'cursor_cdp'].includes(connector),
+    'provider.config.connector must be grok_acp or cursor_cdp');
+  const common = {
     connector,
-    binary_env: binaryEnv,
-    transport,
     environment_mode: 'inherit',
     startup_timeout_ms: integer(raw.startup_timeout_ms, 15_000, 1_000, 120_000,
       'provider.config.startup_timeout_ms'),
@@ -157,6 +149,39 @@ function validateBuiltinConnector(raw) {
     max_result_chars: integer(raw.max_result_chars, 131_072, 1_024, 524_288,
       'provider.config.max_result_chars'),
     single_active_run: true,
+  };
+  if (connector === 'grok_acp') {
+    const binaryEnv = text(raw.binary_env ?? 'GROK_BIN',
+      'provider.config.binary_env', { required: true, max: 128 });
+    assert(ENV_RE.test(binaryEnv),
+      'provider.config.binary_env must name an uppercase environment variable');
+    const transport = text(raw.transport ?? 'leader_acp_stdio',
+      'provider.config.transport', { required: true, max: 64 });
+    assert(transport === 'leader_acp_stdio',
+      'provider.config.transport must be leader_acp_stdio for grok_acp');
+    return { ...common, binary_env: binaryEnv, transport };
+  }
+  const executableEnv = text(raw.executable_env ?? 'CURSOR_EXE',
+    'provider.config.executable_env', { required: true, max: 128 });
+  assert(ENV_RE.test(executableEnv),
+    'provider.config.executable_env must name an uppercase environment variable');
+  const transport = text(raw.transport ?? 'cdp_ui',
+    'provider.config.transport', { required: true, max: 64 });
+  assert(transport === 'cdp_ui',
+    'provider.config.transport must be cdp_ui for cursor_cdp');
+  const uiProfile = text(raw.ui_profile ?? 'agents_v2_2026_08',
+    'provider.config.ui_profile', { required: true, max: 64 });
+  assert(uiProfile === 'agents_v2_2026_08',
+    'provider.config.ui_profile must be agents_v2_2026_08 in this release');
+  return {
+    ...common,
+    executable_env: executableEnv,
+    transport,
+    cdp_port: integer(raw.cdp_port, 9223, 1024, 65535, 'provider.config.cdp_port'),
+    command_timeout_ms: integer(raw.command_timeout_ms, 30_000, 1_000, 120_000,
+      'provider.config.command_timeout_ms'),
+    launch_if_closed: bool(raw.launch_if_closed, true),
+    ui_profile: uiProfile,
   };
 }
 
@@ -295,6 +320,42 @@ function validateScenario(raw, index) {
   };
 }
 
+export function migrateConfigV1(raw, bundledDefaults) {
+  assert(object(raw), 'config must be an object');
+  assert(raw.version === 1, 'migrateConfigV1 accepts only config.version=1');
+  const defaults = validateConfig(bundledDefaults);
+  const migrated = jsonClone(raw, 'legacy config');
+  migrated.version = CONFIG_VERSION;
+  migrated.providers = Array.isArray(migrated.providers) ? migrated.providers : [];
+  migrated.scenarios = Array.isArray(migrated.scenarios) ? migrated.scenarios : [];
+
+  const providerIds = new Set(migrated.providers.map((provider) => provider && provider.id));
+  for (const providerId of ['cursor-local', 'grok-local']) {
+    if (providerIds.has(providerId)) continue;
+    const bundled = defaults.providers.find((provider) => provider.id === providerId);
+    assert(bundled, `bundled migration provider is missing: ${providerId}`);
+    migrated.providers.push(jsonClone(bundled, `bundled provider ${providerId}`));
+    providerIds.add(providerId);
+  }
+
+  const grok = migrated.providers.find((provider) => provider?.id === 'grok-local');
+  if (grok?.kind === 'builtin_connector' && grok?.config?.connector === 'grok_acp') {
+    grok.capabilities = object(grok.capabilities) ? grok.capabilities : {};
+    grok.capabilities.write = true;
+  }
+
+  const scenarioIds = new Set(migrated.scenarios.map((scenario) => scenario && scenario.id));
+  for (const scenarioId of ['grok-readonly-advice', 'grok-bounded-change', 'cursor-readonly-advice', 'cursor-bounded-change']) {
+    if (scenarioIds.has(scenarioId)) continue;
+    const bundled = defaults.scenarios.find((scenario) => scenario.id === scenarioId);
+    assert(bundled, `bundled migration scenario is missing: ${scenarioId}`);
+    migrated.scenarios.push(jsonClone(bundled, `bundled scenario ${scenarioId}`));
+    scenarioIds.add(scenarioId);
+  }
+
+  return migrated;
+}
+
 export function validateConfig(raw) {
   assert(object(raw), 'config must be an object');
   assert(raw.version === CONFIG_VERSION, `config.version must be ${CONFIG_VERSION}`);
@@ -363,14 +424,30 @@ export async function ensureConfigFile({ configPath, defaultConfigPath }) {
   }
 }
 
+async function writeConfigAtomic(validated, configPath) {
+  await mkdir(dirname(configPath), { recursive: true, mode: 0o700 });
+  const temporary = `${configPath}.write-${process.pid}-${randomUUID()}`;
+  await writeFile(temporary, `${JSON.stringify(validated, null, 2)}\n`,
+    { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+  await chmod(temporary, 0o600).catch(() => {});
+  await rename(temporary, configPath);
+}
+
 export async function loadConfig({ configPath, defaultConfigPath }) {
   await ensureConfigFile({ configPath, defaultConfigPath });
   const file = await assertRegularNoSymlink(configPath, 'control-plane config path');
   assert(file.size <= MAX_CONFIG_BYTES, `control-plane config exceeds ${MAX_CONFIG_BYTES} bytes`);
   try {
-    return validateConfig(JSON.parse(await readFile(configPath, 'utf8')));
+    const raw = JSON.parse(await readFile(configPath, 'utf8'));
+    if (raw?.version === 1 && CONFIG_VERSION === 2) {
+      const bundled = JSON.parse(await readFile(defaultConfigPath, 'utf8'));
+      const migrated = validateConfig(migrateConfigV1(raw, bundled));
+      await writeConfigAtomic(migrated, configPath);
+      return migrated;
+    }
+    return validateConfig(raw);
   } catch (error) {
-    if (/config|provider|scenario|control-plane/.test(error.message)) throw error;
+    if (/config|provider|scenario|control-plane|migration/.test(error.message)) throw error;
     throw new Error(`control-plane config is invalid JSON: ${error.message}`);
   }
 }
@@ -387,12 +464,7 @@ export async function saveConfig(config, { configPath, expectedRevision = '' } =
     assert(configRevision(current) === expectedRevision,
       'configuration changed since it was loaded');
   }
-  await mkdir(dirname(configPath), { recursive: true, mode: 0o700 });
-  const temporary = `${configPath}.write-${process.pid}-${randomUUID()}`;
-  await writeFile(temporary, `${JSON.stringify(validated, null, 2)}\n`,
-    { encoding: 'utf8', mode: 0o600, flag: 'wx' });
-  await chmod(temporary, 0o600).catch(() => {});
-  await rename(temporary, configPath);
+  await writeConfigAtomic(validated, configPath);
   return { config: validated, revision: configRevision(validated) };
 }
 
@@ -401,6 +473,9 @@ function modelLabel(provider) {
   if (provider.kind === 'openai_compatible') return provider.config.model;
   if (provider.kind === 'builtin_connector' && provider.config.connector === 'grok_acp') {
     return 'Grok Build via ACP (user installation)';
+  }
+  if (provider.kind === 'builtin_connector' && provider.config.connector === 'cursor_cdp') {
+    return 'Cursor user-selected model via local CDP';
   }
   return provider.config.model_label || null;
 }
@@ -443,7 +518,7 @@ export function sanitizeConfig(config, { env = process.env } = {}) {
         provider_kind: provider?.kind || 'missing',
         read_only: scenario.read_only,
         requires_user_approval: Boolean(
-          scenario.requires_user_approval || provider?.requires_user_approval,
+          scenario.requires_user_approval || provider?.requires_user_approval || !scenario.read_only,
         ),
         tags: scenario.tags,
         template_revision: createHash('sha256').update(scenario.template).digest('hex').slice(0, 12),

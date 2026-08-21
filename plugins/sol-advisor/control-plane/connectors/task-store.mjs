@@ -19,35 +19,44 @@ export class ConnectorTaskStore {
     this.statePath = statePath;
     this.tasks = new Map();
     this.initialized = false;
+    this.initializePromise = null;
     this.flushTail = Promise.resolve();
   }
 
   async initialize() {
     if (this.initialized) return;
-    this.initialized = true;
-    let parsed = { version: 1, tasks: [] };
-    try {
-      parsed = JSON.parse(await readFile(this.statePath, 'utf8'));
-    } catch (error) {
-      if (error?.code !== 'ENOENT') throw error;
-    }
-    let changed = false;
-    for (const raw of Array.isArray(parsed.tasks) ? parsed.tasks : []) {
-      const task = clone(raw);
-      if (!TERMINAL_STATES.has(task.state)) {
-        task.state = 'unknown_after_restart';
-        task.error = {
-          code: 'UNKNOWN_AFTER_RESTART',
-          message: 'The connector process restarted before a terminal state was observed.',
-          retryable: false,
-          action_required: 'Inspect the remote session before abandoning or starting overlapping work.',
-        };
-        task.updated_at = new Date().toISOString();
-        changed = true;
+    if (this.initializePromise) return this.initializePromise;
+    this.initializePromise = (async () => {
+      let parsed = { version: 1, tasks: [] };
+      try {
+        parsed = JSON.parse(await readFile(this.statePath, 'utf8'));
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
       }
-      this.tasks.set(task.task_id, task);
+      let changed = false;
+      for (const raw of Array.isArray(parsed.tasks) ? parsed.tasks : []) {
+        const task = clone(raw);
+        if (!TERMINAL_STATES.has(task.state)) {
+          task.state = 'unknown_after_restart';
+          task.error = {
+            code: 'UNKNOWN_AFTER_RESTART',
+            message: 'The connector process restarted before a terminal state was observed.',
+            retryable: false,
+            action_required: 'Inspect the remote session before abandoning or starting overlapping work.',
+          };
+          task.updated_at = new Date().toISOString();
+          changed = true;
+        }
+        this.tasks.set(task.task_id, task);
+      }
+      if (changed) await this.flush();
+      this.initialized = true;
+    })();
+    try {
+      await this.initializePromise;
+    } finally {
+      this.initializePromise = null;
     }
-    if (changed) await this.flush();
   }
 
   async create(fields) {

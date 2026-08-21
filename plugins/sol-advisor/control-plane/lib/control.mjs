@@ -46,7 +46,7 @@ export async function resolveSelection(args, {
   assert(provider.enabled, `provider is disabled: ${provider.id}`);
 
   const approvalRequired = Boolean(
-    scenario.requires_user_approval || provider.requires_user_approval,
+    scenario.requires_user_approval || provider.requires_user_approval || !scenario.read_only,
   );
   if (approvalRequired) {
     assert(normalizeApproval(args.user_approved),
@@ -56,6 +56,10 @@ export async function resolveSelection(args, {
   if (!scenario.read_only) {
     assert(provider.capabilities.write,
       `provider ${provider.id} is not configured for write-capable work`);
+  }
+  if (!scenario.read_only) {
+    assert(normalizeApproval(args.user_approved),
+      `bounded-write scenario ${scenario.id} requires explicit current-task user approval`);
   }
   assert(provider.capabilities.read, `provider ${provider.id} cannot read task context`);
 
@@ -183,13 +187,14 @@ export async function startConnectorSelection(args, {
   const { config, scenario, provider, compiledPrompt } = resolved;
   assert(provider.kind === 'builtin_connector',
     `scenario provider is not a built-in connector: ${provider.id}`);
-  assert(scenario.read_only, 'the built-in connector in this release requires a read-only scenario');
   const task = await registry.start({
     provider,
     scenario,
     prompt: compiledPrompt,
     workspace: args.workspace,
     scenarioId: scenario.id,
+    allowedPaths: args.allowed_paths,
+    userApproved: args.user_approved === true,
   });
   await appendAuditEvent(configPath, {
     event: 'connector-start', scenario_id: scenario.id, provider_id: provider.id,

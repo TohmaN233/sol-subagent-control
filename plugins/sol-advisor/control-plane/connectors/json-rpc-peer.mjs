@@ -1,5 +1,7 @@
 import readline from 'node:readline';
 
+const MAX_JSON_RPC_LINE_BYTES = 2 * 1024 * 1024;
+
 export class JsonRpcPeer {
   constructor({ input, output, defaultTimeoutMs = 15_000 }) {
     this.output = output;
@@ -57,6 +59,9 @@ export class JsonRpcPeer {
   }
 
   async #onLine(line) {
+    if (Buffer.byteLength(line, 'utf8') > MAX_JSON_RPC_LINE_BYTES) {
+      throw new Error(`ACP JSON-RPC message exceeds ${MAX_JSON_RPC_LINE_BYTES} bytes`);
+    }
     let message;
     try {
       message = JSON.parse(line);

@@ -16,7 +16,7 @@ export function buildProviderAdapter(provider, scenario, { env = process.env, al
     read_only: scenario.read_only,
     capabilities: provider.capabilities,
     requires_user_approval: Boolean(
-      provider.requires_user_approval || scenario.requires_user_approval,
+      provider.requires_user_approval || scenario.requires_user_approval || !scenario.read_only,
     ),
   };
 
@@ -36,7 +36,9 @@ export function buildProviderAdapter(provider, scenario, { env = process.env, al
   if (provider.kind === 'builtin_connector') {
     const identityFields = provider.config.connector === 'grok_acp'
       ? ['task_id', 'session_id', 'run_id']
-      : ['task_id'];
+      : provider.config.connector === 'cursor_cdp'
+        ? ['task_id', 'agent_id', 'target_id']
+        : ['task_id'];
     return {
       ...base,
       execution: 'builtin_connector',

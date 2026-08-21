@@ -289,7 +289,7 @@ function collect() {
     template: $('.scenario-template', card).value,
   }));
   return {
-    version: 1,
+    version: state.config.version,
     global: {
       ...state.config.global,
       enabled: $('#global-enabled').checked,

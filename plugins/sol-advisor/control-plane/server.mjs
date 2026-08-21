@@ -28,7 +28,7 @@ import {
 const CONTROL_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = join(CONTROL_DIR, 'default-config.json');
 const WEB_DIR = join(CONTROL_DIR, 'web');
-const SERVER_VERSION = '0.2.0';
+const SERVER_VERSION = '0.3.0';
 const MAX_HTTP_BODY = 512 * 1024;
 
 let consoleState = null;
@@ -294,12 +294,13 @@ export function buildToolDefinitions() {
     },
     {
       name: 'sol_connector_start',
-      description: 'Compile and internally deliver exactly one selected scenario to its enabled built-in connector. The experimental Grok connector is read-only and requires an absolute Git workspace plus current-task approval when configured.',
+      description: 'Compile and internally deliver exactly one selected scenario to an enabled built-in Cursor or Grok connector. Bounded-write tasks require explicit current-task approval and non-empty workspace-relative allowed_paths.',
       inputSchema: {
         type: 'object',
         properties: {
           ...sharedResolveProperties,
-          workspace: { type: 'string', description: 'Absolute existing Git workspace.' },
+          workspace: { type: 'string', description: 'Absolute existing Git repository root.' },
+          allowed_paths: { type: 'array', items: { type: 'string' }, description: 'Required non-empty workspace-relative path boundaries for bounded-write scenarios; omit for read-only scenarios.' },
         },
         required: ['scenario_id', 'task', 'workspace'],
         additionalProperties: false,
@@ -320,18 +321,19 @@ export function buildToolDefinitions() {
     },
     {
       name: 'sol_connector_control',
-      description: 'Control one exact connector task. Permission/input responses require the returned request identity; cancel requires the exact returned session_id and run_id; abandon is explicitly risk-acknowledged.',
+      description: 'Control one exact connector task. Reconcile reattaches only persisted identities; Grok cancel requires exact session_id/run_id and Cursor cancel requires exact agent_id; abandon is explicitly risk-acknowledged.',
       inputSchema: {
         type: 'object',
         properties: {
           task_id: { type: 'string' },
-          action: { type: 'string', enum: ['respond_permission', 'respond_input', 'cancel', 'disconnect', 'abandon'] },
+          action: { type: 'string', enum: ['reconcile', 'respond_permission', 'respond_input', 'cancel', 'disconnect', 'abandon'] },
           request_id: { type: 'string' },
           decision: { type: 'string', enum: ['select', 'accept', 'decline', 'cancel'] },
           option_id: { type: 'string' },
           content: { type: 'object' },
           expected_session_id: { type: 'string' },
           expected_run_id: { type: 'string' },
+          expected_agent_id: { type: 'string' },
           confirm: { type: 'boolean', default: false },
           acknowledge_may_still_run: { type: 'boolean', default: false },
           reason: { type: 'string' },

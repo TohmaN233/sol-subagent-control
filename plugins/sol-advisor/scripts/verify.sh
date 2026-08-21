@@ -6,6 +6,15 @@ set -eu
 pass() { printf '%s\n' "PASS: $*"; }
 fail() { printf '%s\n' "FAIL: $*" >&2; exit 1; }
 
+if command -v sha256sum >/dev/null 2>&1; then
+  hash_file() { sha256sum "$1"; }
+elif command -v shasum >/dev/null 2>&1; then
+  hash_file() { shasum -a 256 "$1"; }
+else
+  fail "sha256sum or shasum is required"
+fi
+hash_digest() { hash_file "$1" | awk '{print $1}'; }
+
 script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd) || exit 1
 plugin_dir=$(CDPATH= cd "$script_dir/.." && pwd) || exit 1
 repo_dir=$(CDPATH= cd "$plugin_dir/../.." && pwd) || exit 1
@@ -57,7 +66,7 @@ snapshot_files() {
     if [ -L "$path" ]; then
       printf 'L %s -> %s\n' "$(basename "$path")" "$(readlink "$path")"
     elif [ -f "$path" ]; then
-      shasum -a 256 "$path"
+      hash_file "$path"
     else
       printf 'O %s\n' "$(basename "$path")"
     fi
@@ -105,8 +114,8 @@ level; this installed custom-agent profile is the required complex lane.
 """
 LEGACY_TERRA
   cp "$templates/$sol_file" "$target/$sol_file"
-  [ "$(shasum -a 256 "$target/$luna_file" | awk '{print $1}')" = "$legacy_luna_sha256" ] || fail "legacy Luna fixture digest drifted"
-  [ "$(shasum -a 256 "$target/$terra_file" | awk '{print $1}')" = "$legacy_terra_sha256" ] || fail "legacy Terra fixture digest drifted"
+  [ "$(hash_digest "$target/$luna_file")" = "$legacy_luna_sha256" ] || fail "legacy Luna fixture digest drifted"
+  [ "$(hash_digest "$target/$terra_file")" = "$legacy_terra_sha256" ] || fail "legacy Terra fixture digest drifted"
 }
 
 write_v050_roles() {
@@ -155,8 +164,8 @@ reasoning level; this installed custom-agent profile is the required escalation 
 """
 V050_TERRA
   cp "$templates/$sol_file" "$target/$sol_file"
-  [ "$(shasum -a 256 "$target/$luna_file" | awk '{print $1}')" = "$legacy_luna_v050_sha256" ] || fail "v0.5.0 Luna fixture digest drifted"
-  [ "$(shasum -a 256 "$target/$terra_file" | awk '{print $1}')" = "$legacy_terra_v050_sha256" ] || fail "v0.5.0 Terra fixture digest drifted"
+  [ "$(hash_digest "$target/$luna_file")" = "$legacy_luna_v050_sha256" ] || fail "v0.5.0 Luna fixture digest drifted"
+  [ "$(hash_digest "$target/$terra_file")" = "$legacy_terra_v050_sha256" ] || fail "v0.5.0 Terra fixture digest drifted"
 }
 
 for required in "$installer" "$runtime_inspector" "$manifest" "$skill" "$contracts" "$operations" "$control_skill" "$architecture" "$readme" "$ui" "$control_ui"; do

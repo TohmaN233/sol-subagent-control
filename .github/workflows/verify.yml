@@ -8,7 +8,31 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  connector-matrix:
+    name: connector-protocol-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Syntax check connector runtime and fixtures
+        run: >-
+          node --check plugins/sol-advisor/control-plane/server.mjs &&
+          node --check plugins/sol-advisor/control-plane/connectors/cursor-cdp.mjs &&
+          node --check plugins/sol-advisor/control-plane/connectors/grok-acp.mjs &&
+          node --check plugins/sol-advisor/control-plane/test/fixtures/fake-cursor.mjs &&
+          node --check plugins/sol-advisor/control-plane/test/fixtures/fake-grok.mjs
+      - name: Run process and protocol connector tests
+        run: node plugins/sol-advisor/control-plane/test/run-tests.mjs
+
+  full-verify:
+    name: full-repository-verify
+    needs: connector-matrix
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

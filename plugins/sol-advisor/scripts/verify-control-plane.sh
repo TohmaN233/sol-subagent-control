@@ -14,9 +14,6 @@ manifest=$plugin_dir/.codex-plugin/plugin.json
 mcp_manifest=$plugin_dir/.mcp.json
 config=$control/default-config.json
 server=$control/server.mjs
-grok_connector=$control/connectors/grok-acp.mjs
-connector_registry=$control/connectors/registry.mjs
-connector_store=$control/connectors/task-store.mjs
 skill=$plugin_dir/skills/control-plane/SKILL.md
 architecture=$plugin_dir/skills/control-plane/references/architecture.md
 contracts=$plugin_dir/skills/control-plane/references/provider-contracts.md
@@ -26,10 +23,20 @@ workflow=$repo_dir/.github/workflows/verify.yml
 for required in \
   "$manifest" "$mcp_manifest" "$config" "$server" "$skill" "$architecture" \
   "$contracts" "$ui" "$workflow" "$control/package.json" \
-  "$grok_connector" "$connector_registry" "$connector_store" \
+  "$control/connectors/cursor-cdp.mjs" \
+  "$control/connectors/cursor-profile.mjs" \
+  "$control/connectors/cdp-client.mjs" \
+  "$control/connectors/websocket-client.mjs" \
+  "$control/connectors/grok-acp.mjs" \
+  "$control/connectors/registry.mjs" \
+  "$control/connectors/scope-guard.mjs" \
+  "$control/connectors/task-store.mjs" \
   "$control/lib/config.mjs" "$control/lib/control.mjs" \
   "$control/lib/providers.mjs" "$control/lib/templates.mjs" \
-  "$grok_connector" "$connector_registry" "$connector_store" \
+  "$control/test/connector-integration.test.mjs" \
+  "$control/test/run-tests.mjs" \
+  "$control/test/fixtures/fake-cursor.mjs" \
+  "$control/test/fixtures/fake-grok.mjs" \
   "$control/web/index.html" "$control/web/app.js" "$control/web/styles.css"; do
   test -f "$required" || fail "required control-plane file missing: $required"
 done
@@ -49,7 +56,6 @@ python3 - "$manifest" "$ui" <<'PY'
 import json
 from pathlib import Path
 import sys
-
 manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 for value in manifest["interface"]["defaultPrompt"]:
     if len(value) > 128:
@@ -63,48 +69,69 @@ print("default prompts fit the 128-character host cap")
 PY
 pass "plugin and skill prompt lengths"
 
-jq -e '.version == 1 and .global.enabled == true and .global.allow_direct_api == false' "$config" >/dev/null || fail "default global switches are unsafe"
-jq -e '[.providers[] | select(.kind != "native_agent") | .enabled] | all(. == false)' "$config" >/dev/null || fail "an external provider is enabled by default"
+jq -e '.version == 2 and .global.enabled == true and .global.allow_direct_api == false' "$config" >/dev/null || fail "default global switches are unsafe"
+jq -e '[.providers[] | select(.kind != "native_agent") | .enabled] | all(. == false)' "$config" >/dev/null || fail "a non-native provider is enabled by default"
 jq -e '.providers[] | select(.id == "native-luna" and .enabled == true)' "$config" >/dev/null || fail "native Luna default missing"
 jq -e '.providers[] | select(.id == "native-terra" and .enabled == true)' "$config" >/dev/null || fail "native Terra default missing"
 jq -e '.providers[] | select(.id == "native-sol-reviewer" and .enabled == true)' "$config" >/dev/null || fail "native Sol reviewer default missing"
-jq -e '.scenarios[] | select(.id == "bounded-code-change" and .provider_id == "native-luna" and .enabled == true)' "$config" >/dev/null || fail "bounded scenario is not mapped to native Luna"
-jq -e '.scenarios[] | select(.id == "cross-review" and .provider_id == "native-sol-reviewer" and .enabled == true)' "$config" >/dev/null || fail "cross-review scenario is not mapped to native Sol"
-jq -e '.scenarios[] | select(.id == "hard-path-web-advice" and .enabled == false and .requires_user_approval == true)' "$config" >/dev/null || fail "hard-path web advice is not disabled and approval-gated"
-if grep -Eqi '"sk-[A-Za-z0-9_-]{20,}"' "$config"; then
-  fail "default config appears to contain a credential value"
-fi
+jq -e '.providers[] | select(.id == "cursor-local" and .kind == "builtin_connector" and .enabled == false and .requires_user_approval == true and .capabilities.write == true and .config.connector == "cursor_cdp" and .config.transport == "cdp_ui")' "$config" >/dev/null || fail "built-in Cursor default is missing or unsafe"
+jq -e '.providers[] | select(.id == "grok-local" and .kind == "builtin_connector" and .enabled == false and .requires_user_approval == true and .capabilities.write == true and .config.connector == "grok_acp" and .config.transport == "leader_acp_stdio")' "$config" >/dev/null || fail "built-in Grok default is missing or unsafe"
+for scenario in cursor-readonly-advice cursor-bounded-change grok-readonly-advice grok-bounded-change; do
+  jq -e --arg id "$scenario" '.scenarios[] | select(.id == $id and .enabled == false and .requires_user_approval == true)' "$config" >/dev/null || fail "connector scenario is not disabled and approval-gated: $scenario"
+done
+jq -e '.scenarios[] | select(.id == "cursor-bounded-change" and .read_only == false and .provider_id == "cursor-local")' "$config" >/dev/null || fail "Cursor write scenario is not bounded-write"
+jq -e '.scenarios[] | select(.id == "grok-bounded-change" and .read_only == false and .provider_id == "grok-local")' "$config" >/dev/null || fail "Grok write scenario is not bounded-write"
+if grep -Eqi '"sk-[A-Za-z0-9_-]{20,}"' "$config"; then fail "default config appears to contain a credential value"; fi
 jq -e '.providers[] | select(.kind == "openai_compatible") | .config.api_key_env | test("^[A-Z_][A-Z0-9_]*$")' "$config" >/dev/null || fail "API provider does not use an environment-variable name"
-pass "safe native defaults and default-off external providers"
+pass "safe native defaults and disabled approval-gated connector defaults"
 
 for phrase in \
   'sol_control_status' \
   'sol_control_console' \
   'sol_control_resolve' \
-  'sol_control_invoke' \
+  'sol_connector_probe' \
+  'sol_connector_start' \
+  'sol_connector_status' \
+  'sol_connector_control' \
   'Prompt templates, provider endpoints, credential variable names, and console tokens are never returned'; do
   grep -Fq "$phrase" "$server" || fail "server omits required contract: $phrase"
 done
-grep -Fq 'supports only openai_compatible providers' "$control/lib/control.mjs" || fail "direct invocation kind gate missing"
 for phrase in \
   'Read metadata, not the prompt library' \
-  'auto-enable an external provider' \
-  'Resolve exactly the selected template' \
-  'Use the hard-path web scenario only after at least one material signal' \
-  'API keys remain in environment variables' \
+  'Write access opens only when all three facts are true' \
+  'Unified built-in connector contract' \
+  'Built-in Cursor connector' \
+  'Built-in Grok connector' \
+  'Use hard-path web advice only after a real signal' \
   'Auxiliary work substitutes for root work'; do
   grep -Fq "$phrase" "$skill" || fail "control-plane skill omits: $phrase"
 done
-grep -Fq 'This is minimization, not a hostile-model secrecy sandbox' "$architecture" || fail "architecture overclaims template isolation"
-grep -Fq 'Cursor user-selected model' "$config" || fail "Cursor model-selection boundary missing"
-grep -Fq 'Cursor Bridge remains external in this release' "$contracts" || fail "provider contracts overstate the Cursor connection"
-pass "prompt minimization, provider boundaries, and hard-path gate documented"
+for phrase in \
+  'This is minimization, not a hostile-model secrecy sandbox' \
+  'Minimal Cursor connection' \
+  'Minimal Grok connection' \
+  'unknown_after_restart' \
+  'prevented_attempts'; do
+  grep -Fq "$phrase" "$architecture" || fail "architecture omits: $phrase"
+done
+for phrase in \
+  'builtin_connector`: Cursor CDP' \
+  'builtin_connector`: Grok ACP' \
+  'expected_agent_id' \
+  'expected_session_id' \
+  'outside_paths'; do
+  grep -Fq "$phrase" "$contracts" || fail "provider contracts omit: $phrase"
+done
+grep -Fq 'windows-latest' "$workflow" || fail "CI does not cover Windows"
+grep -Fq 'ubuntu-latest' "$workflow" || fail "CI does not cover Linux"
+grep -Fq 'connector-protocol-' "$workflow" || fail "CI does not expose connector protocol matrix"
+pass "prompt minimization, connector contracts, and dual-platform CI documented"
 
 node --check "$server"
 for file in "$control"/lib/*.mjs "$control"/connectors/*.mjs "$control"/web/app.js; do
   node --check "$file"
 done
-node --test "$control"/test/*.test.mjs
+node "$control/test/run-tests.mjs"
 pass "Node syntax and control-plane tests"
 
 sh -n "$script_dir/verify-control-plane.sh"
