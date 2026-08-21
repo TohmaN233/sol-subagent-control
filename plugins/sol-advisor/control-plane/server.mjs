@@ -28,7 +28,7 @@ import {
 const CONTROL_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = join(CONTROL_DIR, 'default-config.json');
 const WEB_DIR = join(CONTROL_DIR, 'web');
-const SERVER_VERSION = '0.4.0';
+const SERVER_VERSION = '0.4.1';
 const MAX_HTTP_BODY = 512 * 1024;
 
 let consoleState = null;
@@ -145,7 +145,7 @@ function openBrowser(url, platform = process.platform) {
 }
 
 export async function startConsole({
-  configPath = resolveConfigPath(),
+  configPath: requestedConfigPath,
   defaultConfigPath = DEFAULT_CONFIG_PATH,
   port = 0,
   open = true,
@@ -155,6 +155,12 @@ export async function startConsole({
     const opened = open ? await openBrowser(consoleState.url) : { opened: false, error: null };
     return { ...consoleState, browser: opened };
   }
+  const configPath = requestedConfigPath || resolveConfigPath(env);
+  const usesOverride = Boolean(requestedConfigPath || env.SOL_CONTROL_CONFIG);
+  const storage = {
+    scope: usesOverride ? 'override' : 'global',
+    config_path: configPath,
+  };
   await loadConfig({ configPath, defaultConfigPath });
   const token = randomBytes(32).toString('base64url');
   const staticFiles = {
@@ -190,7 +196,7 @@ export async function startConsole({
       }
       if (url.pathname === '/api/config' && req.method === 'GET') {
         const config = await loadConfig({ configPath, defaultConfigPath });
-        jsonResponse(res, 200, { config, revision: configRevision(config) });
+        jsonResponse(res, 200, { config, revision: configRevision(config), storage });
         return;
       }
       if (url.pathname === '/api/config' && req.method === 'PUT') {
@@ -225,7 +231,7 @@ export async function startConsole({
   const address = server.address();
   const actualPort = typeof address === 'object' && address ? address.port : port;
   const url = `http://127.0.0.1:${actualPort}/#token=${encodeURIComponent(token)}`;
-  consoleState = { server, token, url, port: actualPort, configPath, defaultConfigPath, env };
+  consoleState = { server, token, url, port: actualPort, configPath, defaultConfigPath, storage, env };
   const browser = open ? await openBrowser(url) : { opened: false, error: null };
   await appendAuditEvent(configPath, {
     event: 'console-open',

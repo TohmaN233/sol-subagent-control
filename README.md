@@ -39,9 +39,13 @@ Use $sol-advisor:sol-control-plane. Keep a qualifying primary agent in charge, r
 
 The native-only workflow remains `$sol-advisor:orchestration`.
 
-For activation semantics, one-click console scripts, configuration, and live smoke examples, read the [Chinese usage tutorial](docs/TUTORIAL.zh-CN.md).
+For activation semantics, one-click console scripts, configuration, and live smoke examples, read the [English usage tutorial](docs/TUTORIAL.md) or [中文使用教程](docs/TUTORIAL.zh-CN.md).
 
 You do not need to select or manage a lane; the console stores reusable policy while the qualifying primary agent owns routing, verification, and acceptance.
+
+The saved control-plane policy is user-global, not repository-local: it lives at `$CODEX_HOME/sol-advisor/control-plane.json`, or `~/.codex/sol-advisor/control-plane.json` when `CODEX_HOME` is unset. The console shows the active storage scope and path at the top. An explicit `SOL_CONTROL_CONFIG` path is an override for development/testing and is visibly marked; it does not replace the global policy.
+
+If the host cannot expose the current primary model or reasoning effort, the skill gives one non-blocking reminder and continues; only an observed mismatch stops controlled delegation. Missing control tools or a denied global-config read is reported as an activation/permission error and never silently changes the selected workflow or Provider.
 
 ## Console, connector enablement, and approval
 

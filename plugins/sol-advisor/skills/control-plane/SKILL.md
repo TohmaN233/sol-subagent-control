@@ -17,7 +17,9 @@ non-native provider.
 
 GPT-5.6 Sol is the default. GPT-5.6 Terra also qualifies. GPT-5.6 Luna never qualifies.
 The reasoning effort must be high, xhigh, or max. Verify public runtime metadata when available;
-never invent model or effort evidence. A proven mismatch stops the controlled route.
+never invent model or effort evidence. If either value is unavailable, give one non-blocking
+reminder that the user is responsible for selecting a qualifying primary session, then continue.
+Only a proven mismatch stops the controlled route.
 
 ## Read metadata, not the prompt library
 
@@ -31,9 +33,12 @@ loopback console may create, enable, disable, remap, or delete Providers and Tas
 Never auto-enable an external provider or built-in connector, never infer that an
 installed paid model should be called, and never bypass `SOL_CONTROL_DISABLED`.
 
-If status is unavailable, disabled, invalid, or inconsistent, use the native
-`$sol-advisor:orchestration` workflow or stay solo. Do not silently substitute another
-model.
+If the control tools are absent, report a plugin-activation error. Do not launch the MCP
+server manually from a project shell. If status fails with `EPERM` or `EACCES`, request
+permission for the exact global configuration directory and retry once. If status remains
+unavailable, disabled, invalid, or inconsistent, report that the controlled auxiliary lane
+is inactive and continue the root task without auxiliary routing. Do not switch workflows,
+substitute a Provider, or claim that the requested controlled route ran.
 
 ## Declare one selective route
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +8,27 @@ import readline from 'node:readline';
 import test from 'node:test';
 
 const controlDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const pluginDir = dirname(controlDir);
 const serverPath = join(controlDir, 'server.mjs');
+
+test('plugin MCP launches from the installed plugin root with the global Codex environment', async () => {
+  const manifest = JSON.parse(await readFile(join(pluginDir, '.mcp.json'), 'utf8'));
+  const server = manifest.mcpServers['sol-control-plane'];
+  assert.equal(server.enabled, true);
+  assert.equal(server.cwd, '.');
+  assert.deepEqual(server.args, ['./control-plane/server.mjs']);
+  assert.ok(server.env_vars.includes('CODEX_HOME'));
+  assert.ok(server.env_vars.includes('USERPROFILE'));
+});
+
+test('routing policy warns on unobservable root metadata and never auto-falls back', async () => {
+  const controlSkill = await readFile(join(pluginDir, 'skills', 'control-plane', 'SKILL.md'), 'utf8');
+  const nativeSkill = await readFile(join(pluginDir, 'skills', 'orchestration', 'SKILL.md'), 'utf8');
+  assert.doesNotMatch(controlSkill, /use the native[\s\S]{0,100}workflow or stay solo/i);
+  assert.match(controlSkill, /request\s+permission[\s\S]{0,100}retry once/i);
+  assert.doesNotMatch(nativeSkill, /ask the user to confirm[\s\S]{0,80}stop[\s\S]{0,40}until confirmed/i);
+  assert.match(nativeSkill, /non-blocking reminder/i);
+});
 
 function makeClient(child) {
   const lines = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });

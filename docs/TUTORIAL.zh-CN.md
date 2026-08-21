@@ -1,5 +1,7 @@
 # Sol Subagent Control 使用教程
 
+[English version](TUTORIAL.md)
+
 ## 安装后会不会自动调用子 Agent？
 
 不会对所有对话全局自动调用。安装并启用插件只会让 Codex 在**新任务**中可以发现
@@ -40,6 +42,11 @@ $CODEX_HOME/sol-advisor/control-plane.json
 ```text
 ~/.codex/sol-advisor/control-plane.json
 ```
+
+这是用户级全局配置，与当前仓库和工作目录无关；保存后，其他项目和新任务读取的是同一份配置。
+控制台顶部会明确显示 **Global user configuration** 和实际文件路径。只有开发或测试时显式设置
+绝对路径 `SOL_CONTROL_CONFIG`，或由代码传入覆盖路径，才会显示红色的
+**Override/test configuration**；这种覆盖不会改写全局配置，不应作为日常入口使用。
 
 控制台概览（截图使用内置默认配置，不包含本机 token 或私人设置）：
 
@@ -86,6 +93,10 @@ sh "$plugin_dir/scripts/open-control-console.sh" --port 58046
 ```
 
 在 Codex 对话中说“打开 Sol Subagent Control 配置控制台”仍然是等价的推荐入口。
+
+如果新任务看不到 `sol_control_*` 工具，这是插件 MCP 未激活，不代表配置恢复默认。不要从项目
+shell 手动启动服务器，也不要自动切换到另一套路由；先重新加载或更新插件并新建任务。若读取
+全局配置只因 `EPERM`/`EACCES` 失败，应只批准上述全局配置目录并重试一次。
 
 ## 配置 Task Type、Stage 与 Provider
 
@@ -145,3 +156,5 @@ Use $sol-advisor:sol-control-plane.
 - 关闭一键控制台的终端或按 `Ctrl+C`：只停止配置网页，不会改变已经保存的启用状态。
 
 配置网页只是策略编辑器；真正的调用由新 Codex 任务中的 control-plane skill 和 MCP 工具执行。
+当前任务无法读取主模型或 reasoning effort 时，只提醒一次并继续；只有观察到明确不符合要求的
+模型或等级时，才停止受控子 Agent 路线。

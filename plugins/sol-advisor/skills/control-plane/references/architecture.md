@@ -51,6 +51,11 @@ The default configuration path is `$CODEX_HOME/sol-advisor/control-plane.json`, 
 `~/.codex/sol-advisor/control-plane.json` when `CODEX_HOME` is unset. An absolute
 `SOL_CONTROL_CONFIG` overrides it. Saves are validated, atomic, restrictive-permission,
 and revision-checked.
+The default is user-global and independent of the repository or current working directory.
+The authenticated human console reports the active scope and path: normal launches are
+marked `global`; an explicit path override is marked `override` so test state cannot be
+mistaken for the user's shared policy. This storage detail is not exposed by sanitized
+agent-facing status.
 Version-1 and version-2 files migrate atomically to version 3. Legacy scenarios become
 Task Types; untouched disabled provider-specific connector defaults are removed, while
 enabled or customized policy is preserved for manual editing. Ambiguous legacy `full`

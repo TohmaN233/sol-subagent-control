@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import {
   loadConfig,
+  resolveConfigPath,
   sanitizeConfig,
   saveConfig,
   validateConfig,
@@ -19,6 +20,18 @@ async function fixture() {
   const config = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
   return { dir, configPath, config };
 }
+
+test('default config path is user-global and independent of the project directory', () => {
+  const userHome = join(tmpdir(), 'sol-control-user');
+  assert.equal(
+    resolveConfigPath({}, userHome),
+    join(userHome, '.codex', 'sol-advisor', 'control-plane.json'),
+  );
+  assert.equal(
+    resolveConfigPath({ CODEX_HOME: join(userHome, 'custom-codex-home') }, userHome),
+    join(userHome, 'custom-codex-home', 'sol-advisor', 'control-plane.json'),
+  );
+});
 
 test('bundled defaults use pluggable task types with route-shaped stages', async () => {
   const { config } = await fixture();

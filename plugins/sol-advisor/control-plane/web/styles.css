@@ -26,6 +26,9 @@ h2 { margin: 0; font-size: 1.35rem; }
 .task-type-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .task-type-controls select { width: min(280px, 100%); }
 main { padding-bottom: 64px; }
+.storage-banner { display: flex; justify-content: space-between; align-items: center; gap: 20px; background: color-mix(in srgb, var(--success) 10%, var(--panel)); border: 1px solid color-mix(in srgb, var(--success) 55%, var(--line)); border-radius: 16px; padding: 16px 22px; margin-bottom: 18px; }
+.storage-banner.override { background: color-mix(in srgb, var(--danger) 9%, var(--panel)); border-color: color-mix(in srgb, var(--danger) 55%, var(--line)); }
+.storage-banner code { color: var(--muted); overflow-wrap: anywhere; text-align: right; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-bottom: 18px; box-shadow: 0 16px 40px rgba(0,0,0,.18); }
 .grid { display: grid; gap: 14px; }
 .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -70,4 +73,6 @@ button.small { padding: 7px 10px; font-size: .78rem; }
   .task-type-controls { justify-content: flex-start; width: 100%; }
   .task-type-controls select { width: 100%; }
   .danger-zone { align-items: flex-start; flex-direction: column; }
+  .storage-banner { align-items: flex-start; flex-direction: column; }
+  .storage-banner code { text-align: left; }
 }

@@ -2,7 +2,7 @@ const fragment = new URLSearchParams(location.hash.slice(1));
 const token = fragment.get('token') || '';
 history.replaceState(null, '', location.pathname);
 
-const state = { config: null, bundledDefaults: null, revision: '', dirty: false };
+const state = { config: null, bundledDefaults: null, revision: '', storage: null, dirty: false };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
@@ -452,7 +452,16 @@ async function load(path = '/api/config') {
   ]);
   if (defaultsPayload) state.bundledDefaults = defaultsPayload.config;
   state.config = payload.config;
-  state.revision = path === '/api/config' ? payload.revision : state.revision;
+  if (path === '/api/config') {
+    state.revision = payload.revision;
+    state.storage = payload.storage;
+    const global = state.storage?.scope === 'global';
+    $('#config-storage').classList.toggle('override', !global);
+    $('#config-storage-scope').textContent = global
+      ? 'Global user configuration — shared by every project and new task'
+      : 'Override/test configuration — not shared globally';
+    $('#config-storage-path').textContent = state.storage?.config_path || 'Unknown path';
+  }
   render();
 }
 

@@ -189,6 +189,6 @@ git status --short
 git diff --stat
 ~~~
 
-The verifier covers the v0.7.0 manifest, exact three-role TOMLs, selective-routing
+The verifier covers the v0.7.1 manifest, exact three-role TOMLs, selective-routing
 contracts, concise README journey, absence of retired workflow references, installer
 safety fixtures, Luna runtime evidence, JSON/TOML validity, and shell syntax.

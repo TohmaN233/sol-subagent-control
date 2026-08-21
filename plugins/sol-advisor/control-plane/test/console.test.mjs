@@ -12,7 +12,7 @@ test('loopback console requires token and revision-checks saves', async (t) => {
   const state = await startConsole({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, open: false });
   t.after(stopConsole);
   const base = `http://127.0.0.1:${state.port}`;
-  assert.equal(SERVER_VERSION, '0.4.0');
+  assert.equal(SERVER_VERSION, '0.4.1');
   assert.deepEqual(await (await fetch(`${base}/health`)).json(), {
     status: 'ok', version: SERVER_VERSION,
   });
@@ -21,6 +21,7 @@ test('loopback console requires token and revision-checks saves', async (t) => {
   assert.equal(unauthorized.status, 401);
 
   const appSource = await (await fetch(`${base}/app.js`)).text();
+  const indexSource = await (await fetch(`${base}/index.html`)).text();
   const stylesSource = await (await fetch(`${base}/styles.css`)).text();
   assert.match(appSource, /provider-reasoning-effort/);
   assert.match(appSource, /reasoning_effort \|\| ''/);
@@ -28,6 +29,7 @@ test('loopback console requires token and revision-checks saves', async (t) => {
   assert.match(appSource, /add-task-type-from-preset/);
   assert.match(appSource, /duplicate-task-type/);
   assert.doesNotMatch(appSource, /scenario-card/);
+  assert.match(indexSource, /config-storage/);
   assert.match(stylesSource, /\.provider-native-options\[hidden\]\s*\{\s*display:\s*none/);
 
   const headers = { authorization: `Bearer ${state.token}` };
@@ -35,6 +37,10 @@ test('loopback console requires token and revision-checks saves', async (t) => {
   assert.equal(loadedResponse.status, 200);
   const loaded = await loadedResponse.json();
   assert.ok(loaded.config.task_types[0].stages[0].template.includes('{{task}}'));
+  assert.deepEqual(loaded.storage, {
+    scope: 'override',
+    config_path: configPath,
+  });
 
   loaded.config.global.enabled = false;
   const savedResponse = await fetch(`${base}/api/config`, {
@@ -52,4 +58,39 @@ test('loopback console requires token and revision-checks saves', async (t) => {
     body: JSON.stringify({ config: loaded.config, expected_revision: loaded.revision }),
   });
   assert.equal(staleResponse.status, 409);
+});
+
+test('ordinary console reports global storage under CODEX_HOME', async (t) => {
+  const codexHome = await mkdtemp(join(tmpdir(), 'sol-control-global-'));
+  const state = await startConsole({
+    defaultConfigPath: DEFAULT_CONFIG_PATH,
+    open: false,
+    env: { ...process.env, CODEX_HOME: codexHome, SOL_CONTROL_CONFIG: '' },
+  });
+  t.after(stopConsole);
+  const payload = await (await fetch(`http://127.0.0.1:${state.port}/api/config`, {
+    headers: { authorization: `Bearer ${state.token}` },
+  })).json();
+  assert.deepEqual(payload.storage, {
+    scope: 'global',
+    config_path: join(codexHome, 'sol-advisor', 'control-plane.json'),
+  });
+});
+
+test('SOL_CONTROL_CONFIG is visibly reported as an override', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'sol-control-env-override-'));
+  const configPath = join(dir, 'control-plane.json');
+  const state = await startConsole({
+    defaultConfigPath: DEFAULT_CONFIG_PATH,
+    open: false,
+    env: { ...process.env, SOL_CONTROL_CONFIG: configPath },
+  });
+  t.after(stopConsole);
+  const payload = await (await fetch(`http://127.0.0.1:${state.port}/api/config`, {
+    headers: { authorization: `Bearer ${state.token}` },
+  })).json();
+  assert.deepEqual(payload.storage, {
+    scope: 'override',
+    config_path: configPath,
+  });
 });

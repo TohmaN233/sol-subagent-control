@@ -3,7 +3,16 @@
     "sol-control-plane": {
       "command": "node",
       "args": [
-        "${CLAUDE_PLUGIN_ROOT}/control-plane/server.mjs"
+        "./control-plane/server.mjs"
+      ],
+      "cwd": ".",
+      "enabled": true,
+      "env_vars": [
+        "CODEX_HOME",
+        "HOME",
+        "USERPROFILE",
+        "LOCALAPPDATA",
+        "PATH"
       ],
       "default_tools_approval_mode": "approve"
     }
