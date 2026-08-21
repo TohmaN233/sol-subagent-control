@@ -28,6 +28,13 @@ test('routing policy warns on unobservable root metadata and never auto-falls ba
   assert.match(controlSkill, /request\s+permission[\s\S]{0,100}retry once/i);
   assert.doesNotMatch(nativeSkill, /ask the user to confirm[\s\S]{0,80}stop[\s\S]{0,40}until confirmed/i);
   assert.match(nativeSkill, /non-blocking reminder/i);
+  assert.match(controlSkill, /delegate is the default/i);
+  assert.match(controlSkill, /full[\s\S]{0,120}(difficult|high-risk)/i);
+  assert.match(controlSkill, /CONTROL PLANE UNAVAILABLE/);
+  const unavailableSection = controlSkill.match(/If the control tools are absent[\s\S]*?(?=\n## )/i)?.[0] || '';
+  assert.match(unavailableSection, /Do not emit[\s\S]{0,40}`SELECTIVE ROUTE`/i);
+  assert.doesNotMatch(unavailableSection, /~~~text[\s\S]*SELECTIVE ROUTE/i);
+  assert.match(nativeSkill, /delegate is the default/i);
 });
 
 function makeClient(child) {

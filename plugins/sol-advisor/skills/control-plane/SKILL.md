@@ -33,8 +33,10 @@ loopback console may create, enable, disable, remap, or delete Providers and Tas
 Never auto-enable an external provider or built-in connector, never infer that an
 installed paid model should be called, and never bypass `SOL_CONTROL_DISABLED`.
 
-If the control tools are absent, report a plugin-activation error. Do not launch the MCP
-server manually from a project shell. If status fails with `EPERM` or `EACCES`, request
+If the control tools are absent, emit `CONTROL PLANE UNAVAILABLE`, report a plugin-activation
+error, and tell the user that tools are attached only when a task starts. Do not emit a
+`SELECTIVE ROUTE`, continue under a `solo` label, or launch the MCP server manually from a
+project shell. If status fails with `EPERM` or `EACCES`, request
 permission for the exact global configuration directory and retry once. If status remains
 unavailable, disabled, invalid, or inconsistent, report that the controlled auxiliary lane
 is inactive and continue the root task without auxiliary routing. Do not switch workflows,
@@ -52,8 +54,10 @@ stages: <ordered stage -> pinned provider bindings, or none>
 risk: <concise task-specific reason>
 ~~~
 
-Solo is the default. One auxiliary is the default maximum. `full` is an explicit broad
-or high-risk exception and resolves implementation/review stages sequentially. A later
+Delegate is the default for light or ordinary controlled work. Use `full` for difficult,
+high-risk, or broad work that needs implementation followed by independent review. Use
+`audit` only for an explicitly review-only Task Type, and `solo` only when the user explicitly
+requests primary-only work; never use it as an activation-error fallback. A later
 declaration may only escalate on newly observed evidence. Never silently downgrade or
 remap a Stage's pinned Provider.
 

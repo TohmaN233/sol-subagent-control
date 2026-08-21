@@ -169,9 +169,11 @@ External MCP entries remain descriptors whose availability is unverified. ChatGP
 Pro stays packet-first. Direct OpenAI-compatible calls remain read-only, text-only,
 credential-from-environment, no-redirect, bounded-time/response advisory lanes.
 
-The route model remains `solo`, `delegate`, `audit`, and exceptional sequential `full`.
-Route topology is strict: `solo` has no Stages, `delegate` has one implementation Stage,
-`audit` has one review Stage, and `full` has implementation then review. Task Type prompts
+The route model remains `solo`, `delegate`, `audit`, and sequential `full`. Route is derived
+from the ordered Stage structure and is not a second editable field: `solo` has no Stages,
+`delegate` has one implementation Stage, `audit` has one review Stage, and `full` has
+implementation then review. New Task Types default to delegate; difficult work adds an
+independent review Stage and derives full. Task Type prompts
 contain reusable work semantics; Provider adapters own transport and provider-specific
 safety behavior. Each Stage has one pinned Provider—there are no candidate lists or
 automatic fallbacks.

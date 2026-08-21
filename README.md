@@ -9,7 +9,7 @@ This fork preserves Sol Advisor's native Codex workflow and adds a user-owned co
 | Area | Upstream behavior retained | This fork adds or changes |
 |---|---|---|
 | Primary owner | One root owns architecture, routing, verification, and acceptance. | Sol remains default; Terra may qualify; primary reasoning must be high or above. |
-| Routes | `solo`, `delegate`, `audit`, and exceptional `full`; native Luna / Max, Terra / High, and fresh Sol / High roles stay pinned. | A Task Type defines a strict Stage topology; each Stage pins one Provider without transferring final authority. |
+| Routes | `solo`, `delegate`, `audit`, and `full`; native Luna / Max, Terra / High, and fresh Sol / High roles stay pinned. | Delegate is the ordinary default; difficult work uses full. A Task Type's route is derived from its Stage topology instead of being configured twice. |
 | Configuration | Native routing remains instruction- and role-driven. | A token-protected `127.0.0.1` console manages pluggable Task Types, Stage bindings, Provider switches, approval gates, and private templates. |
 | Connectors | Codex-native custom agents. | Minimal built-in Cursor CDP and Grok Leader+ACP connectors support read-only and explicitly approved bounded-write work. |
 | Safety | Exact role/runtime evidence fails closed. | Writes require Provider write capability, a `bounded_write` Stage, explicit current-task approval, and non-empty `allowed_paths`; a live workspace monitor plus Git content/HEAD/index/ref/config/reflog evidence rejects scope violations. |
@@ -74,18 +74,18 @@ Read-only Stages omit `allowed_paths`. Bounded-write Stages must provide the sma
 - A **Stage** is an ordered implementation or review lane inside that Task Type. It owns access and approval policy.
 - A **Provider** is a model/transport adapter. Provider-specific safety and connection rules stay in the adapter.
 
-Route topology is fixed: `solo` has no Stages, `delegate` has one implementation Stage, `audit` has one review Stage, and `full` has implementation followed by review. Each Stage has exactly one Provider pinned by the user in the console. Sol may choose a matching enabled Task Type, but it may not choose among Providers, substitute one, or auto-fallback.
+Route topology is derived from Stages: no Stages means `solo`, implementation means `delegate`, review means `audit`, and implementation followed by review means `full`. The console no longer exposes a separate Route selector. New Task Types default to delegate; enable an independent review Stage for difficult work to produce full. Each Stage has exactly one Provider pinned by the user. Sol may choose a matching enabled Task Type, but it may not choose among Providers, substitute one, or auto-fallback.
 
 ## Routes
 
 | Mode | Use it when | Delivery |
 |---|---|---|
-| `solo` | Default; risk is contained. | Root plans, implements, tests, and self-reviews. |
-| `delegate` | One bounded task benefits from an auxiliary. | The pinned implementation Provider executes or advises; root verifies. |
+| `solo` | The user explicitly requests primary-only work. | Root plans, implements, tests, and self-reviews. Never use this as an activation-error fallback. |
+| `delegate` | Default for light or ordinary bounded work. | The pinned implementation Provider executes or advises; root verifies. |
 | `audit` | Independent final scrutiny matters more than delegation. | Root implements; the pinned read-only review Provider audits. |
-| `full` | Explicit broad or high-risk exception. | One implementation stage, root verification, then one fresh review stage. |
+| `full` | Difficult, broad, or high-risk work. | One implementation stage, root verification, then one fresh review stage. |
 
-Solo is the default. One auxiliary is the default maximum. The primary emits a route before the first task tool call, escalates only on newly observed risk, and never silently downgrades or remaps the provider. Auxiliary work substitutes for root work; it does not duplicate it.
+Delegate is the default. Difficult work uses full. The primary emits a route before the first task tool call, escalates only on newly observed risk, and never silently downgrades or remaps the Provider. Missing control tools are an activation error, not a valid solo route. Auxiliary work substitutes for root work; it does not duplicate it.
 
 ## Local live smoke boundary
 

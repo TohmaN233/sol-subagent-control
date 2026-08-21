@@ -326,20 +326,19 @@ const ROUTE_STAGE_SHAPES = {
   full: [['implementation', 'implementer'], ['review', 'reviewer']],
 };
 
+export function deriveRouteFromStages(stages) {
+  const signature = stages.map((stage) => `${stage.id}/${stage.role}`).join(',');
+  for (const [route, shape] of Object.entries(ROUTE_STAGE_SHAPES)) {
+    if (signature === shape.map(([stageId, role]) => `${stageId}/${role}`).join(',')) return route;
+  }
+  throw new Error('task type stages must be empty, implementation, review, or implementation then review');
+}
+
 function validateTaskType(raw, index) {
   assert(object(raw), `task_types[${index}] must be an object`);
-  const route = text(raw.route, `task_types[${index}].route`, { required: true, max: 32 });
-  assert(ROUTES.has(route), `task_types[${index}].route is unsupported`);
   const stagesRaw = Array.isArray(raw.stages) ? raw.stages : [];
-  const expectedShape = ROUTE_STAGE_SHAPES[route];
-  assert(stagesRaw.length === expectedShape.length,
-    `task_types[${index}] route ${route} requires ${expectedShape.length} stage(s)`);
   const stages = stagesRaw.map((stage, stageIndex) => validateStage(stage, index, stageIndex));
-  stages.forEach((stage, stageIndex) => {
-    const [expectedId, expectedRole] = expectedShape[stageIndex];
-    assert(stage.id === expectedId && stage.role === expectedRole,
-      `task_types[${index}] route ${route} stage ${stageIndex} must be ${expectedId}/${expectedRole}`);
-  });
+  const route = deriveRouteFromStages(stages);
   return {
     id: id(raw.id, `task_types[${index}].id`),
     name: text(raw.name, `task_types[${index}].name`, { required: true, max: 128 }),

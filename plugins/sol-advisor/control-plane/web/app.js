@@ -99,6 +99,7 @@ function providerCard(provider, index) {
   const details = document.createElement('details');
   details.className = 'card provider-card';
   details.dataset.index = String(index);
+  details.dataset.role = provider.config?.role || '';
   const summary = document.createElement('summary');
   const title = document.createElement('span');
   title.textContent = provider.name;
@@ -245,10 +246,18 @@ function taskTypeFromCard(card) {
     name: $('.task-type-name', card).value.trim(),
     enabled: $('.task-type-enabled', card).checked,
     description: $('.task-type-description', card).value,
-    route: $('.task-type-route', card).value,
     tags: $('.task-type-tags', card).value.split(',').map((value) => value.trim()).filter(Boolean),
     stages: currentStages(card),
   };
+}
+
+function routeForStages(stages) {
+  const ids = stages.map((stage) => stage.id).join(',');
+  if (!ids) return 'solo';
+  if (ids === 'implementation') return 'delegate';
+  if (ids === 'review') return 'audit';
+  if (ids === 'implementation,review') return 'full';
+  return 'invalid';
 }
 
 function uniqueTaskTypeId(baseId) {
@@ -279,15 +288,30 @@ function renderPresetOptions() {
   }
 }
 
+function defaultProviderIdForRole(role, access) {
+  const providers = $$('.provider-card').map((card) => ({
+    id: $('.provider-id', card).value.trim(),
+    role: card.dataset.role,
+    read: $('.provider-read', card).checked,
+    write: $('.provider-write', card).checked,
+  })).filter((provider) => provider.id && provider.read && (access !== 'bounded_write' || provider.write));
+  return providers.find((provider) => provider.role === role)?.id || providers[0]?.id || '';
+}
+
 function renderStages(card, route, previous = []) {
-  const stages = ROUTE_STAGES[route].map((shape) => previous.find((stage) => stage.id === shape.id) || {
-    ...shape,
-    provider_id: $('.provider-id')?.value || '',
-    access: shape.role === 'reviewer' ? 'read_only' : 'bounded_write',
-    requires_user_approval: shape.role === 'implementer',
-    template: shape.role === 'reviewer'
-      ? 'Review {{task}} using {{context}}. Respect {{constraints}} and verify against {{verification}}.'
-      : 'Perform {{task}} using {{context}}. Respect {{constraints}} and verify with {{verification}}.',
+  const stages = ROUTE_STAGES[route].map((shape) => {
+    const existing = previous.find((stage) => stage.id === shape.id);
+    if (existing) return existing;
+    const access = shape.role === 'reviewer' ? 'read_only' : 'bounded_write';
+    return {
+      ...shape,
+      provider_id: defaultProviderIdForRole(shape.role, access),
+      access,
+      requires_user_approval: shape.role === 'implementer',
+      template: shape.role === 'reviewer'
+        ? 'Review {{task}} using {{context}}. Respect {{constraints}} and verify against {{verification}}.'
+        : 'Perform {{task}} using {{context}}. Respect {{constraints}} and verify with {{verification}}.',
+    };
   });
   $('.task-stages', card).replaceChildren(...stages.map(stageEditor));
   refreshProviderOptions();
@@ -302,7 +326,8 @@ function taskTypeCard(taskType, index) {
   title.textContent = taskType.name;
   const meta = document.createElement('span');
   meta.className = 'card-meta';
-  meta.textContent = `${taskType.route} · ${taskType.stages.length} stage(s)`;
+  const initialRoute = routeForStages(taskType.stages);
+  meta.textContent = `${initialRoute} · ${taskType.stages.length} stage(s)`;
   summary.append(title, meta);
 
   const body = document.createElement('div');
@@ -311,15 +336,23 @@ function taskTypeCard(taskType, index) {
   const name = textInput(taskType.name, 'task-type-name');
   name.addEventListener('input', () => { title.textContent = name.value || '(unnamed task type)'; });
   const enabled = checkbox(taskType.enabled, 'task-type-enabled');
-  const route = selectInput(['solo', 'delegate', 'audit', 'full'], taskType.route, 'task-type-route');
+  const independentReview = checkbox(initialRoute === 'full', 'workflow-review');
+  const standardWorkflow = initialRoute === 'delegate' || initialRoute === 'full';
+  independentReview.disabled = !standardWorkflow;
+  const workflowHint = document.createElement('p');
+  workflowHint.className = 'hint workflow-hint';
+  workflowHint.textContent = standardWorkflow
+    ? 'Workflow is derived from Stages: implementation = delegate; implementation + review = full.'
+    : `Specialized ${initialRoute} workflow is derived from its existing Stage structure.`;
   const description = textarea(taskType.description, 'task-type-description');
   const tags = textInput((taskType.tags || []).join(', '), 'task-type-tags');
   const stageContainer = document.createElement('div');
   stageContainer.className = 'task-stages stack';
-  route.addEventListener('change', () => {
+  independentReview.addEventListener('change', () => {
     const previous = currentStages(details);
-    renderStages(details, route.value, previous);
-    meta.textContent = `${route.value} · ${ROUTE_STAGES[route.value].length} stage(s)`;
+    const nextRoute = independentReview.checked ? 'full' : 'delegate';
+    renderStages(details, nextRoute, previous);
+    meta.textContent = `${nextRoute} · ${ROUTE_STAGES[nextRoute].length} stage(s)`;
   });
 
   const toggles = document.createElement('div');
@@ -329,7 +362,8 @@ function taskTypeCard(taskType, index) {
   );
   body.append(
     grid(field('Task Type id', id), field('Display name', name)),
-    grid(field('Route', route), document.createElement('span')),
+    field('Independent review stage (full workflow)', independentReview),
+    workflowHint,
     toggles,
     field('Description visible to Sol', description),
     field('Tags (comma separated)', tags),
@@ -356,7 +390,7 @@ function taskTypeCard(taskType, index) {
   actions.append(duplicate, remove);
   body.append(actions);
   details.append(summary, body);
-  renderStages(details, taskType.route, taskType.stages);
+  renderStages(details, initialRoute, taskType.stages);
   return details;
 }
 
@@ -542,7 +576,6 @@ $('#add-task-type').addEventListener('click', () => {
     name: `Custom Task Type ${n}`,
     enabled: false,
     description: '',
-    route: 'delegate',
     tags: ['custom'],
     stages: [{
       id: 'implementation', role: 'implementer', provider_id: firstProvider,

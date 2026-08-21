@@ -12,7 +12,7 @@ test('loopback console requires token and revision-checks saves', async (t) => {
   const state = await startConsole({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, open: false });
   t.after(stopConsole);
   const base = `http://127.0.0.1:${state.port}`;
-  assert.equal(SERVER_VERSION, '0.4.1');
+  assert.equal(SERVER_VERSION, '0.4.2');
   assert.deepEqual(await (await fetch(`${base}/health`)).json(), {
     status: 'ok', version: SERVER_VERSION,
   });
@@ -28,6 +28,11 @@ test('loopback console requires token and revision-checks saves', async (t) => {
   assert.match(appSource, /task-type-card/);
   assert.match(appSource, /add-task-type-from-preset/);
   assert.match(appSource, /duplicate-task-type/);
+  assert.match(appSource, /workflow-review/);
+  assert.match(appSource, /Independent review stage/);
+  assert.match(appSource, /defaultProviderIdForRole\(shape\.role, access\)/);
+  assert.doesNotMatch(appSource, /task-type-route/);
+  assert.doesNotMatch(appSource, /selectInput\(\['solo', 'delegate', 'audit', 'full'\]/);
   assert.doesNotMatch(appSource, /scenario-card/);
   assert.match(indexSource, /config-storage/);
   assert.match(stylesSource, /\.provider-native-options\[hidden\]\s*\{\s*display:\s*none/);

@@ -1,6 +1,6 @@
 ---
 name: orchestration
-description: "Codex-native risk-gated selective routing: default solo delivery, targeted native delegation or audit, and exceptional full review."
+description: "Codex-native risk-gated selective routing: default delegation for ordinary work, explicit audit, and full implementation plus review for difficult work."
 ---
 
 # Sol Advisor Orchestration
@@ -8,8 +8,9 @@ description: "Codex-native risk-gated selective routing: default solo delivery, 
 Act as the architect. Own the user's intent, architecture, route choice, decomposition,
 implementation or delegation, parent verification, escalation decisions, and final
 acceptance. Selective routing has four exact modes: `solo`, `delegate`, `audit`, and
-`full`. Solo is the default. One auxiliary agent is the default maximum; full is an
-explicit broad or high-risk exception.
+`full`. Delegate is the default for light or ordinary work. Full is required for difficult,
+broad, or high-risk work that needs implementation followed by independent review. Audit is
+explicitly review-only; solo requires an explicit primary-only request and is never a fallback.
 
 Read [references/role-contracts.md](references/role-contracts.md) before the first
 delegation. Use [references/operations.md](references/operations.md) for exact spawn,
@@ -35,8 +36,8 @@ mode: solo | delegate | audit | full
 risk: <concise, task-specific rationale>
 ~~~
 
-No task tool call may precede this declaration. Choose `solo` unless a stated risk
-justifies another mode. A later declaration may only escalate the route when newly
+No task tool call may precede this declaration. Choose `delegate` by default; choose `full`
+for difficult, broad, or high-risk work. A later declaration may only escalate the route when newly
 observed risk justifies it; never silently downgrade. Record the evidence for an
 escalation. Details and the task-scoped preflight matrix are in operations.md.
 

@@ -74,8 +74,9 @@ mode: solo | delegate | audit | full
 risk: <concise, task-specific rationale>
 ~~~
 
-Solo is the default. One auxiliary is the default maximum; full is an explicit broad
-or high-risk exception. The root may emit a later declaration only to escalate when
+Delegate is the default for light or ordinary work; full is required for difficult,
+broad, or high-risk work. Solo requires an explicit primary-only request and is never an
+activation-error fallback. The root may emit a later declaration only to escalate when
 newly observed risk justifies it. It records that evidence and never silently
 downgrades.
 
@@ -189,6 +190,6 @@ git status --short
 git diff --stat
 ~~~
 
-The verifier covers the v0.7.1 manifest, exact three-role TOMLs, selective-routing
+The verifier covers the v0.7.2 manifest, exact three-role TOMLs, selective-routing
 contracts, concise README journey, absence of retired workflow references, installer
 safety fixtures, Luna runtime evidence, JSON/TOML validity, and shell syntax.

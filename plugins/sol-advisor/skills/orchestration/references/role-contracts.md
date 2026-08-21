@@ -17,8 +17,9 @@ mode: solo | delegate | audit | full
 risk: <concise, task-specific rationale>
 ~~~
 
-Solo is the default; one auxiliary is the default maximum. Full is an explicit broad
-or high-risk exception. A later route declaration may only escalate after newly
+Delegate is the default for light or ordinary work. Full is required for difficult,
+broad, or high-risk work. Solo requires an explicit primary-only request and is never an
+activation-error fallback. A later route declaration may only escalate after newly
 observed risk justifies it and supplies that evidence; never silently downgrade.
 
 GPT-5.6 Sol is the default. GPT-5.6 Terra also qualifies. GPT-5.6 Luna never qualifies.

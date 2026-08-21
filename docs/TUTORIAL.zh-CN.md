@@ -14,10 +14,10 @@ select one matching Task Type, and verify every auxiliary claim.
 
 skill 激活后，主 Agent 会在第一次仓库/任务工具调用前读取一次经过清理的配置元数据，并选择路线：
 
-- `solo`：主 Agent 自己完成，不调用子 Agent；这是默认路线。
-- `delegate`：执行一个实现或分析 Stage。
+- `solo`：仅在用户明确要求主 Agent 独立完成时使用，不能作为插件激活失败的兜底。
+- `delegate`：轻量或普通任务的默认流程，执行一个实现或分析 Stage。
 - `audit`：主 Agent 完成主要工作后，执行一个只读审阅 Stage。
-- `full`：依次执行实现和独立审阅；只用于明确的高风险或大范围例外。
+- `full`：困难、高风险或大范围任务，依次执行实现和独立审阅。
 
 只有同时满足以下条件，某个子 Agent 才可能被调用：
 
@@ -94,8 +94,9 @@ sh "$plugin_dir/scripts/open-control-console.sh" --port 58046
 
 在 Codex 对话中说“打开 Sol Subagent Control 配置控制台”仍然是等价的推荐入口。
 
-如果新任务看不到 `sol_control_*` 工具，这是插件 MCP 未激活，不代表配置恢复默认。不要从项目
-shell 手动启动服务器，也不要自动切换到另一套路由；先重新加载或更新插件并新建任务。若读取
+如果某个任务看不到 `sol_control_*` 工具，说明该任务创建时没有挂载插件 MCP，不代表配置恢复默认；
+已有任务不会热加载后来安装的工具。不要从项目 shell 手动启动服务器，也不要声明成功的 solo
+兜底；先重新加载或更新插件并新建任务。若读取
 全局配置只因 `EPERM`/`EACCES` 失败，应只批准上述全局配置目录并重试一次。
 
 ## 配置 Task Type、Stage 与 Provider
@@ -103,10 +104,11 @@ shell 手动启动服务器，也不要自动切换到另一套路由；先重�
 Provider 只描述“由谁、通过什么连接工作”；Task Type 描述“什么任务、按什么步骤工作”。
 
 1. 在 **Providers** 中启用准备使用的 Provider。
-2. 在 **Task Types and stages** 中使用内置预设、复制现有任务或创建空白任务。
-3. 在每个 Stage 内选择唯一的 **Pinned provider**。
-4. 为只读工作选择 `read_only`；需要修改仓库时选择 `bounded_write` 并开启任务批准。
-5. 保存配置。
+2. 在 **Task Types and stages** 中使用内置预设、复制现有任务或创建空白任务；新任务类型默认为 delegate。
+3. 困难任务需要 full 时，开启 **Independent review stage**。工作流由 Stage 自动推导，不再单独选择 Route。
+4. 在每个 Stage 内选择唯一的 **Pinned provider**。
+5. 为只读工作选择 `read_only`；需要修改仓库时选择 `bounded_write` 并开启任务批准。
+6. 保存配置。
 
 内置预设是起点，不是封闭清单。可以删除、重新添加、复制、改名、改模板或创建完全自定义的任务类型。
 Cursor、Grok、网页审阅和 native agent 都是 Provider，不应该出现在任务类型名称里。

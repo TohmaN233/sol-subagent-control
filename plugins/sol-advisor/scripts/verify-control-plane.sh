@@ -14,6 +14,7 @@ manifest=$plugin_dir/.codex-plugin/plugin.json
 mcp_manifest=$plugin_dir/.mcp.json
 config=$control/default-config.json
 server=$control/server.mjs
+web_app=$control/web/app.js
 skill=$plugin_dir/skills/control-plane/SKILL.md
 architecture=$plugin_dir/skills/control-plane/references/architecture.md
 contracts=$plugin_dir/skills/control-plane/references/provider-contracts.md
@@ -54,7 +55,7 @@ jq empty "$manifest"
 jq empty "$mcp_manifest"
 jq empty "$config"
 jq empty "$control/package.json"
-[ "$(jq -r '.version' "$manifest")" = 0.7.1 ] || fail "native manifest version drifted"
+[ "$(jq -r '.version' "$manifest")" = 0.7.2 ] || fail "native manifest version drifted"
 [ "$(jq -r '.mcpServers' "$manifest")" = './.mcp.json' ] || fail "plugin manifest does not load control-plane MCP"
 [ "$(jq -r '.mcpServers["sol-control-plane"].command' "$mcp_manifest")" = node ] || fail "control-plane MCP does not use node"
 [ "$(jq -r '.mcpServers["sol-control-plane"].enabled' "$mcp_manifest")" = true ] || fail "control-plane MCP is disabled"
@@ -89,6 +90,8 @@ jq -e '.providers[] | select(.id == "native-sol-reviewer" and .enabled == true)'
 jq -e '.providers[] | select(.id == "cursor-local" and .kind == "builtin_connector" and .enabled == false and .requires_user_approval == true and .capabilities.write == true and .config.connector == "cursor_cdp" and .config.transport == "cdp_ui")' "$config" >/dev/null || fail "built-in Cursor default is missing or unsafe"
 jq -e '.providers[] | select(.id == "grok-local" and .kind == "builtin_connector" and .enabled == false and .requires_user_approval == true and .capabilities.write == true and .config.connector == "grok_acp" and .config.transport == "leader_acp_stdio")' "$config" >/dev/null || fail "built-in Grok default is missing or unsafe"
 jq -e '[.task_types[] | select((.id + " " + .name + " " + .description + " " + (.tags | join(" "))) | test("cursor|grok|chatgpt|luna|terra|openai"; "i"))] | length == 0' "$config" >/dev/null || fail "default Task Type metadata is Provider-specific"
+jq -e '.task_types[] | select(.id == "bounded-code-change" and .route == "delegate" and (.stages | length) == 1)' "$config" >/dev/null || fail "bounded change is not the delegate default"
+jq -e '.task_types[] | select(.id == "judgment-heavy-change" and .route == "full" and (.stages | length) == 2)' "$config" >/dev/null || fail "difficult change does not use full workflow"
 jq -e 'all(.task_types[]; (.route == "solo" and (.stages|length)==0) or (.route == "delegate" and (.stages|length)==1 and .stages[0].id=="implementation" and .stages[0].role=="implementer") or (.route == "audit" and (.stages|length)==1 and .stages[0].id=="review" and .stages[0].role=="reviewer") or (.route == "full" and (.stages|length)==2 and .stages[0].id=="implementation" and .stages[1].id=="review"))' "$config" >/dev/null || fail "Task Type route topology is invalid"
 if grep -Eqi '"sk-[A-Za-z0-9_-]{20,}"' "$config"; then fail "default config appears to contain a credential value"; fi
 jq -e '.providers[] | select(.kind == "openai_compatible") | .config.api_key_env | test("^[A-Z_][A-Z0-9_]*$")' "$config" >/dev/null || fail "API provider does not use an environment-variable name"
@@ -105,6 +108,10 @@ for phrase in \
   'Prompt templates, provider endpoints, credential variable names, and console tokens are never returned'; do
   grep -Fq "$phrase" "$server" || fail "server omits required contract: $phrase"
 done
+grep -Fq 'workflow-review' "$web_app" || fail "console omits the independent review workflow switch"
+if grep -Fq 'task-type-route' "$web_app"; then fail "console still exposes an independent route selector"; fi
+grep -Fq 'CONTROL PLANE UNAVAILABLE' "$skill" || fail "control-plane skill hides activation failure"
+grep -Fq 'Delegate is the default' "$skill" || fail "control-plane skill does not default to delegate"
 for phrase in \
   'Read metadata, not the prompt library' \
   'Write access opens only when all three facts are true' \

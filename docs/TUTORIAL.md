@@ -13,10 +13,10 @@ select one matching Task Type, and verify every auxiliary claim.
 
 After the skill is activated, the primary agent reads sanitized configuration metadata once, before its first repository or task-tool call, and selects a route:
 
-- `solo`: the primary agent works alone; this is the default route.
-- `delegate`: execute one implementation or analysis Stage.
+- `solo`: the primary agent works alone only when primary-only work was explicitly requested.
+- `delegate`: the default for light or ordinary work; execute one implementation or analysis Stage.
 - `audit`: the primary agent does the main work, followed by a read-only review Stage.
-- `full`: run implementation and independent review in sequence; reserve this for explicit high-risk or broad-scope exceptions.
+- `full`: use for difficult, high-risk, or broad work; run implementation and independent review in sequence.
 
 A subagent can be called only when all of the following are true:
 
@@ -89,17 +89,18 @@ sh "$plugin_dir/scripts/open-control-console.sh" --port 58046
 
 In a Codex conversation, saying “Open the Sol Subagent Control configuration console” is still the equivalent recommended entry point.
 
-If a new task cannot see the `sol_control_*` tools, the plugin MCP server was not activated; this does not mean that the configuration has reverted to defaults. Do not start the server manually from the project shell or automatically switch to another route. Reload or update the plugin, then create a new task. If reading the global configuration fails only with `EPERM` or `EACCES`, approve access to the global configuration directory above and retry once.
+If a task cannot see the `sol_control_*` tools, the plugin MCP server was not attached when that task started; this does not mean that the configuration reverted to defaults. Existing tasks do not gain newly installed tools. Do not start the server manually or declare a successful solo fallback. Reload or update the plugin, then create a new task. If reading the global configuration fails only with `EPERM` or `EACCES`, approve access to the global configuration directory above and retry once.
 
 ## Configure Task Types, Stages, and Providers
 
 A Provider describes “who does the work and through which connection”; a Task Type describes “what kind of task this is and which steps it follows.”
 
 1. In **Providers**, enable the Providers you are ready to use.
-2. In **Task Types and stages**, use a bundled preset, copy an existing task, or create a blank task.
-3. Select exactly one **Pinned provider** inside each Stage.
-4. Select `read_only` for read-only work. For repository changes, select `bounded_write` and enable task approval.
-5. Save the configuration.
+2. In **Task Types and stages**, use a bundled preset, copy an existing task, or create a blank task. A new Task Type starts as delegate.
+3. Enable **Independent review stage** when difficult work should use full. The displayed workflow is derived from the Stages; there is no separate Route selector.
+4. Select exactly one **Pinned provider** inside each Stage.
+5. Select `read_only` for read-only work. For repository changes, select `bounded_write` and enable task approval.
+6. Save the configuration.
 
 Bundled presets are starting points, not a closed list. You can delete, restore, copy, rename, or edit them, change their templates, or create entirely custom Task Types. Cursor, Grok, web review, and native agents are Providers; they should not be encoded into Task Type names.
 

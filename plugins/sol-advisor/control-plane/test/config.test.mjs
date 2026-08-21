@@ -33,7 +33,7 @@ test('default config path is user-global and independent of the project director
   );
 });
 
-test('bundled defaults use pluggable task types with route-shaped stages', async () => {
+test('bundled defaults use delegate for light work and full for difficult work', async () => {
   const { config } = await fixture();
   assert.equal(config.version, 3);
   assert.equal('scenarios' in config, false);
@@ -46,6 +46,7 @@ test('bundled defaults use pluggable task types with route-shaped stages', async
   assert.equal(sanitizeConfig(config, { env: {} }).providers
     .find((provider) => provider.id === 'chatgpt-web-pro').model_label, null);
   const bounded = config.task_types.find((taskType) => taskType.id === 'bounded-code-change');
+  assert.equal(bounded.route, 'delegate');
   assert.deepEqual(bounded.stages.map((stage) => [stage.id, stage.role, stage.provider_id]), [
     ['implementation', 'implementer', 'native-luna'],
   ]);
@@ -61,10 +62,21 @@ test('bundled defaults use pluggable task types with route-shaped stages', async
   assert.deepEqual(full.stages.map((stage) => [stage.id, stage.role]), [
     ['implementation', 'implementer'], ['review', 'reviewer'],
   ]);
+  const difficult = config.task_types.find((taskType) => taskType.id === 'judgment-heavy-change');
+  assert.equal(difficult.route, 'full');
+  assert.deepEqual(difficult.stages.map((stage) => stage.id), ['implementation', 'review']);
   for (const taskType of config.task_types) {
     const providerSpecificText = `${taskType.id} ${taskType.name} ${taskType.description} ${taskType.tags.join(' ')}`;
     assert.doesNotMatch(providerSpecificText, /cursor|grok|chatgpt|luna|terra|openai/i);
   }
+});
+
+test('task type route is derived from stages and cannot conflict with them', async () => {
+  const { config } = await fixture();
+  const bounded = config.task_types.find((taskType) => taskType.id === 'bounded-code-change');
+  bounded.route = 'solo';
+  assert.equal(validateConfig(config).task_types
+    .find((taskType) => taskType.id === 'bounded-code-change').route, 'delegate');
 });
 
 test('sanitized status omits templates, endpoints, and credential names', async () => {

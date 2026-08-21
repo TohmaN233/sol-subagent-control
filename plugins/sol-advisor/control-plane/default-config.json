@@ -193,7 +193,7 @@
       "name": "Judgment-heavy bounded change",
       "enabled": true,
       "description": "Implement a bounded change whose local details require deeper judgment or carry a wider blast radius.",
-      "route": "delegate",
+      "route": "full",
       "tags": [
         "implementation",
         "high-risk",
@@ -207,6 +207,14 @@
           "access": "bounded_write",
           "requires_user_approval": true,
           "template": "ROLE\nPerform a judgment-heavy but still bounded implementation task. Resolve local technical uncertainty inside the settled architecture; do not change product direction without returning a blocker.\n\nTASK TYPE\n{{task_type_id}}\n\nOBJECTIVE\n{{task}}\n\nEVIDENCE AND CONTEXT\n{{context}}\n\nFIXED CONSTRAINTS, OWNERSHIP, AND BLAST-RADIUS BOUNDARY\n{{constraints}}\nPreserve concurrent edits and document every material judgment call. Stop if safe ownership or an acceptance boundary cannot be established.\n\nVERIFICATION\n{{verification}}\nUse risk-proportionate checks and inspect the complete change set.\n\nRETURN\nSTATUS: complete | partial | blocked\nCHANGES: file-by-file summary\nVERIFIED: exact commands and evidence\nJUDGMENT CALLS: choices made and why\nRESIDUAL RISK: most important remaining risk\nGAPS: unresolved items or none"
+        },
+        {
+          "id": "review",
+          "role": "reviewer",
+          "provider_id": "native-sol-reviewer",
+          "access": "read_only",
+          "requires_user_approval": false,
+          "template": "ROLE\nIndependently review the difficult implementation. Remain read-only and do not fix your own findings.\n\nSTATED GOAL\n{{task}}\n\nIMPLEMENTATION RESULT AND CONTEXT\n{{context}}\n\nCONSTRAINTS AND ACCEPTANCE BOUNDARY\n{{constraints}}\n\nPRIMARY VERIFICATION EVIDENCE\n{{verification}}\n\nRETURN\nVERDICT: ship | fix-first | rethink\nBLOCKING FINDINGS: precise locations and required fixes, or none\nNON-BLOCKING RISKS: concise list, or none\nMISSING EVIDENCE: checks still required, or none\nRESIDUAL RISK: most important remaining risk, or none"
         }
       ]
     },

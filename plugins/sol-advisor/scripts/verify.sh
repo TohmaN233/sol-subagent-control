@@ -189,14 +189,13 @@ grep -Fq 'requires high, xhigh, or max reasoning' "$manifest" || fail "manifest 
 pass "default-Sol primary eligibility with Terra/high-plus support and Luna refusal"
 
 jq empty "$manifest"
-[ "$(jq -r '.version' "$manifest")" = 0.7.1 ] || fail "manifest version is not 0.7.1"
+[ "$(jq -r '.version' "$manifest")" = 0.7.2 ] || fail "manifest version is not 0.7.2"
 grep -Fq 'SELECTIVE ROUTE' "$manifest" || fail "manifest omits route declaration"
-grep -Fq 'solo is the default' "$manifest" || fail "manifest omits solo default"
-grep -Fq 'delegate uses one implementation Stage' "$manifest" || fail "manifest omits delegate Stage contract"
-grep -Fq 'audit uses one review Stage' "$manifest" || fail "manifest omits audit Stage contract"
-grep -Fq 'full combines implementation then review' "$manifest" || fail "manifest omits exceptional full contract"
+grep -Fq 'delegate is the default' "$manifest" || fail "manifest omits delegate default"
+grep -Fq 'Route is derived from those Stages rather than configured independently' "$manifest" || fail "manifest omits derived-route contract"
+grep -Fq 'full combines implementation then review for difficult' "$manifest" || fail "manifest omits difficult full contract"
 grep -Fq 'fails closed' "$manifest" || fail "manifest omits fail-closed evidence rule"
-pass "manifest JSON, v0.7.1 release, and selective-routing language"
+pass "manifest JSON, v0.7.2 release, and selective-routing language"
 
 python3 - "$templates" <<'PY'
 from pathlib import Path
@@ -430,8 +429,8 @@ grep -Fq '../../scripts/inspect-agent-runtime.sh' "$operations" || fail "operati
 grep -Fq 'SELECTIVE ROUTE' "$skill" || fail "skill omits route declaration"
 grep -Fq 'mode: solo | delegate | audit | full' "$skill" || fail "skill omits exact route modes"
 grep -Fq 'No task tool call may precede this declaration' "$skill" || fail "skill permits tool-before-route"
-grep -Fq 'Solo is the default' "$skill" || fail "skill omits solo default"
-grep -Fq 'One auxiliary agent is the default maximum' "$skill" || fail "skill omits auxiliary limit"
+grep -Fq 'Delegate is the default' "$skill" || fail "skill omits delegate default"
+grep -Fq 'Full is required for difficult' "$skill" || fail "skill omits difficult full route"
 grep -Fq 'A later declaration may only escalate the route when newly' "$skill" || fail "skill omits escalation gate"
 grep -Fq 'never silently downgrade' "$skill" || fail "skill permits silent downgrade"
 grep -Fqi 'public metadata' "$skill" || fail "skill lacks public-metadata evidence rule"
@@ -462,8 +461,8 @@ for phrase in \
   'fork_turns: none' \
   'SELECTIVE ROUTE' \
   'solo | delegate | audit | full' \
-  'Solo is the default' \
-  'one auxiliary is the default maximum' \
+  'Delegate is the default' \
+  'full is required for difficult' \
   'only to escalate when' \
   'local inspector' \
   'sandbox_mode = read-only' \
@@ -488,8 +487,8 @@ grep -Fq '| `solo` |' "$readme" || fail "README route table omits solo"
 grep -Fq '| `delegate` |' "$readme" || fail "README route table omits delegate"
 grep -Fq '| `audit` |' "$readme" || fail "README route table omits audit"
 grep -Fq '| `full` |' "$readme" || fail "README route table omits full"
-grep -Fq 'Solo is the default.' "$readme" || fail "README omits solo default"
-grep -Fq 'One auxiliary is the default maximum' "$readme" || fail "README omits auxiliary limit"
+grep -Fq 'Delegate is the default.' "$readme" || fail "README omits delegate default"
+grep -Fq 'Difficult work uses full.' "$readme" || fail "README omits difficult full route"
 grep -Fq 'before the first task tool call' "$readme" || fail "README omits route-before-tools rule"
 grep -Fq 'newly observed' "$readme" || fail "README omits escalation gate"
 grep -Fq 'never silently downgrades' "$readme" || fail "README permits silent downgrade"
@@ -580,4 +579,4 @@ sh -n "$runtime_inspector"
 sh -n "$script_dir/verify.sh"
 pass "shell syntax"
 
-printf '%s\n' "VERIFY PASSED: Sol Advisor v0.7.1 selective routing checks completed in $tmp_dir"
+printf '%s\n' "VERIFY PASSED: Sol Advisor v0.7.2 selective routing checks completed in $tmp_dir"

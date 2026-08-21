@@ -17,7 +17,7 @@ A configured execution backend whose adapter owns transport details, capabilitie
 _Avoid_: Task type, scenario
 
 **Route**:
-The fixed stage topology of a Task Type: `solo`, `delegate`, `audit`, or `full`.
+The workflow label derived from a Task Type's ordered Stages: `solo`, `delegate`, `audit`, or `full`. It is not an independently editable configuration field.
 
 **Control Plane**:
 The policy boundary that exposes sanitized metadata, resolves one Task Type, and enforces its pinned Stage-to-Provider bindings.
