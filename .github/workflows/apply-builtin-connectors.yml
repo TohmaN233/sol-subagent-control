@@ -1,0 +1,58 @@
+name: apply-builtin-connectors
+
+on:
+  push:
+    branches:
+      - feat/builtin-cursor-grok-write
+    paths:
+      - .github/connector-upload/READY
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/builtin-cursor-grok-write
+          fetch-depth: 0
+      - name: Reconstruct and verify implementation patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "b3c655ec8a790b4441c60fe6c06c1f98dc7671dd"
+          test "$(git merge-base HEAD b3c655ec8a790b4441c60fe6c06c1f98dc7671dd)" = "b3c655ec8a790b4441c60fe6c06c1f98dc7671dd"
+          test -f .github/connector-upload/READY
+          test "$(find .github/connector-upload -maxdepth 1 -type f -name 'part-*' | wc -l | tr -d ' ')" = 6
+          cat .github/connector-upload/part-* | base64 --decode | gzip --decompress --stdout > /tmp/builtin-connectors.patch
+          printf '%s  %s\n' '3f1a527d2e2e010c7499a7e71a99a9972c142a9685d514bfb27d1616e25832a2' /tmp/builtin-connectors.patch | sha256sum --check --strict
+          git apply --check --whitespace=error-all /tmp/builtin-connectors.patch
+          git apply --index --whitespace=error-all /tmp/builtin-connectors.patch
+          git rm -r .github/connector-upload
+          git rm .github/workflows/apply-builtin-connectors.yml
+          git diff --cached --check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run protocol, connector, and repository gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in plugins/sol-advisor/control-plane/connectors/*.mjs plugins/sol-advisor/control-plane/test/fixtures/*.mjs; do
+            node --check "$file"
+          done
+          node plugins/sol-advisor/control-plane/test/run-tests.mjs
+          sh plugins/sol-advisor/scripts/verify-control-plane.sh
+          sh plugins/sol-advisor/scripts/verify.sh
+          git diff --cached --check
+      - name: Commit repository-owned connector source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'TohmaN233'
+          git config user.email '271796371+TohmaN233@users.noreply.github.com'
+          git commit -m 'feat: add built-in Cursor and writable Grok connectors'
+          git push origin HEAD:feat/builtin-cursor-grok-write
