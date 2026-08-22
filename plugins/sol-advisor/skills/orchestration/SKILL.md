@@ -23,7 +23,7 @@ effort (GPT-5.6 Terra also qualifies).` GPT-5.6 Luna never qualifies. Verify the
 model and effort when runtime metadata exposes them. If either explicitly violates this
 contract, stop before delegation. If metadata is unavailable, continue silently without
 another reminder. A skill cannot change the primary model itself; never invent or claim
-unavailable evidence.
+unavailable evidence. Only a proven mismatch stops delegation.
 
 ## Declare the route before task tools
 

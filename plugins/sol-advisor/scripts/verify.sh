@@ -178,27 +178,34 @@ test ! -e "$retired_contract" || fail "retired separate workflow contract remain
 pass "required files present and retired contract absent"
 
 for primary_contract in "$skill" "$contracts" "$operations" "$control_skill" "$architecture"; do
-  grep -Fq 'GPT-5.6 Sol is the default.' "$primary_contract" || fail "primary contract omits default Sol in $primary_contract"
-  grep -Fq 'GPT-5.6 Terra also qualifies.' "$primary_contract" || fail "primary contract omits eligible Terra in $primary_contract"
-  grep -Fq 'GPT-5.6 Luna never qualifies.' "$primary_contract" || fail "primary contract does not reject Luna in $primary_contract"
-  grep -Fq 'reasoning effort must be high, xhigh, or max.' "$primary_contract" || fail "primary contract has the wrong reasoning floor in $primary_contract"
+  grep -Fq 'GPT-5.6 Sol' "$primary_contract" || fail "primary contract omits recommended Sol in $primary_contract"
+  grep -Fq 'GPT-5.6 Terra' "$primary_contract" || fail "primary contract omits eligible Terra in $primary_contract"
+  grep -Fq 'GPT-5.6 Luna' "$primary_contract" || fail "primary contract omits Luna policy in $primary_contract"
+  grep -Fq 'high, xhigh, or max' "$primary_contract" || fail "primary contract has the wrong reasoning floor in $primary_contract"
+done
+for entry_skill in "$skill" "$control_skill"; do
+  grep -Fq 'At skill startup, say once:' "$entry_skill" || fail "skill omits one-time primary recommendation in $entry_skill"
+  grep -Fq 'continue silently without' "$entry_skill" || fail "skill does not stay quiet when primary metadata is unavailable in $entry_skill"
+  grep -Fq 'Only a proven mismatch' "$entry_skill" || fail "skill does not reserve blocking for a proven mismatch in $entry_skill"
+  ! grep -Fq 'non-blocking reminder' "$entry_skill" || fail "skill still instructs an unavailable-metadata reminder in $entry_skill"
 done
 grep -Fq 'Sol remains the default; Terra is also allowed, Luna is rejected' "$readme" || fail "README omits primary model policy"
 grep -Fq 'reasoning must be `high`, `xhigh`, or `max`' "$readme" || fail "README omits primary reasoning policy"
-grep -Fq 'defaults to GPT-5.6 Sol' "$manifest" || fail "manifest omits default Sol"
+grep -Fq 'recommends GPT-5.6 Sol' "$manifest" || fail "manifest omits recommended Sol"
 grep -Fq 'permits GPT-5.6 Terra' "$manifest" || fail "manifest omits eligible Terra"
 grep -Fq 'rejects GPT-5.6 Luna' "$manifest" || fail "manifest does not reject Luna"
-grep -Fq 'requires high, xhigh, or max reasoning' "$manifest" || fail "manifest has the wrong reasoning floor"
+grep -Fq 'high, xhigh, or max reasoning' "$manifest" || fail "manifest has the wrong reasoning floor"
+grep -Fq 'Unavailable primary-session metadata is not repeatedly surfaced and never blocks work' "$manifest" || fail "manifest omits silent unavailable-metadata behavior"
 pass "default-Sol primary eligibility with Terra/high-plus support and Luna refusal"
 
 jq empty "$manifest"
-[ "$(jq -r '.version' "$manifest")" = 0.7.7 ] || fail "manifest version is not 0.7.7"
+[ "$(jq -r '.version' "$manifest")" = 0.7.8 ] || fail "manifest version is not 0.7.8"
 grep -Fq 'SELECTIVE ROUTE' "$manifest" || fail "manifest omits route declaration"
 grep -Fq 'delegate is the default' "$manifest" || fail "manifest omits delegate default"
 grep -Fq 'Route is derived from those Stages rather than configured independently' "$manifest" || fail "manifest omits derived-route contract"
 grep -Fq 'full combines implementation then review for difficult' "$manifest" || fail "manifest omits difficult full contract"
 grep -Fq 'fails closed' "$manifest" || fail "manifest omits fail-closed evidence rule"
-pass "manifest JSON, v0.7.7 release, and selective-routing language"
+pass "manifest JSON, v0.7.8 release, and selective-routing language"
 
 python3 - "$templates" <<'PY'
 from pathlib import Path
@@ -586,4 +593,4 @@ node --check "$node_runtime_inspector"
 node --test "$native_tools_test"
 pass "shell wrappers and cross-platform native role tools"
 
-printf '%s\n' "VERIFY PASSED: Sol Advisor v0.7.7 selective routing checks completed in $tmp_dir"
+printf '%s\n' "VERIFY PASSED: Sol Advisor v0.7.8 selective routing checks completed in $tmp_dir"
