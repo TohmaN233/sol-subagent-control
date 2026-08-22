@@ -208,5 +208,6 @@ Use $sol-advisor:sol-control-plane.
 - 关闭一键控制台的终端或按 `Ctrl+C`：只停止配置网页，不会改变已经保存的启用状态。
 
 配置网页只是策略编辑器；真正的调用由新 Codex 任务中的 control-plane skill 和 MCP 工具执行。
-当前任务无法读取主模型或 reasoning effort 时，只提醒一次并继续；只有观察到明确不符合要求的
-模型或等级时，才停止受控子 Agent 路线。
+启动时 skill 只会推荐一次使用 GPT-5.6 Sol 且 reasoning effort 为 high、xhigh 或 max（Terra
+也符合要求）。当前任务无法读取主模型或 reasoning effort 时静默继续；只有观察到明确不符合
+要求的模型或等级时，才停止受控子 Agent 路线。

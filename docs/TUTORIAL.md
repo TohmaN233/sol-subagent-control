@@ -199,4 +199,4 @@ The test passes only if the specified file is the only changed path, `outside_pa
 - Set `SOL_CONTROL_DISABLED=1` before starting Codex: this is an environment-level kill switch that the console cannot bypass.
 - Close the terminal running the one-click console or press `Ctrl+C`: this stops only the configuration webpage and does not change saved enablement state.
 
-The configuration webpage is only a policy editor. Actual calls are made by the control-plane skill and MCP tools in a new Codex task. If the primary model or reasoning effort cannot be observed, show one reminder and continue; stop the controlled subagent route only when an explicit model or level mismatch is observed.
+The configuration webpage is only a policy editor. Actual calls are made by the control-plane skill and MCP tools in a new Codex task. At startup the skill recommends GPT-5.6 Sol at high, xhigh, or max effort (Terra also qualifies). If the primary model or reasoning effort cannot be observed, continue silently; stop the controlled subagent route only when an explicit model or level mismatch is observed.

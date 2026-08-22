@@ -21,13 +21,18 @@ test('plugin MCP launches from the installed plugin root with the global Codex e
   assert.ok(server.env_vars.includes('USERPROFILE'));
 });
 
-test('routing policy warns on unobservable root metadata and never auto-falls back', async () => {
+test('routing policy recommends a primary once, stays quiet on missing metadata, and never auto-falls back', async () => {
   const controlSkill = await readFile(join(pluginDir, 'skills', 'control-plane', 'SKILL.md'), 'utf8');
   const nativeSkill = await readFile(join(pluginDir, 'skills', 'orchestration', 'SKILL.md'), 'utf8');
   assert.doesNotMatch(controlSkill, /use the native[\s\S]{0,100}workflow or stay solo/i);
   assert.match(controlSkill, /request\s+permission[\s\S]{0,100}retry once/i);
   assert.doesNotMatch(nativeSkill, /ask the user to confirm[\s\S]{0,80}stop[\s\S]{0,40}until confirmed/i);
-  assert.match(nativeSkill, /non-blocking reminder/i);
+  for (const skill of [controlSkill, nativeSkill]) {
+    assert.match(skill, /recommended primary/i);
+    assert.match(skill, /metadata[\s\S]{0,120}unavailable[\s\S]{0,120}(silently|without.*reminder)/i);
+    assert.doesNotMatch(skill, /non-blocking reminder|user is responsible/i);
+    assert.match(skill, /proven mismatch|explicit.*mismatch/i);
+  }
   assert.match(controlSkill, /delegate is the default/i);
   assert.match(controlSkill, /full[\s\S]{0,120}(difficult|high-risk)/i);
   assert.match(controlSkill, /CONTROL PLANE UNAVAILABLE/);

@@ -18,13 +18,12 @@ preflight, runtime-evidence, isolation, and maintainer procedures.
 
 ## Confirm the primary session
 
-GPT-5.6 Sol is the default. GPT-5.6 Terra also qualifies. GPT-5.6 Luna never qualifies.
-The reasoning effort must be high, xhigh, or max. Verify the current model and effort
-when runtime metadata exposes them. If either violates this contract, tell the user to
-select a qualifying primary session and stop before delegation. If runtime metadata
-does not expose them, give one non-blocking reminder that the user is responsible for
-selecting a qualifying model and effort, then continue. A skill cannot change the primary
-model itself; never invent or claim unavailable evidence.
+At skill startup, say once: `Recommended primary: GPT-5.6 Sol at high, xhigh, or max
+effort (GPT-5.6 Terra also qualifies).` GPT-5.6 Luna never qualifies. Verify the current
+model and effort when runtime metadata exposes them. If either explicitly violates this
+contract, stop before delegation. If metadata is unavailable, continue silently without
+another reminder. A skill cannot change the primary model itself; never invent or claim
+unavailable evidence.
 
 ## Declare the route before task tools
 

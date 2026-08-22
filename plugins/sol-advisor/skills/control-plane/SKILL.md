@@ -15,11 +15,11 @@ non-native provider.
 
 ## Confirm the primary session
 
-GPT-5.6 Sol is the default. GPT-5.6 Terra also qualifies. GPT-5.6 Luna never qualifies.
-The reasoning effort must be high, xhigh, or max. Verify public runtime metadata when available;
-never invent model or effort evidence. If either value is unavailable, give one non-blocking
-reminder that the user is responsible for selecting a qualifying primary session, then continue.
-Only a proven mismatch stops the controlled route.
+At skill startup, say once: `Recommended primary: GPT-5.6 Sol at high, xhigh, or max
+effort (GPT-5.6 Terra also qualifies).` GPT-5.6 Luna never qualifies. Verify public
+runtime metadata when available and never invent model or effort evidence. If metadata
+is unavailable, continue silently without another reminder. Only a proven mismatch
+stops the controlled route.
 
 ## Read metadata, not the prompt library
 

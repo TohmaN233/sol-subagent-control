@@ -204,7 +204,7 @@ On Linux, also run the full compatibility wrapper suite:
 sh plugins/sol-advisor/scripts/verify.sh
 ~~~
 
-The verifier covers the v0.7.6 manifest, exact three-role TOMLs, selective-routing
+The verifier covers the v0.7.7 manifest, exact three-role TOMLs, selective-routing
 contracts, concise README journey, absence of retired workflow references, installer
 safety fixtures, Luna runtime evidence, JSON/TOML validity, Node syntax, and Linux
 wrapper compatibility.

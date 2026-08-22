@@ -45,7 +45,7 @@ You do not need to select or manage a lane; the console stores reusable policy w
 
 The saved control-plane policy is user-global, not repository-local: it lives at `$CODEX_HOME/sol-advisor/control-plane.json`, or `~/.codex/sol-advisor/control-plane.json` when `CODEX_HOME` is unset. The console shows the active storage scope and path at the top. An explicit `SOL_CONTROL_CONFIG` path is an override for development/testing and is visibly marked; it does not replace the global policy.
 
-If the host cannot expose the current primary model or reasoning effort, the skill gives one non-blocking reminder and continues; only an observed mismatch stops controlled delegation. A missing optional native-role checker is likewise reported as unverified without stopping the task. Missing control tools or a denied global-config read is reported as an activation/permission error and never silently changes the selected workflow or Provider.
+At startup the skill gives one short recommendation to use GPT-5.6 Sol at high, xhigh, or max effort (Terra also qualifies). If the host cannot expose the current primary model or reasoning effort, it continues silently; only an observed mismatch stops controlled delegation. A missing optional native-role checker is likewise reported as unverified without stopping the task. Missing control tools or a denied global-config read is reported as an activation/permission error and never silently changes the selected workflow or Provider.
 
 ## Console, connector enablement, and approval
 
