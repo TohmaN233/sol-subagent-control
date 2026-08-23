@@ -55,7 +55,7 @@ jq empty "$manifest"
 jq empty "$mcp_manifest"
 jq empty "$config"
 jq empty "$control/package.json"
-[ "$(jq -r '.version' "$manifest")" = 0.7.10 ] || fail "native manifest version drifted"
+[ "$(jq -r '.version' "$manifest")" = 0.7.11 ] || fail "native manifest version drifted"
 [ "$(jq -r '.mcpServers' "$manifest")" = './.mcp.json' ] || fail "plugin manifest does not load control-plane MCP"
 [ "$(jq -r '.mcpServers["sol-control-plane"].command' "$mcp_manifest")" = node ] || fail "control-plane MCP does not use node"
 [ "$(jq -r '.mcpServers["sol-control-plane"].enabled' "$mcp_manifest")" = true ] || fail "control-plane MCP is disabled"
@@ -115,7 +115,7 @@ grep -Fq 'CONTROL PLANE UNAVAILABLE' "$skill" || fail "control-plane skill hides
 grep -Fq 'Delegate is the default' "$skill" || fail "control-plane skill does not default to delegate"
 for phrase in \
   'Read metadata, not the prompt library' \
-  'Write access opens only when all three facts are true' \
+  'Write delivery opens only when all three facts are true' \
   'Unified built-in connector contract' \
   'Built-in Cursor connector' \
   'Built-in Grok connector' \

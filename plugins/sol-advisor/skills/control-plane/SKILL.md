@@ -168,9 +168,9 @@ low-confidence decision after a discriminating check, or an explicit user reques
 Ordinary uncertainty or one failed test is not a trigger.
 
 Call `sol_control_invoke` only for an enabled read-only OpenAI-compatible provider when
-direct API invocation and approval are both enabled and credentials are present only
-in the configured environment variable. The external model receives no file or host
-tools.
+direct API invocation is enabled and credentials are present only in the configured
+environment variable. If its Provider or Stage confirmation gate is enabled, obtain
+that approval first. The external model receives no file or host tools.
 
 ## Parent acceptance
 
