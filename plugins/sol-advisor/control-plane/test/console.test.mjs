@@ -12,7 +12,7 @@ test('loopback console requires token and revision-checks saves', async (t) => {
   const state = await startConsole({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, open: false });
   t.after(stopConsole);
   const base = `http://127.0.0.1:${state.port}`;
-  assert.equal(SERVER_VERSION, '0.4.4');
+  assert.equal(SERVER_VERSION, '0.4.5');
   assert.deepEqual(await (await fetch(`${base}/health`)).json(), {
     status: 'ok', version: SERVER_VERSION,
   });
@@ -31,6 +31,9 @@ test('loopback console requires token and revision-checks saves', async (t) => {
   assert.match(appSource, /workflow-review/);
   assert.match(appSource, /Independent review stage/);
   assert.match(appSource, /defaultProviderIdForRole\(shape\.role, access\)/);
+  assert.match(appSource, /Ask before every Provider use/);
+  assert.match(appSource, /Ask before this Stage/);
+  assert.match(appSource, /Leave both off for no additional model-call prompt/);
   assert.doesNotMatch(appSource, /task-type-route/);
   assert.doesNotMatch(appSource, /selectInput\(\['solo', 'delegate', 'audit', 'full'\]/);
   assert.doesNotMatch(appSource, /scenario-card/);
@@ -42,6 +45,9 @@ test('loopback console requires token and revision-checks saves', async (t) => {
   assert.equal(loadedResponse.status, 200);
   const loaded = await loadedResponse.json();
   assert.ok(loaded.config.task_types[0].stages[0].template.includes('{{task}}'));
+  assert.equal(loaded.config.providers.some((provider) => provider.requires_user_approval), false);
+  assert.equal(loaded.config.task_types.some((taskType) =>
+    taskType.stages.some((stage) => stage.requires_user_approval)), false);
   assert.deepEqual(loaded.storage, {
     scope: 'override',
     config_path: configPath,

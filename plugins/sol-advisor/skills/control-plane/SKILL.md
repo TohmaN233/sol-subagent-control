@@ -77,19 +77,21 @@ selected prompt internally. Supply:
 
 - `task_type_id`, exact `stage_id`, task/context/constraints/verification;
 - the absolute Git repository root as `workspace`;
-- `user_approved=true` only after explicit approval in the current task;
+- `user_approved=true` only after explicit approval when the selected Provider or Stage
+  approval gate is enabled; otherwise omit it or keep it false;
 - no `allowed_paths` for read-only work;
 - a non-empty, smallest practical, workspace-relative `allowed_paths` list for writes.
 
-Write access opens only when all three facts are true:
+Write delivery opens only when all three facts are true:
 
 1. `provider.capabilities.write=true`;
 2. `stage.access=bounded_write`;
-3. the user explicitly approved this current task.
+3. `allowed_paths` is a non-empty, smallest practical, validated boundary.
 
-Missing approval, missing write capability, read-only/write mismatch, empty paths,
-globs, absolute paths, `..`, or symlink escape must fail before the submodel receives
-the task.
+An enabled Provider or Stage approval gate also requires explicit current-task approval.
+When both gates are off, do not ask merely because a model will be called. Missing gated
+approval, missing write capability, read-only/write mismatch, empty paths, globs,
+absolute paths, `..`, or symlink escape must fail before the submodel receives the task.
 
 ## Unified built-in connector contract
 

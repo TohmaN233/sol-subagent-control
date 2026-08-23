@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "global": {
     "enabled": true,
     "allow_direct_api": false,
@@ -76,7 +76,7 @@
       "kind": "builtin_connector",
       "enabled": false,
       "description": "Repository-owned Cursor connector using loopback CDP and one supported Agents UI profile. Requires desktop live smoke on the user machine.",
-      "requires_user_approval": true,
+      "requires_user_approval": false,
       "capabilities": {
         "read": true,
         "write": true,
@@ -101,8 +101,8 @@
       "name": "Built-in Grok ACP connector",
       "kind": "builtin_connector",
       "enabled": false,
-      "description": "Repository-owned Grok connector using a dedicated Leader and ACP over stdio for read-only and explicitly approved bounded-write work. Requires desktop live smoke.",
-      "requires_user_approval": true,
+      "description": "Repository-owned Grok connector using a dedicated Leader and ACP over stdio for read-only and policy-bounded write work. Requires desktop live smoke.",
+      "requires_user_approval": false,
       "capabilities": {
         "read": true,
         "write": true,
@@ -125,7 +125,7 @@
       "kind": "web_review",
       "enabled": false,
       "description": "Optional external advice for genuine planning dead ends or high-blast-radius uncertainty. The model and thinking level are selected only in the web session. Packet-only and advisory.",
-      "requires_user_approval": true,
+      "requires_user_approval": false,
       "capabilities": {
         "read": true,
         "write": false,
@@ -145,7 +145,7 @@
       "kind": "openai_compatible",
       "enabled": false,
       "description": "Optional text-only custom model. Replace endpoint/model and set the named environment variable before enabling.",
-      "requires_user_approval": true,
+      "requires_user_approval": false,
       "capabilities": {
         "read": true,
         "write": false,
@@ -183,7 +183,7 @@
           "role": "implementer",
           "provider_id": "native-luna",
           "access": "bounded_write",
-          "requires_user_approval": true,
+          "requires_user_approval": false,
           "template": "ROLE\nPerform a bounded implementation task. Execute the settled design; do not redesign product direction or architecture.\n\nTASK TYPE\n{{task_type_id}}\n\nOBJECTIVE\n{{task}}\n\nCONTEXT\n{{context}}\n\nCONSTRAINTS AND OWNERSHIP\n{{constraints}}\nPreserve concurrent user or agent edits. Modify only explicitly owned paths. Surface material ambiguity instead of silently widening scope.\n\nVERIFICATION\n{{verification}}\nRun the requested checks and inspect the actual diff. A completion claim without concrete evidence is invalid.\n\nRETURN\nSTATUS: complete | partial | blocked\nCHANGES: file-by-file summary from the real diff\nVERIFIED: exact commands and concrete output\nJUDGMENT CALLS: decisions left open by the specification, or none\nGAPS: unfinished work, ambiguity, or none"
         }
       ]
@@ -205,7 +205,7 @@
           "role": "implementer",
           "provider_id": "native-terra",
           "access": "bounded_write",
-          "requires_user_approval": true,
+          "requires_user_approval": false,
           "template": "ROLE\nPerform a judgment-heavy but still bounded implementation task. Resolve local technical uncertainty inside the settled architecture; do not change product direction without returning a blocker.\n\nTASK TYPE\n{{task_type_id}}\n\nOBJECTIVE\n{{task}}\n\nEVIDENCE AND CONTEXT\n{{context}}\n\nFIXED CONSTRAINTS, OWNERSHIP, AND BLAST-RADIUS BOUNDARY\n{{constraints}}\nPreserve concurrent edits and document every material judgment call. Stop if safe ownership or an acceptance boundary cannot be established.\n\nVERIFICATION\n{{verification}}\nUse risk-proportionate checks and inspect the complete change set.\n\nRETURN\nSTATUS: complete | partial | blocked\nCHANGES: file-by-file summary\nVERIFIED: exact commands and evidence\nJUDGMENT CALLS: choices made and why\nRESIDUAL RISK: most important remaining risk\nGAPS: unresolved items or none"
         },
         {
@@ -303,7 +303,7 @@
           "role": "implementer",
           "provider_id": "native-luna",
           "access": "bounded_write",
-          "requires_user_approval": true,
+          "requires_user_approval": false,
           "template": "ROLE\nImplement the settled bounded change. Stay inside the owned paths and preserve concurrent work.\n\nOBJECTIVE\n{{task}}\n\nCONTEXT\n{{context}}\n\nCONSTRAINTS AND OWNERSHIP\n{{constraints}}\n\nVERIFICATION\n{{verification}}\n\nRETURN\nSTATUS: complete | partial | blocked\nCHANGES: file-by-file summary from the real diff\nVERIFIED: exact commands and concrete output\nJUDGMENT CALLS: material decisions or none\nGAPS: unfinished work or none"
         },
         {
@@ -333,7 +333,7 @@
           "role": "reviewer",
           "provider_id": "chatgpt-web-pro",
           "access": "read_only",
-          "requires_user_approval": true,
+          "requires_user_approval": false,
           "template": "ROLE\nAct as an external advisor. Review only the supplied packet. You have no ambient repository access and must not claim implementation.\n\nDECISION OR BLOCKER\n{{task}}\n\nPACKET CONTENT AND OBSERVED EVIDENCE\n{{context}}\n\nFIXED CONSTRAINTS\n{{constraints}}\n\nPRIOR ATTEMPTS OR REQUIRED DECISION TEST\n{{verification}}\n\nRETURN\n1. Blocking assumptions or contradictions\n2. Two plausible next routes and their failure modes\n3. Exact evidence missing from the packet\n4. Smallest next check that most changes the decision\n5. One-sentence recommendation with uncertainty\nDo not request broad repository access and do not turn the consultation into implementation."
         }
       ]

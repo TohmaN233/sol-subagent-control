@@ -1,6 +1,6 @@
 {
   "name": "sol-advisor-control-plane",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "private": true,
   "type": "module",
   "description": "Local Task Type/Stage/Provider control plane with repository-owned Cursor CDP and Grok Leader + ACP connectors.",

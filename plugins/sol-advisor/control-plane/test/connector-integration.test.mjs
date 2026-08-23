@@ -155,7 +155,7 @@ async function respondAllow(registry, taskId) {
   });
 }
 
-test('bounded write is rejected before connector launch when current-task approval is missing', async (t) => {
+test('approval-gated bounded write is rejected before connector launch when approval is missing', async (t) => {
   const fx = await fixture(t);
   for (const scenarioId of ['grok-bounded-change', 'cursor-bounded-change']) {
     await assert.rejects(
@@ -169,11 +169,27 @@ test('bounded write is rejected before connector launch when current-task approv
   await assert.rejects(stat(fx.cursorLog), /ENOENT/);
 });
 
+test('bounded write does not ask for extra approval when provider and stage gates are off', async (t) => {
+  const fx = await fixture(t);
+  const config = await loadConfig({ configPath: fx.configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
+  const provider = config.providers.find((item) => item.id === 'grok-local');
+  const stage = config.task_types.find((item) => item.id === 'grok-bounded-change').stages[0];
+  provider.requires_user_approval = false;
+  stage.requires_user_approval = false;
+  await saveConfig(config, { configPath: fx.configPath });
+
+  const task = await startScenario(fx, 'grok-bounded-change', 'WRITE_ALLOWED', {
+    userApproved: false,
+    allowedPaths: ['allowed/'],
+  });
+  assert.match(task.task_id, /^[0-9a-f-]{36}$/i);
+});
 
 
 
 
-test('registry defensively rejects a write connector start without current-task approval', async (t) => {
+
+test('registry defensively rejects an explicitly approval-gated connector start without approval', async (t) => {
   const fx = await fixture(t);
   const config = await loadConfig({ configPath: fx.configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
   const provider = config.providers.find((item) => item.id === 'cursor-local');

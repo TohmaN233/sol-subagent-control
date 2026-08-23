@@ -40,10 +40,10 @@ Both built-in connectors use:
 cancellation, disconnect, and acknowledged abandon; Grok also supports exact permission
 and input responses.
 
-Write tasks require Provider write capability, a `bounded_write` Stage, current-task
-approval, and non-empty validated `allowed_paths`. Read-only tasks omit paths. Every
-task requires an absolute Git root and acquires the workspace's single active-task
-reservation.
+Write tasks require Provider write capability, a `bounded_write` Stage, and non-empty
+validated `allowed_paths`. An enabled Provider or Stage approval gate additionally
+requires explicit current-task approval. Read-only tasks omit paths. Every task requires
+an absolute Git root and acquires the workspace's single active-task reservation.
 
 Common terminal evidence and scope fields must be inspected before use. A
 `scope_violation`, `needs_attention`, `unknown_after_restart`, or `abandoned` result is

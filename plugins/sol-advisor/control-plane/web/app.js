@@ -167,7 +167,7 @@ function providerCard(provider, index) {
   toggles.className = 'grid three';
   toggles.append(
     field('Enabled', enabled),
-    field('Require task approval', approval),
+    field('Ask before every Provider use', approval),
     field('Read capability', read),
     field('Write capability', write),
     field('Background capability', background),
@@ -219,11 +219,15 @@ function stageEditor(stage) {
   const access = selectInput(['read_only', 'bounded_write'], stage.access || 'read_only', 'stage-access');
   const approval = checkbox(stage.requires_user_approval, 'stage-approval');
   const template = textarea(stage.template || 'Perform {{task}} under {{constraints}}. Verify with {{verification}}.', 'stage-template template');
+  const approvalHint = document.createElement('p');
+  approvalHint.className = 'hint';
+  approvalHint.textContent = 'Extra confirmation is requested when either this Stage or its Provider is checked. Leave both off for no additional model-call prompt.';
   access.addEventListener('change', refreshProviderOptions);
   section.append(
     heading,
     grid(field('Pinned provider', provider), field('Access', access)),
-    field('Require task approval', approval),
+    field('Ask before this Stage', approval),
+    approvalHint,
     field('Private stage prompt template', template),
   );
   return section;
@@ -307,7 +311,7 @@ function renderStages(card, route, previous = []) {
       ...shape,
       provider_id: defaultProviderIdForRole(shape.role, access),
       access,
-      requires_user_approval: shape.role === 'implementer',
+      requires_user_approval: false,
       template: shape.role === 'reviewer'
         ? 'Review {{task}} using {{context}}. Respect {{constraints}} and verify against {{verification}}.'
         : 'Perform {{task}} using {{context}}. Respect {{constraints}} and verify with {{verification}}.',
@@ -534,7 +538,7 @@ $('#add-provider').addEventListener('click', () => {
     kind: 'openai_compatible',
     enabled: false,
     description: '',
-    requires_user_approval: true,
+    requires_user_approval: false,
     capabilities: { read: true, write: false, background: false },
     config: {
       endpoint: 'https://example.invalid/v1/chat/completions',
@@ -579,7 +583,7 @@ $('#add-task-type').addEventListener('click', () => {
     tags: ['custom'],
     stages: [{
       id: 'implementation', role: 'implementer', provider_id: firstProvider,
-      access: 'read_only', requires_user_approval: true,
+      access: 'read_only', requires_user_approval: false,
       template: 'TASK\n{{task}}\n\nCONTEXT\n{{context}}\n\nCONSTRAINTS\n{{constraints}}\n\nVERIFICATION\n{{verification}}',
     }],
   };

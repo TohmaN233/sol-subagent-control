@@ -199,13 +199,13 @@ grep -Fq 'Unavailable primary-session metadata is not repeatedly surfaced and ne
 pass "default-Sol primary eligibility with Terra/high-plus support and Luna refusal"
 
 jq empty "$manifest"
-[ "$(jq -r '.version' "$manifest")" = 0.7.8 ] || fail "manifest version is not 0.7.8"
+[ "$(jq -r '.version' "$manifest")" = 0.7.9 ] || fail "manifest version is not 0.7.9"
 grep -Fq 'SELECTIVE ROUTE' "$manifest" || fail "manifest omits route declaration"
 grep -Fq 'delegate is the default' "$manifest" || fail "manifest omits delegate default"
 grep -Fq 'Route is derived from those Stages rather than configured independently' "$manifest" || fail "manifest omits derived-route contract"
 grep -Fq 'full combines implementation then review for difficult' "$manifest" || fail "manifest omits difficult full contract"
 grep -Fq 'fails closed' "$manifest" || fail "manifest omits fail-closed evidence rule"
-pass "manifest JSON, v0.7.8 release, and selective-routing language"
+pass "manifest JSON, v0.7.9 release, and selective-routing language"
 
 python3 - "$templates" <<'PY'
 from pathlib import Path
@@ -593,4 +593,4 @@ node --check "$node_runtime_inspector"
 node --test "$native_tools_test"
 pass "shell wrappers and cross-platform native role tools"
 
-printf '%s\n' "VERIFY PASSED: Sol Advisor v0.7.8 selective routing checks completed in $tmp_dir"
+printf '%s\n' "VERIFY PASSED: Sol Advisor v0.7.9 selective routing checks completed in $tmp_dir"

@@ -28,7 +28,7 @@ function resolveStage(config, taskType, stage, args, env) {
   assert(provider, `task type ${taskType.id} stage ${stage.id} provider is missing: ${stage.provider_id}`);
   assert(provider.enabled, `provider is disabled: ${provider.id}`);
   const approvalRequired = Boolean(
-    stage.requires_user_approval || provider.requires_user_approval || stage.access === 'bounded_write',
+    stage.requires_user_approval || provider.requires_user_approval,
   );
   if (approvalRequired) {
     assert(normalizeApproval(args.user_approved),

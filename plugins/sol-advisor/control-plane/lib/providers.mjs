@@ -16,7 +16,7 @@ export function buildProviderAdapter(provider, stage, { env = process.env, allow
     read_only: stage.access === 'read_only',
     capabilities: provider.capabilities,
     requires_user_approval: Boolean(
-      provider.requires_user_approval || stage.requires_user_approval || stage.access === 'bounded_write',
+      provider.requires_user_approval || stage.requires_user_approval,
     ),
   };
 

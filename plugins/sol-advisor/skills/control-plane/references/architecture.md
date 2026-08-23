@@ -78,8 +78,11 @@ it. A write task additionally requires all of:
 
 - provider `capabilities.write=true`;
 - Stage `access=bounded_write`;
-- explicit current-task `user_approved=true`;
 - a non-empty validated `allowed_paths` list.
+
+If either the selected Provider or Stage enables its approval gate, explicit current-task
+`user_approved=true` is additionally required. When both gates are off, model invocation
+does not add a second confirmation prompt.
 
 Allowed paths are workspace-relative, non-glob, non-escaping boundaries. Existing or
 nearest existing parents are resolved to reject symlink escape. The exact Git repository

@@ -4,7 +4,7 @@ import { access, chmod, lstat, mkdir, readFile, rename, stat, writeFile } from '
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
-export const CONFIG_VERSION = 5;
+export const CONFIG_VERSION = 6;
 export const PROVIDER_KINDS = new Set(['native_agent', 'builtin_connector', 'external_mcp', 'mcp_tool', 'web_review', 'openai_compatible']);
 export const ROUTES = new Set(['solo', 'delegate', 'audit', 'full']);
 export const STAGE_ROLES = new Set(['implementer', 'reviewer']);
@@ -283,7 +283,7 @@ function validateProvider(raw, index) {
     kind: normalizedKind,
     enabled: bool(raw.enabled, false),
     description: text(raw.description, `providers[${index}].description`, { max: 4000 }),
-    requires_user_approval: bool(raw.requires_user_approval, kind !== 'native_agent'),
+    requires_user_approval: bool(raw.requires_user_approval, false),
     capabilities: capabilities(raw.capabilities, normalizedKind),
     config: validators[kind](raw.config),
   };
@@ -314,7 +314,7 @@ function validateStage(raw, taskTypeIndex, stageIndex) {
     role,
     provider_id: id(raw.provider_id, `${field}.provider_id`),
     access,
-    requires_user_approval: bool(raw.requires_user_approval, access === 'bounded_write'),
+    requires_user_approval: bool(raw.requires_user_approval, false),
     template: validateTemplate(raw.template, `${field}.template`),
   };
 }
@@ -421,7 +421,7 @@ export function migrateConfigV2(raw) {
         migratedStage(scenario, 'implementation', 'implementer'),
         {
           id: 'review', role: 'reviewer', provider_id: migrationReviewer.id,
-          access: 'read_only', requires_user_approval: true,
+          access: 'read_only', requires_user_approval: false,
           template: 'Review the completed work for {{task}} using {{context}}. Respect {{constraints}} and verify with {{verification}}.',
         },
       ];
@@ -500,8 +500,38 @@ export function migrateConfigV4(raw, bundledDefaults) {
   assert(object(bundledDefaults) && bundledDefaults.version === CONFIG_VERSION,
     `bundled defaults must use config.version=${CONFIG_VERSION}`);
   const migrated = jsonClone(raw, 'version-4 config');
-  migrated.version = CONFIG_VERSION;
+  migrated.version = 5;
   upgradeLegacyDifficultTask(migrated, bundledDefaults);
+  return migrated;
+}
+
+const LEGACY_DEFAULT_APPROVAL_PROVIDERS = new Set([
+  'cursor-local', 'grok-local', 'chatgpt-web-pro', 'custom-openai-compatible',
+]);
+const LEGACY_DEFAULT_APPROVAL_STAGES = new Set([
+  'bounded-code-change.implementation',
+  'judgment-heavy-change.implementation',
+  'implementation-with-review.implementation',
+  'hard-path-web-advice.review',
+]);
+
+export function migrateConfigV5(raw) {
+  assert(object(raw), 'config must be an object');
+  assert(raw.version === 5, 'migrateConfigV5 accepts only config.version=5');
+  const migrated = jsonClone(raw, 'version-5 config');
+  migrated.version = CONFIG_VERSION;
+  for (const provider of migrated.providers || []) {
+    if (LEGACY_DEFAULT_APPROVAL_PROVIDERS.has(provider?.id)) {
+      provider.requires_user_approval = false;
+    }
+  }
+  for (const taskType of migrated.task_types || []) {
+    for (const stage of taskType?.stages || []) {
+      if (LEGACY_DEFAULT_APPROVAL_STAGES.has(`${taskType.id}.${stage?.id}`)) {
+        stage.requires_user_approval = false;
+      }
+    }
+  }
   return migrated;
 }
 
@@ -603,27 +633,33 @@ export async function loadConfig({ configPath, defaultConfigPath }) {
     const raw = JSON.parse(await readFile(configPath, 'utf8'));
     if (raw?.version === 1) {
       const bundled = JSON.parse(await readFile(defaultConfigPath, 'utf8'));
-      const migrated = validateConfig(migrateConfigV4(
-        migrateConfigV3(migrateConfigV2(migrateConfigV1(raw, bundled)), bundled), bundled));
+      const migrated = validateConfig(migrateConfigV5(migrateConfigV4(
+        migrateConfigV3(migrateConfigV2(migrateConfigV1(raw, bundled)), bundled), bundled)));
       await writeConfigAtomic(migrated, configPath);
       return migrated;
     }
     if (raw?.version === 2) {
       const bundled = JSON.parse(await readFile(defaultConfigPath, 'utf8'));
-      const migrated = validateConfig(migrateConfigV4(
-        migrateConfigV3(migrateConfigV2(raw), bundled), bundled));
+      const migrated = validateConfig(migrateConfigV5(migrateConfigV4(
+        migrateConfigV3(migrateConfigV2(raw), bundled), bundled)));
       await writeConfigAtomic(migrated, configPath);
       return migrated;
     }
     if (raw?.version === 3) {
       const bundled = JSON.parse(await readFile(defaultConfigPath, 'utf8'));
-      const migrated = validateConfig(migrateConfigV4(migrateConfigV3(raw, bundled), bundled));
+      const migrated = validateConfig(migrateConfigV5(
+        migrateConfigV4(migrateConfigV3(raw, bundled), bundled)));
       await writeConfigAtomic(migrated, configPath);
       return migrated;
     }
     if (raw?.version === 4) {
       const bundled = JSON.parse(await readFile(defaultConfigPath, 'utf8'));
-      const migrated = validateConfig(migrateConfigV4(raw, bundled));
+      const migrated = validateConfig(migrateConfigV5(migrateConfigV4(raw, bundled)));
+      await writeConfigAtomic(migrated, configPath);
+      return migrated;
+    }
+    if (raw?.version === 5) {
+      const migrated = validateConfig(migrateConfigV5(raw));
       await writeConfigAtomic(migrated, configPath);
       return migrated;
     }
@@ -695,7 +731,7 @@ export function sanitizeConfig(config, { env = process.env } = {}) {
           provider_kind: provider?.kind || 'missing',
           access: stage.access,
           requires_user_approval: Boolean(
-            stage.requires_user_approval || provider?.requires_user_approval || stage.access === 'bounded_write',
+            stage.requires_user_approval || provider?.requires_user_approval,
           ),
           effective_enabled: Boolean(provider?.enabled && config.global.enabled && !environmentDisabled),
           template_revision: createHash('sha256').update(stage.template).digest('hex').slice(0, 12),

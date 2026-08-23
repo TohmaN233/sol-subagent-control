@@ -35,7 +35,7 @@ test('default config path is user-global and independent of the project director
 
 test('bundled defaults use delegate for light work and full for difficult work', async () => {
   const { config } = await fixture();
-  assert.equal(config.version, 5);
+  assert.equal(config.version, 6);
   assert.equal('scenarios' in config, false);
   const external = config.providers.filter((provider) => provider.kind !== 'native_agent');
   assert.ok(external.length >= 4);
@@ -90,7 +90,40 @@ test('sanitized status omits templates, endpoints, and credential names', async 
   assert.match(text, /bounded-code-change/);
   assert.match(text, /template_revision/);
   const bounded = status.task_types.find((taskType) => taskType.id === 'bounded-code-change');
-  assert.equal(bounded.stages[0].requires_user_approval, true);
+  assert.equal(bounded.stages[0].requires_user_approval, false);
+});
+
+test('bundled approval gates default off and only explicit provider or stage opt-in requires approval', async () => {
+  const { configPath, config } = await fixture();
+  assert.equal(config.providers.some((provider) => provider.requires_user_approval), false);
+  assert.equal(config.task_types.some((taskType) =>
+    taskType.stages.some((stage) => stage.requires_user_approval)), false);
+
+  const unguarded = await resolveSelection({
+    task_type_id: 'bounded-code-change',
+    task: 'Implement the parser guard.',
+  }, { configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: {} });
+  assert.equal(unguarded.result.stages[0].approval_required, false);
+
+  const bounded = config.task_types.find((taskType) => taskType.id === 'bounded-code-change');
+  bounded.stages[0].requires_user_approval = true;
+  await saveConfig(config, { configPath });
+  await assert.rejects(
+    resolveSelection({ task_type_id: 'bounded-code-change', task: 'Implement it.' }, {
+      configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: {},
+    }),
+    /requires explicit current-task user approval/,
+  );
+
+  bounded.stages[0].requires_user_approval = false;
+  config.providers.find((provider) => provider.id === 'native-luna').requires_user_approval = true;
+  await saveConfig(config, { configPath });
+  await assert.rejects(
+    resolveSelection({ task_type_id: 'bounded-code-change', task: 'Implement it.' }, {
+      configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: {},
+    }),
+    /requires explicit current-task user approval/,
+  );
 });
 
 test('resolution returns only the selected compiled prompt and adapter', async () => {
@@ -123,7 +156,9 @@ test('disabled and approval-gated routes fail closed', async () => {
   );
 
   config.providers.find((provider) => provider.id === 'chatgpt-web-pro').enabled = true;
-  config.task_types.find((taskType) => taskType.id === 'hard-path-web-advice').enabled = true;
+  const hardPath = config.task_types.find((taskType) => taskType.id === 'hard-path-web-advice');
+  hardPath.enabled = true;
+  hardPath.stages[0].requires_user_approval = true;
   await saveConfig(config, { configPath });
   await assert.rejects(
     resolveSelection({ task_type_id: 'hard-path-web-advice', task: 'Review the blocker.' }, {
@@ -203,11 +238,11 @@ test('version-2 config migrates task types and removes untouched disabled provid
   await writeFile(configPath, `${JSON.stringify(legacy, null, 2)}\n`);
 
   const migrated = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
-  assert.equal(migrated.version, 5);
+  assert.equal(migrated.version, 6);
   assert.equal(migrated.task_types.find((taskType) => taskType.id === 'brainstorm').description,
     'USER CUSTOM DESCRIPTION');
   assert.equal(migrated.task_types.some((taskType) => taskType.id === 'cursor-bounded-change'), false);
-  assert.equal(JSON.parse(await readFile(configPath, 'utf8')).version, 5);
+  assert.equal(JSON.parse(await readFile(configPath, 'utf8')).version, 6);
 });
 
 test('version-2 full route migrates disabled with a separate read-only reviewer', async () => {
@@ -241,7 +276,7 @@ test('version-3 difficult default preserves a customized implementation while ad
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
 
   const migrated = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
-  assert.equal(migrated.version, 5);
+  assert.equal(migrated.version, 6);
   assert.deepEqual(migrated.task_types.find((taskType) => taskType.id === 'judgment-heavy-change')
     .stages.map((stage) => [stage.id, stage.provider_id]), [
     ['implementation', 'native-terra'], ['review', 'native-sol-reviewer'],
@@ -263,7 +298,7 @@ test('version-3 customized difficult Task Type keeps its user-owned workflow', a
   await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
 
   const migrated = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
-  assert.equal(migrated.version, 5);
+  assert.equal(migrated.version, 6);
   assert.equal(migrated.task_types.find((taskType) => taskType.id === 'judgment-heavy-change').route,
     'delegate');
 });
@@ -280,10 +315,40 @@ test('version-4 difficult workflow retries migration after the strict v3 migrati
   const migrated = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
   const migratedDifficult = migrated.task_types.find(
     (taskType) => taskType.id === 'judgment-heavy-change');
-  assert.equal(migrated.version, 5);
+  assert.equal(migrated.version, 6);
   assert.equal(migratedDifficult.route, 'full');
   assert.deepEqual(migratedDifficult.stages.map((stage) => stage.id), ['implementation', 'review']);
   assert.match(migratedDifficult.stages[0].template, /PREVIOUSLY CUSTOMIZED/);
+});
+
+test('version-5 migration clears inherited bundled approval gates and preserves custom opt-ins', async () => {
+  const { configPath, config } = await fixture();
+  config.version = 5;
+  config.providers.find((provider) => provider.id === 'cursor-local').requires_user_approval = true;
+  config.providers.find((provider) => provider.id === 'native-luna').requires_user_approval = true;
+  config.task_types.find((taskType) => taskType.id === 'hard-path-web-advice')
+    .stages[0].requires_user_approval = true;
+  config.task_types.push({
+    id: 'custom-approval', name: 'Custom approval', enabled: false,
+    description: 'User-owned opt-in approval fixture.', route: 'delegate', tags: ['custom'],
+    stages: [{
+      id: 'implementation', role: 'implementer', provider_id: 'native-luna',
+      access: 'read_only', requires_user_approval: true,
+      template: 'Inspect {{task}} with {{context}} under {{constraints}} and verify {{verification}}.',
+    }],
+  });
+  await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+  const migrated = await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
+  assert.equal(migrated.version, 6);
+  assert.equal(migrated.providers.find((provider) => provider.id === 'cursor-local')
+    .requires_user_approval, false);
+  assert.equal(migrated.task_types.find((taskType) => taskType.id === 'hard-path-web-advice')
+    .stages[0].requires_user_approval, false);
+  assert.equal(migrated.providers.find((provider) => provider.id === 'native-luna')
+    .requires_user_approval, true);
+  assert.equal(migrated.task_types.find((taskType) => taskType.id === 'custom-approval')
+    .stages[0].requires_user_approval, true);
 });
 
 test('full resolves implementation then review with pinned providers and no fallback', async () => {
@@ -334,8 +399,8 @@ test('version-1 migration adds both built-in connectors disabled when legacy con
     const provider = migrated.providers.find((item) => item.id === providerId);
     assert.ok(provider);
     assert.equal(provider.enabled, false);
-    assert.equal(provider.requires_user_approval, true);
+    assert.equal(provider.requires_user_approval, false);
     assert.equal(provider.capabilities.write, true);
   }
-  assert.equal(migrated.version, 5);
+  assert.equal(migrated.version, 6);
 });

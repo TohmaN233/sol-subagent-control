@@ -28,7 +28,7 @@ import {
 const CONTROL_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = join(CONTROL_DIR, 'default-config.json');
 const WEB_DIR = join(CONTROL_DIR, 'web');
-const SERVER_VERSION = '0.4.4';
+const SERVER_VERSION = '0.4.5';
 const DEFAULT_CONSOLE_PORT = 58712;
 const MAX_HTTP_BODY = 512 * 1024;
 
@@ -266,7 +266,7 @@ export function buildToolDefinitions() {
     context: { description: 'Relevant task context. String or JSON value.' },
     constraints: { description: 'Fixed decisions, scope boundaries, prohibited actions, and ownership.' },
     verification: { description: 'Concrete checks and acceptance evidence.' },
-    user_approved: { type: 'boolean', default: false, description: 'Set true only when the user explicitly approved every approval-gated Stage/Provider for the current task.' },
+    user_approved: { type: 'boolean', default: false, description: 'Set true only after explicit current-task approval when the selected Provider or Stage approval gate is enabled.' },
   };
   return [
     {
@@ -311,7 +311,7 @@ export function buildToolDefinitions() {
     },
     {
       name: 'sol_connector_start',
-      description: 'Compile and internally deliver exactly one Stage from a selected Task Type to its pinned built-in connector. Bounded-write Stages require explicit current-task approval and non-empty workspace-relative allowed_paths.',
+      description: 'Compile and internally deliver exactly one Stage from a selected Task Type to its pinned built-in connector. Bounded-write Stages require non-empty workspace-relative allowed_paths; extra confirmation is required only when the Provider or Stage approval gate is enabled.',
       inputSchema: {
         type: 'object',
         properties: {

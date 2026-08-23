@@ -47,8 +47,7 @@ export class ConnectorRegistry {
   async start(params) {
     await this.initialize();
     const writeRequested = params?.stage?.read_only !== true;
-    const approvalRequired = writeRequested
-      || params?.provider?.requires_user_approval === true
+    const approvalRequired = params?.provider?.requires_user_approval === true
       || params?.stage?.requires_user_approval === true;
     if (approvalRequired && params?.userApproved !== true) {
       throw connectorError('APPROVAL_REQUIRED',

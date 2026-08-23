@@ -24,7 +24,7 @@ skill 激活后，主 Agent 会在第一次仓库/任务工具调用前读取一
 1. 当前任务启用了 control-plane skill；
 2. 存在与当前任务语义匹配且已启用的 Task Type；
 3. 对应 Stage 固定绑定了一个已启用、能力匹配的 Provider；
-4. 需要批准时，用户在**当前任务**中明确批准；
+4. 选中的 Provider 或 Stage 开启额外批准门时，用户在**当前任务**中明确批准；
 5. 写任务还提供了非空、最小化、仓库相对的 `allowed_paths`。
 
 仅启用 Provider 不会触发调用、收费或后台运行。主 Agent 不能临时换 Provider，也不能失败后静默回退。
@@ -136,7 +136,7 @@ Provider 只描述“由谁、通过什么连接工作”；Task Type 描述“�
 2. 在 **Task Types and stages** 中使用内置预设、复制现有任务或创建空白任务；新任务类型默认为 delegate。
 3. 困难任务需要 full 时，开启 **Independent review stage**。工作流由 Stage 自动推导，不再单独选择 Route。
 4. 在每个 Stage 内选择唯一的 **Pinned provider**。
-5. 为只读工作选择 `read_only`；需要修改仓库时选择 `bounded_write` 并开启任务批准。
+5. 只读工作选择 `read_only`，修改仓库选择 `bounded_write`。批准门默认关闭；只有希望每次额外确认时才开启。
 6. 保存配置。
 
 内置预设是起点，不是封闭清单。可以删除、重新添加、复制、改名、改模板或创建完全自定义的任务类型。
@@ -149,7 +149,7 @@ Cursor、Grok、网页审阅和 native agent 都是 Provider，不应该出现�
 翻译很适合作为自定义 Task Type，因为“产出译文”和“验收译文质量”应由不同职责完成：
 
 1. 复制 **Implementation with independent review**，改名为 `translation-with-review` 并启用。
-2. 将 implementation Stage 固定到具备翻译能力的 Provider；选择 `bounded_write`，要求当前任务批准，并把 `allowed_paths` 限定为目标语言文件。
+2. 将 implementation Stage 固定到具备翻译能力的 Provider；选择 `bounded_write`，并把 `allowed_paths` 限定为目标语言文件。除非希望额外确认，否则保持批准门关闭。
 3. 在模板中要求 Provider 保持原有行序与行数、占位符、标签和控制码，遵循提供的术语表与角色说明；遇到不确定术语必须报告，不能静默猜测。
 4. 将 review Stage 固定到另一个只读 Reviewer；要求逐项对照源文和译文，检查漏译、误译、人名或术语不一致、语气偏移以及占位符损坏。Reviewer 只报告问题，不修改自己的审阅结果。
 5. 最终验收仍由主 Agent 负责：运行结构校验、检查真实 diff，并解决所有阻塞性审阅发现。
@@ -189,7 +189,7 @@ Cursor 应返回 `task_id`、`agent_id`、`target_id`；Grok 应返回 `task_id`
 
 ### 3. 有界写任务
 
-创建一个 `bounded_write` Stage，绑定待测 Provider 并要求批准。然后明确批准一个最小路径：
+创建一个 `bounded_write` Stage，绑定待测 Provider，并保持 Provider 与 Stage 的批准门关闭，以测试不会额外询问的正常流程。然后在任务中授权一个最小路径：
 
 ```text
 Use $sol-advisor:sol-control-plane.

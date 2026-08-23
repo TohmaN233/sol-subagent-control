@@ -18,7 +18,7 @@ Ask Codex to open the Sol Subagent Control console, or use the one-click script 
 
 ## What stays the same
 
-The main agent owns architecture, routing, verification, and acceptance. Writes need current-task approval and allowed paths. A subagent cannot swap models or silently fall back.
+The main agent owns architecture, routing, verification, and acceptance. Writes require an enabled write capability, a bounded-write stage, and allowed paths. Extra Provider/Stage confirmation prompts are optional and off by default. A subagent cannot swap models or silently fall back.
 
 ## Go deeper
 

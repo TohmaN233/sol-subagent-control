@@ -23,7 +23,7 @@ A subagent can be called only when all of the following are true:
 1. The current task has activated the control-plane skill.
 2. An enabled Task Type matches the semantics of the current task.
 3. Each selected Stage is pinned to one enabled Provider with the required capabilities.
-4. If approval is required, the user explicitly approves it **in the current task**.
+4. If either the selected Provider or Stage approval gate is enabled, the user explicitly approves it **in the current task**.
 5. A write task supplies non-empty, minimal, repository-relative `allowed_paths`.
 
 Enabling a Provider by itself does not trigger a call, incur a charge, or start anything in the background. The primary agent cannot swap Providers on the fly or silently fall back after a failure.
@@ -129,7 +129,7 @@ A Provider describes “who does the work and through which connection”; a Tas
 2. In **Task Types and stages**, use a bundled preset, copy an existing task, or create a blank task. A new Task Type starts as delegate.
 3. Enable **Independent review stage** when difficult work should use full. The displayed workflow is derived from the Stages; there is no separate Route selector.
 4. Select exactly one **Pinned provider** inside each Stage.
-5. Select `read_only` for read-only work. For repository changes, select `bounded_write` and enable task approval.
+5. Select `read_only` for read-only work or `bounded_write` for repository changes. Approval gates default off; enable one only when you want an extra per-task confirmation.
 6. Save the configuration.
 
 Bundled presets are starting points, not a closed list. You can delete, restore, copy, rename, or edit them, change their templates, or create entirely custom Task Types. Cursor, Grok, web review, and native agents are Providers; they should not be encoded into Task Type names.
@@ -141,7 +141,7 @@ When upgrading an earlier configuration, a legacy judgment-heavy preset with the
 Translation is a useful custom Task Type because producing the target text and accepting its quality are separate responsibilities:
 
 1. Copy **Implementation with independent review**, rename it `translation-with-review`, and enable it.
-2. Pin the implementation Stage to a translation-capable Provider. Use `bounded_write`, require current-task approval, and limit `allowed_paths` to the target-language files.
+2. Pin the implementation Stage to a translation-capable Provider. Use `bounded_write` and limit `allowed_paths` to the target-language files. Leave approval off unless an extra confirmation is desired.
 3. In its template, require the Provider to preserve line order and count, placeholders, tags, and control codes; follow the supplied glossary and character notes; and report uncertain terms instead of silently guessing.
 4. Pin the review Stage to a separate read-only Reviewer. Require a source/target comparison for omissions, mistranslations, inconsistent names or terminology, tone drift, and damaged placeholders. The Reviewer reports findings but does not rewrite its own findings.
 5. Keep final acceptance with the primary agent: run structural validation, inspect the actual diff, and resolve every blocking review finding.
@@ -181,7 +181,7 @@ Cursor should return `task_id`, `agent_id`, and `target_id`. Grok should return 
 
 ### 3. Bounded write task
 
-Create a `bounded_write` Stage, pin it to the Provider under test, and require approval. Then explicitly approve one minimal path:
+Create a `bounded_write` Stage, pin it to the Provider under test, and leave both approval gates off to test normal no-extra-prompt execution. Then authorize one minimal path in the task:
 
 ```text
 Use $sol-advisor:sol-control-plane.
