@@ -189,8 +189,7 @@ for entry_skill in "$skill" "$control_skill"; do
   grep -Fq 'Only a proven mismatch' "$entry_skill" || fail "skill does not reserve blocking for a proven mismatch in $entry_skill"
   ! grep -Fq 'non-blocking reminder' "$entry_skill" || fail "skill still instructs an unavailable-metadata reminder in $entry_skill"
 done
-grep -Fq 'Sol remains the default; Terra is also allowed, Luna is rejected' "$readme" || fail "README omits primary model policy"
-grep -Fq 'reasoning must be `high`, `xhigh`, or `max`' "$readme" || fail "README omits primary reasoning policy"
+grep -Fq 'Use GPT-5.6 Sol or Terra at high, xhigh, or max. Luna cannot be the main agent.' "$readme" || fail "README omits primary model and reasoning policy"
 grep -Fq 'recommends GPT-5.6 Sol' "$manifest" || fail "manifest omits recommended Sol"
 grep -Fq 'permits GPT-5.6 Terra' "$manifest" || fail "manifest omits eligible Terra"
 grep -Fq 'rejects GPT-5.6 Luna' "$manifest" || fail "manifest does not reject Luna"
@@ -199,13 +198,13 @@ grep -Fq 'Unavailable primary-session metadata is not repeatedly surfaced and ne
 pass "default-Sol primary eligibility with Terra/high-plus support and Luna refusal"
 
 jq empty "$manifest"
-[ "$(jq -r '.version' "$manifest")" = 0.7.9 ] || fail "manifest version is not 0.7.9"
+[ "$(jq -r '.version' "$manifest")" = 0.7.10 ] || fail "manifest version is not 0.7.10"
 grep -Fq 'SELECTIVE ROUTE' "$manifest" || fail "manifest omits route declaration"
 grep -Fq 'delegate is the default' "$manifest" || fail "manifest omits delegate default"
 grep -Fq 'Route is derived from those Stages rather than configured independently' "$manifest" || fail "manifest omits derived-route contract"
 grep -Fq 'full combines implementation then review for difficult' "$manifest" || fail "manifest omits difficult full contract"
 grep -Fq 'fails closed' "$manifest" || fail "manifest omits fail-closed evidence rule"
-pass "manifest JSON, v0.7.9 release, and selective-routing language"
+pass "manifest JSON, v0.7.10 release, and selective-routing language"
 
 python3 - "$templates" <<'PY'
 from pathlib import Path
@@ -493,18 +492,11 @@ fi
 if grep -Fq -- '--check' "$readme"; then
   fail "README quick start repeats the post-install --check"
 fi
-grep -Fq 'advanced native operations' "$readme" || fail "README omits operations link"
-grep -Fq '| `solo` |' "$readme" || fail "README route table omits solo"
-grep -Fq '| `delegate` |' "$readme" || fail "README route table omits delegate"
-grep -Fq '| `audit` |' "$readme" || fail "README route table omits audit"
-grep -Fq '| `full` |' "$readme" || fail "README route table omits full"
-grep -Fq 'Delegate is the default.' "$readme" || fail "README omits delegate default"
-grep -Fq 'Difficult work uses full.' "$readme" || fail "README omits difficult full route"
-grep -Fq 'before the first task tool call' "$readme" || fail "README omits route-before-tools rule"
-grep -Fq 'newly observed' "$readme" || fail "README omits escalation gate"
-grep -Fq 'never silently downgrades' "$readme" || fail "README permits silent downgrade"
-grep -Fq 'need to select or manage a lane' "$readme" || fail "README asks users to manage lanes"
-grep -Fq 'Luna / Max or Terra / High access is needed only when' "$readme" || fail "README omits conditional delegate access"
+grep -Fq 'For native operations, runtime evidence, and maintainer verification' "$readme" || fail "README omits operations link"
+grep -Fq 'The main agent owns architecture, routing, verification, and acceptance.' "$readme" || fail "README omits primary ownership"
+grep -Fq 'Extra Provider/Stage confirmation prompts are optional and off by default.' "$readme" || fail "README omits opt-in confirmation policy"
+grep -Fq 'A subagent cannot swap models or silently fall back.' "$readme" || fail "README permits model substitution or silent fallback"
+grep -Fq 'Read the [English tutorial]' "$readme" || fail "README omits detailed usage tutorial"
 python3 - "$readme" <<'PY'
 from pathlib import Path
 import sys
@@ -526,7 +518,7 @@ for line in install_lines:
         raise SystemExit(f"installer executes before directory/file guards: {line}")
 print("two companion install examples are fail-closed and guarded")
 PY
-pass "README is concise, user-first, route-tabled, and keeps maintainer machinery out"
+pass "README is concise, user-first, links detailed policy, and keeps maintainer machinery out"
 
 python3 - "$readme" "$manifest" "$skill" "$contracts" "$operations" "$ui" "$templates" <<'PY'
 from pathlib import Path
@@ -563,13 +555,10 @@ for path in paths:
 print("obsolete workflow references are absent")
 PY
 
-grep -Fq 'A qualifying primary agent runs the show' "$readme" || fail "README omits primary ownership"
-grep -Fq 'What this fork changes' "$readme" || fail "README omits fork delta"
-grep -Fq 'Upstream behavior retained' "$readme" || fail "README fork delta does not preserve upstream scope"
-grep -Fq 'This fork adds or changes' "$readme" || fail "README fork delta does not identify fork work"
-grep -Fq 'Luna / Max' "$readme" || fail "README omits Luna / Max delegate path"
-grep -Fq 'Terra / High' "$readme" || fail "README omits Terra delegate path"
-grep -Fq 'Auxiliary work substitutes' "$readme" || fail "README omits substitution rule"
+grep -Fq 'A Sol Advisor fork with a console.' "$readme" || fail "README omits fork identity"
+grep -Fq '## What the console does' "$readme" || fail "README omits console overview"
+grep -Fq 'Cursor and Grok are extra subagent entries.' "$readme" || fail "README omits connector scope"
+grep -Fq 'ChatGPT review uses the installed chatgpt-review-agent skill.' "$readme" || fail "README omits web review boundary"
 grep -Fq 'Attention Heads' "$readme" || fail "README lost Attention Heads section"
 grep -Fq 'https://attentionheads.substack.com/?utm_source=github&utm_medium=readme&utm_campaign=sol-advisor' "$readme" || fail "README changed Attention Heads link"
 grep -Fq 'https://attentionheads.substack.com/subscribe?utm_source=github&utm_medium=readme&utm_campaign=sol-advisor' "$readme" || fail "README changed Subscribe link"
@@ -593,4 +582,4 @@ node --check "$node_runtime_inspector"
 node --test "$native_tools_test"
 pass "shell wrappers and cross-platform native role tools"
 
-printf '%s\n' "VERIFY PASSED: Sol Advisor v0.7.9 selective routing checks completed in $tmp_dir"
+printf '%s\n' "VERIFY PASSED: Sol Advisor v0.7.10 selective routing checks completed in $tmp_dir"
