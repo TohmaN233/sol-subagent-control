@@ -38,6 +38,7 @@ test('service imports only a fresh actual inventory selection and prepares expan
   const packet = await f.service.call('prepare_expansion', { workflow_id: pack.workflow.id, revision_hash: pack.revision_hash, provider_id: provider.id });
   assert.equal(packet.invoked, false); assert.equal(packet.handoff_required, true); assert.equal(packet.access, 'read_only');
   assert.equal((await f.service.call('verify_relocation', { workflow_id: pack.workflow.id, revision_hash: pack.revision_hash })).functional_execution_proven, false);
+  await assert.rejects(f.service.call('review_import', { workflow_id: pack.workflow.id, expected_revision: pack.revision_hash }), { code: 'HUMAN_REVIEW_REQUIRED' });
   await writeFile(source, (await readFile(source, 'utf8')) + '\nChanged');
   await assert.rejects(f.service.call('import_skill', { workspace: f.workspace, skill_id: selected.id, workflow_id: 'stale' }), { code: 'SKILL_SELECTION_STALE' });
 });

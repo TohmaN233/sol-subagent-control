@@ -26,13 +26,18 @@ export function validateStrictConfig(raw = {}) {
   return result;
 }
 
-export async function qualifiedStrictSettings(config, env = process.env) {
-  const settings = validateStrictConfig(config.strict_executor);
-  requireValue(settings.enabled, 'STRICT_DISABLED', 'The user has not enabled the isolated executor');
+export async function qualifiedCodexBinary(settings) {
   requireValue(process.platform === QUALIFIED_CODEX.platform && process.arch === QUALIFIED_CODEX.architecture && settings.binary_sha256 === QUALIFIED_CODEX.sha256,
     'STRICT_EXECUTOR_UNQUALIFIED', 'This platform/executable has no shipped Strict qualification');
   await noSymlinks(settings.codex_binary); const stat = await lstat(settings.codex_binary);
   requireValue(stat.isFile() && stat.size <= 512 * 1024 * 1024 && digest(await readFile(settings.codex_binary)) === settings.binary_sha256, 'CODEX_BINARY_CHANGED', 'Executable differs from its qualified content hash');
+  return settings;
+}
+
+export async function qualifiedStrictSettings(config, env = process.env) {
+  const settings = validateStrictConfig(config.strict_executor);
+  requireValue(settings.enabled, 'STRICT_DISABLED', 'The user has not enabled the isolated executor');
+  await qualifiedCodexBinary(settings);
   requireValue(settings.authentication.mode !== 'environment_api_key' || Boolean(env[settings.authentication.api_key_env]), 'CODEX_CREDENTIAL_MISSING', 'Configured authentication environment variable is unavailable');
   return settings;
 }

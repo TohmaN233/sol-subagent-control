@@ -4,7 +4,7 @@ import { readFile, writeFile, mkdir, open, readdir, rename } from 'node:fs/promi
 import { join, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
-import { createProbeWorkspace, cleanupProbeWorkspace } from '../skill-isolation/create-temp-profile.mjs';
+import { createProbeWorkspace, createTempProfile, cleanupProbeWorkspace } from '../skill-isolation/create-temp-profile.mjs';
 import { createStrictSession } from '../../plugins/sol-advisor/control-plane/lib/execution/codex-session.mjs';
 import { StrictSessionManager } from '../../plugins/sol-advisor/control-plane/lib/execution/strict-session-manager.mjs';
 import { STRICT_INSTRUCTIONS } from '../../plugins/sol-advisor/control-plane/lib/execution/codex-profile-builder.mjs';
@@ -14,12 +14,13 @@ import { importCoarseSkill } from '../../plugins/sol-advisor/control-plane/lib/s
 import { digest } from '../../plugins/sol-advisor/control-plane/lib/workflow-revisions.mjs';
 import { DEFAULT_CONFIG_PATH } from '../../plugins/sol-advisor/control-plane/server.mjs';
 import { sourceManifest } from './source-manifest.mjs';
+import { discoverCodexSkills } from '../../plugins/sol-advisor/control-plane/lib/skill-import/codex-inventory.mjs';
 
 const [binary, workRoot, reportPath] = process.argv.slice(2);
 assert(process.argv.length === 5 && [binary, workRoot, reportPath].every(isAbsolute));
 const reportFile = await open(reportPath, 'wx');
 const report = { kind: 'strict-manager-actual-app-server-local-provider', production_qualified: false, cases: [], requests: [], errors: [] };
-let fixture, manager, service, serverError, run, source;
+let fixture, manager, service, serverError, run, source, planningNode, planningProposal;
 const counts = new Map(); const markers = new Map();
 const configs = [...new Set([join(homedir(), '.codex', 'config.toml'), ...(process.env.CODEX_HOME ? [join(process.env.CODEX_HOME, 'config.toml')] : [])])];
 async function hashes() { return Promise.all(configs.map(async path => { try { return { path, sha256: digest(await readFile(path)) }; } catch (error) { if (error.code === 'ENOENT') return { path, missing: true }; throw error; } })); }
@@ -28,18 +29,19 @@ const server = createServer(async (req, res) => {
     assert.equal(req.url, '/v1/responses'); const chunks = []; let size = 0;
     for await (const chunk of req) { size += chunk.length; assert(size <= 512000); chunks.push(chunk); }
     const body = JSON.parse(Buffer.concat(chunks)); const input = JSON.stringify(body.input);
-    const matches = [...markers].filter(([marker]) => input.includes(marker)); assert.equal(matches.length, 1);
-    const [marker, node] = matches[0]; const index = counts.get(marker) ?? 0; counts.set(marker, index + 1);
+    const matches = [...markers].filter(([marker]) => input.includes(marker));
+    if (!planningNode) assert.equal(matches.length, 1); else assert(input.includes('analysis/request.txt'));
+    const [marker, node] = planningNode ? [planningNode, planningNode] : matches[0]; const index = counts.get(marker) ?? 0; counts.set(marker, index + 1);
     assert.equal(body.instructions, STRICT_INSTRUCTIONS);
     assert(!input.includes(run.control_token) && !input.includes('SHADOWED_SKILL_') && !input.includes('sol-isolation-conflict'));
     const allowed = new Set(['update_plan', 'request_user_input', 'read_workflow_resource', 'list_workspace', 'read_workspace', ...(node === 'instructions' ? ['write_workspace'] : [])]);
     assert(body.tools.every(tool => tool.type === 'function' && allowed.has(tool.name)));
     report.requests.push({ node, index, sha256: digest(JSON.stringify(body)), tools: body.tools.map(tool => tool.name) });
-    const step = index === 0 ? { name: 'read_workflow_resource', args: { path: 'source/SKILL.md' } }
+    const step = index === 0 ? { name: 'read_workflow_resource', args: { path: planningNode ? 'analysis/request.txt' : 'source/SKILL.md' } }
       : index === 1 && node === 'instructions' ? { name: 'write_workspace', args: { path: 'result.txt', text: 'MANAGER_VERIFIED', expected_sha256: null } } : null;
     if (index > 0) assert(input.includes('PINNED_SOURCE_ONLY'));
     const item = step ? { type: 'function_call', id: `fc_${node}_${index}`, call_id: `call_${node}_${index}`, name: step.name, arguments: JSON.stringify(step.args) }
-      : { type: 'message', id: `msg_${node}`, role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: '{"verified":true}', annotations: [] }] };
+      : { type: 'message', id: `msg_${node}`, role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: planningNode === 'expand' ? JSON.stringify(planningProposal) : '{"verified":true}', annotations: [] }] };
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     const emit = (type, fields) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...fields })}\n\n`);
     emit('response.created', { response: { id: 'manager-response', status: 'in_progress', output: [] } });
@@ -57,7 +59,17 @@ try {
     const relative = `../../plugins/sol-advisor/control-plane/lib/${name}.mjs`;
     report.source_hashes[relative] = digest(await readFile(fileURLToPath(new URL(relative, import.meta.url))));
   }
+  for (const name of ['codex-inventory', 'expansion-run', 'semantic-expander', 'metadata-reader', 'coarse-compiler', 'dependency-reader', 'review-import', 'skill-reader']) {
+    const relative = `../../plugins/sol-advisor/control-plane/lib/skill-import/${name}.mjs`;
+    report.source_hashes[relative] = digest(await readFile(fileURLToPath(new URL(relative, import.meta.url))));
+  }
+  report.source_hashes['run-manager-qualification.mjs'] = digest(await readFile(fileURLToPath(import.meta.url)));
   fixture = await createProbeWorkspace(workRoot);
+  const inventoryProfile = await createTempProfile(fixture, 'run-a');
+  const listed = await discoverCodexSkills(fixture.cwd, { config: { strict_executor: { codex_binary: binary, binary_sha256: report.executable_sha256 } }, env: { ...process.env, CODEX_HOME: inventoryProfile.home } });
+  assert.equal(listed.errors.length, 0); assert(listed.skills.some(skill => skill.path.replaceAll('\\', '/') === inventoryProfile.allowedSkill.replaceAll('\\', '/')));
+  assert(listed.skills.some(skill => skill.path.replaceAll('\\', '/') === fixture.repoSkill.replaceAll('\\', '/')));
+  report.cases.push({ name: 'actual-configured-profile-inventory-without-model-or-auth', passed: true, discovered_by: listed.discovered_by, model_invocations: listed.model_invocations, skills: listed.skills.length });
   await new Promise((ok, fail) => { server.once('error', fail); server.listen(0, '127.0.0.1', ok); });
   const configPath = join(fixture.root, 'control-plane.json');
   await loadConfig({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH });
@@ -101,12 +113,30 @@ try {
       result_proposal: (await service.call('get', args)).nodes[node].attempts[0].result_proposal });
   }
   assert.equal(await readFile(join(fixture.cwd, 'result.txt'), 'utf8'), 'MANAGER_VERIFIED');
+  const planner = config.providers.find(item => item.enabled && item.kind === 'native_agent' && item.config.model === 'gpt-5.6-sol'); assert(planner);
+  const origin = { confidence: 0.8, source_span: { resource: 'source/SKILL.md', start_line: 5, end_line: 5 } };
+  planningProposal = { source_revision: ready.revision_hash, nodes: [{ id: 'analyze', type: 'agent', prompt_template: 'Analyze {{task}} using the pinned source.', ...origin }],
+    edges: [{ id: 'start-analyze', source: 'start', target: 'analyze', ...origin }, { id: 'analyze-final', source: 'analyze', target: 'final', ...origin }] };
+  run = await service.call('create_expansion_run', { workflow_id: workflow.id, revision_hash: ready.revision_hash, provider_id: planner.id, run_id: 'synthetic-expansion', workspace: fixture.cwd, main_actor: 'primary' });
+  for (const node of ['expand', 'final']) {
+    planningNode = node === 'final' ? 'expansion-final' : node;
+    const lease = await service.call('claim_node', { run_id: run.run_id, control_token: run.control_token, node_id: node, owner: node === 'final' ? 'primary' : 'planner', request_id: 'claim-' + node });
+    const args = { run_id: run.run_id, control_token: run.control_token, node_id: node, attempt_id: lease.attempt_id, lease_token: lease.lease_token };
+    if (node === 'expand') assert.equal(lease.provider.id, planner.id);
+    await service.call('dispatch', args); const entry = manager.entries.get(run.run_id + '/' + lease.attempt_id); await entry.job;
+    assert.equal(serverError, undefined); assert.equal(entry.error, null);
+    if (node === 'final') await service.call('collect_strict', { ...args, accepted: true });
+  }
+  const expanded = await service.call('apply_expansion_result', { run_id: run.run_id, control_token: run.control_token, workflow_id: workflow.id, expected_revision: ready.revision_hash });
+  assert.equal(expanded.workflow.status, 'draft'); assert.equal(expanded.workflow.nodes.find(node => node.id === 'analyze').executor.provider_id, provider.id);
+  assert(expanded.workflow.import_status.unresolved.some(issue => issue.code === 'AI_INFERENCES_REQUIRE_REVIEW'));
+  report.cases.push({ name: 'selected-provider-read-only-expansion-applies-unreviewed-draft', passed: true, planner_provider: planner.id, execution_provider_preserved: provider.id });
   assert.deepEqual(await readdir(manager.parent), []); report.profiles_retained = [];
 } catch (error) {
   report.errors.push({ code: error.code ?? null, message: error.message, ...(serverError ? { request_validation: serverError.message } : {}) }); process.exitCode = 1;
 } finally {
   if (manager) try { await manager.close(); } catch (error) { report.errors.push({ phase: 'session-cleanup', message: error.message }); process.exitCode = 1; }
-  await new Promise(ok => server.close(ok));
+  if (server.listening) await new Promise((ok, fail) => server.close(error => error ? fail(error) : ok()));
   if (fixture) try { await cleanupProbeWorkspace(fixture); } catch (error) { report.errors.push({ phase: 'workspace-cleanup', message: error.message }); process.exitCode = 1; }
   report.after = await hashes(); report.shared_config_unchanged = JSON.stringify(report.before) === JSON.stringify(report.after);
   if (!report.shared_config_unchanged) process.exitCode = 1;

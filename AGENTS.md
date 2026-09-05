@@ -34,8 +34,12 @@ and completed synthetic live qualification. Catalog controls include the indepen
 orchestrator Skills namespace; feature flags alone do not suppress it.
 
 M8's import/compiler foundation is documented in `docs/V7_SKILL_IMPORT_CONTRACT.md`.
-Actual host discovery and selected-Provider expansion dispatch are still integration
-work. The bundled ISC YAML parser needs no npm at runtime; build it using pinned
+Configured-profile Codex discovery and selected-native-Provider expansion dispatch
+are implemented. Discovery uses only metadata RPCs and never writes user config;
+Codex may refresh normal caches. Expansion has its own immutable planning Pack/Run,
+read-only tools, explicit main acceptance and source-revision CAS. The inferred
+result remains Draft and requires per-item human review. UI integration remains.
+The bundled ISC YAML parser needs no npm at runtime; build it using pinned
 development dependencies and preserve its license/source manifest. Never execute
 imported scripts during analysis or label resource relocation as functional proof.
 

@@ -11,6 +11,7 @@ import { validateStrictConfig, qualifiedStrictSettings } from '../lib/execution/
 import { DEFAULT_CONFIG_PATH } from '../server.mjs';
 import { randomUUID } from 'node:crypto';
 import { processIdentity } from '../lib/execution/codex-process-ownership.mjs';
+import { importCoarseSkill } from '../lib/skill-import/coarse-compiler.mjs';
 
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 async function fixture(t, options = {}) {
@@ -154,4 +155,38 @@ test('orphan cleanup selects exact Run/node/attempt ownership and refuses a live
   assert.deepEqual(result.cleaned, [orphan]); assert(result.blocked.some(item => item.home === active && item.code === 'PROFILE_OWNER_ACTIVE'));
   assert.equal(result.resubmitted, false); await assert.rejects(readFile(join(orphan, 'owner.json')), { code: 'ENOENT' });
   assert(await readFile(join(other, 'owner.json'))); assert(await readFile(join(active, 'owner.json')));
+});
+
+test('selected-Provider expansion uses durable read-only execution and applies only an accepted exact-revision Draft', async t => {
+  let proposal;
+  const f = await fixture(t, { turn: async settings => {
+    assert.equal(settings.toolBroker.tools().some(tool => tool.name === 'write_workspace'), false);
+    const packet = await settings.toolBroker.call('read_workflow_resource', { path: 'analysis/request.txt' }, 'read-plan');
+    assert(JSON.parse(packet.contentItems[0].text).text.includes(proposal.source_revision));
+    return { output: JSON.stringify(proposal), thread_id: 'planning-thread', turn_id: 'planning-turn', audit: {} };
+  } });
+  const source = join(f.root, 'expansion-source'); await mkdir(source);
+  await writeFile(join(source, 'SKILL.md'), '---\nname: plan\ndescription: planning fixture\n---\nAnalyze the task and return a result.');
+  const { store } = await f.service.open(); const config = await f.service.config();
+  const providers = config.providers.filter(item => item.enabled && item.kind === 'native_agent'); assert(providers.length >= 2);
+  const pack = await importCoarseSkill(store, join(source, 'SKILL.md'), { id: 'source-draft', providerId: providers[0].id, role: providers[0].config.role });
+  const origin = { confidence: 0.8, source_span: { resource: 'source/SKILL.md', start_line: 5, end_line: 5 } };
+  proposal = { source_revision: pack.revision_hash, nodes: [{ id: 'analyze', type: 'agent', prompt_template: 'Analyze {{task}}', ...origin }],
+    edges: [{ id: 'start-analyze', source: 'start', target: 'analyze', ...origin }, { id: 'analyze-final', source: 'analyze', target: 'final', ...origin }] };
+  const planning = await f.service.call('create_expansion_run', { workflow_id: pack.workflow.id, revision_hash: pack.revision_hash, provider_id: providers[1].id,
+    run_id: 'planning-job', workspace: f.workspace, main_actor: 'root' });
+  const apply = { run_id: planning.run_id, control_token: planning.control_token, workflow_id: pack.workflow.id, expected_revision: pack.revision_hash };
+  await assert.rejects(f.service.call('apply_expansion_result', apply), { code: 'EXPANSION_ACCEPTANCE_REQUIRED' });
+  for (const node of ['expand', 'final']) {
+    const lease = await f.service.call('claim_node', { run_id: planning.run_id, control_token: planning.control_token, node_id: node, owner: node === 'final' ? 'root' : 'planner', request_id: 'claim-' + node });
+    if (node === 'expand') assert.equal(lease.provider.id, providers[1].id);
+    const args = { run_id: planning.run_id, control_token: planning.control_token, node_id: node, attempt_id: lease.attempt_id, lease_token: lease.lease_token };
+    await f.service.call('dispatch', args); await f.entry(args).job;
+    if (node === 'final') await f.service.call('collect_strict', { ...args, accepted: true });
+  }
+  assert.equal(f.sessions.length, 2); assert.equal((await store.snapshot(pack.workflow.id)).revision_hash, pack.revision_hash);
+  const expanded = await f.service.call('apply_expansion_result', apply);
+  assert.equal(expanded.workflow.status, 'draft'); assert.equal(expanded.workflow.nodes.find(node => node.id === 'analyze').executor.provider_id, providers[0].id);
+  assert(expanded.workflow.import_status.unresolved.some(item => item.code === 'AI_INFERENCES_REQUIRE_REVIEW'));
+  await assert.rejects(f.service.call('apply_expansion_result', apply), { code: 'REVISION_CONFLICT' }); assert.equal(f.sessions.length, 2);
 });

@@ -169,6 +169,8 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
   }
   for (const join of [...nodes.values()].filter(node => node.type === 'join')) if (nodes.get(join.parallel_id)?.join_id !== join.id) issue('JOIN_PARALLEL', 'Join must belong to exactly one Parallel', { node_id: join.id });
   const finalizer = nodes.get(workflow.finalization?.node_id);
+  for (const kind of ['nodes', 'edges']) for (const item of workflow[kind]) if (item?.origin?.kind === 'inferred' && item.origin.reviewed !== true)
+    issue('AI_INFERENCE_UNREVIEWED', 'Inferred control flow requires explicit per-item review', { item_kind: kind, item_id: item.id }, blockers);
   if (workflow.finalization?.required !== true || !finalizer || finalizer.type !== 'agent') issue('FINALIZER_MISSING', 'A final acceptance agent is required');
   else {
     if (finalizer.executor?.kind !== 'main') issue('FINALIZER_AUTHORITY', 'Final acceptance belongs to the main agent', { node_id: finalizer.id });

@@ -34,8 +34,9 @@ file or the submitted proposal as new operational instructions.
 
 ## Current integration checkpoint (2026-09-05)
 
-M8 foundation was committed as `1b29ef2`. The following M7 integration changes
-are now implemented; historical notes below describe earlier checkpoints only.
+M8 foundation was committed as `1b29ef2`; M7 service integration as `3b471a0`.
+The following M7 integration changes are implemented; historical notes below
+describe earlier checkpoints only.
 
 - v7 user configuration has an explicit, default-off `strict_executor` section.
   Unknown fields and stored credentials are rejected. Enabling requires the exact
@@ -81,6 +82,36 @@ M8 still needs actual host inventory discovery, metadata dependency interpretati
 review controls and selected-Provider expansion dispatch. M9-M13 remain. No real
 user config was migrated/enabled, no installed plugin changed, and no push/release
 has occurred. Do not treat this checkpoint as the completed upgrade.
+
+## M8 service integration (2026-09-05, active)
+
+- Parsed declared openai.yaml/Skill frontmatter/SKILL.json dependencies into exact
+  tool/MCP/executable/environment requirements; commands and optional malformed or
+  unsupported metadata stay visible and blocked. Provider declarations never
+  choose an executor. Fixed static path detection that had mistaken https:// for
+  a Windows drive path. No imported scripts or connections are executed.
+- Human-only import review records exact observation/inferred-item identity,
+  reason, source revision and history. Requirements are preserved; every inferred
+  node/edge has an independent launch blocker until reviewed. Review stays Draft.
+- Managed AI expansion uses an internal immutable planning Pack and ordinary
+  read-only Strict Run. The selected native Provider is retained, main acceptance
+  gates application, and source-revision CAS prevents stale overwrite. The source
+  execution Provider and Strict policy stay intact; graph output remains unreviewed
+  Draft. Non-native planning executors currently report unsupported explicitly.
+- Default Skill inventory now uses qualified actual Codex initialize/skills/list
+  against configured CODEX_HOME/workspace, with no thread/turn/login or config write.
+  Codex may refresh its own metadata/system caches. This scope is explicitly the
+  configured profile, not every possible desktop/environment Skill. Per-path errors
+  remain visible and concurrent config edits cause integrity failure, never rollback.
+- Targeted import12/manager9 tests passed. Actual expansion integration report1
+  passed three cases/nine serialized requests with source removal and preserved
+  Provider binding. Expanded report2 passed four cases/nine requests, adding actual
+  synthetic-profile inventory (nine discovered entries) and additional implementation
+  hashes; session6482 completed with unchanged config and no retained profiles.
+  Evidence: `baselines/v7-strict-2026-09-04/inventory-expansion-integration.json`.
+  Full144 regression passed, zero failures, 55.6 seconds; session62946 completed.
+  Neither run uses live credentials or migrates real user config.
+- Remaining: UI integration/source editing/publication, M9-M13. No release or push.
 
 ## M7 engine checkpoint (243208c; historical)
 

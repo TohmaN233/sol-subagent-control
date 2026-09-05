@@ -12,12 +12,17 @@ import { importCoarseSkill, verifyCoarseRelocation } from './skill-import/coarse
 import { expansionPacket, applyExpansion } from './skill-import/semantic-expander.mjs';
 import { buildProviderAdapter } from './providers.mjs';
 import { strictManagerFor } from './execution/strict-session-manager.mjs';
+import { importReviewPacket, reviewImportedDraft } from './skill-import/review-import.mjs';
+import { expansionRunPack } from './skill-import/expansion-run.mjs';
+import { SkillInventory } from './skill-import/inventory.mjs';
+import { discoverCodexSkills } from './skill-import/codex-inventory.mjs';
 
 export class WorkflowService {
   constructor({ configPath, defaultConfigPath, env = process.env, fetchImpl = globalThis.fetch, registry, capabilities = {} }) {
     this.configPath = resolve(configPath); this.defaultConfigPath = defaultConfigPath; this.env = env; this.fetchImpl = fetchImpl;
     this.registry = registry ?? connectorRegistryFor({ configPath: this.configPath, env }); this.capabilities = capabilities;
     this.strictManager = capabilities.strictManager ?? strictManagerFor({ configPath: this.configPath, getConfig: () => this.config(), env });
+    this.skillInventory = capabilities.skillInventory ?? new SkillInventory(async workspace => discoverCodexSkills(workspace, { config: await this.config(), env }));
   }
   async config() { return loadConfig({ configPath: this.configPath, defaultConfigPath: this.defaultConfigPath }); }
   async open() {
@@ -45,12 +50,10 @@ export class WorkflowService {
     if (['start', 'claim_node', 'dispatch', 'retry_node', 'resume'].includes(operation)) requireValue(config.global.enabled && !isEnvironmentDisabled(this.env), 'CONTROL_DISABLED', 'Workflow execution is disabled');
     switch (operation) {
       case 'skill_inventory': {
-        requireValue(this.capabilities.skillInventory, 'SKILL_DISCOVERY_UNAVAILABLE', 'Actual host Skill discovery is not configured');
-        return this.capabilities.skillInventory.list(args.workspace);
+        return this.skillInventory.list(args.workspace);
       }
       case 'import_skill': {
-        requireValue(this.capabilities.skillInventory, 'SKILL_DISCOVERY_UNAVAILABLE', 'Actual host Skill discovery is not configured');
-        const selected = await this.capabilities.skillInventory.select(args.workspace, args.skill_id);
+        const selected = await this.skillInventory.select(args.workspace, args.skill_id);
         const provider = config.providers.find(provider => provider.id === args.provider_id);
         if (args.provider_id) requireValue(provider, 'PROVIDER_MISSING', 'Selected instruction Provider does not exist');
         return importCoarseSkill(store, selected.path, { id: args.workflow_id, name: args.name, providerId: args.provider_id, role: provider?.config?.role ?? 'advisor', expectedSourceHash: selected.source_hash });
@@ -58,6 +61,11 @@ export class WorkflowService {
       case 'verify_relocation': {
         const pack = await store.snapshot(args.workflow_id, args.revision_hash);
         return verifyCoarseRelocation(pack, await store.resources(args.workflow_id, pack.revision_hash));
+      }
+      case 'import_review': return importReviewPacket(await store.snapshot(args.workflow_id, args.revision_hash));
+      case 'review_import': {
+        requireValue(human, 'HUMAN_REVIEW_REQUIRED', 'Import and inference confirmation belongs to the human editor');
+        return reviewImportedDraft(store, args.workflow_id, args);
       }
       case 'prepare_expansion': {
         requireValue(config.global.enabled && !isEnvironmentDisabled(this.env), 'CONTROL_DISABLED', 'Workflow expansion is disabled');
@@ -68,6 +76,26 @@ export class WorkflowService {
         // A packet is not an invocation. Native/MCP/Strict host integration must
         // preserve this selected Provider and record actual dispatch separately.
         return { ...packet, adapter, handoff_required: true, invoked: false, approval_required: provider.requires_user_approval };
+      }
+      case 'create_expansion_run': {
+        requireValue(config.global.enabled && !isEnvironmentDisabled(this.env), 'CONTROL_DISABLED', 'Workflow expansion is disabled');
+        const provider = config.providers.find(item => item.id === args.provider_id);
+        const pack = await store.snapshot(args.workflow_id, args.revision_hash);
+        const job = expansionRunPack(pack, await store.resources(args.workflow_id, pack.revision_hash), provider, args.run_id);
+        await this.strictManager.capability({ ...job, resources: [{ path: 'analysis/request.txt', bytes: Buffer.byteLength(job.resources['analysis/request.txt']) }] }, config.providers);
+        const jobs = await new WorkflowStore(join(dirname(this.configPath), 'workflow-expansion-jobs'), { validationContext: context }).initialize();
+        const saved = await jobs.create(job.workflow, job);
+        const planning = await new WorkflowRuntime({ workflowStore: jobs, runRoot: runtime.runs.root, context, strictCapability: async definition => { await this.strictManager.capability(definition, config.providers); return true; } }).initialize();
+        return planning.start({ workflow_id: saved.workflow.id, revision_hash: saved.revision_hash, run_id: args.run_id,
+          workspace: args.workspace, main_actor: args.main_actor, access: 'read_only', inputs: { task: 'Analyze this pinned Skill into an editable Draft' } });
+      }
+      case 'apply_expansion_result': {
+        const state = await runtime.authorizeController(args.run_id, args);
+        requireValue(state.status === 'succeeded', 'EXPANSION_ACCEPTANCE_REQUIRED', 'Expansion Run needs main-controller acceptance before applying its proposal');
+        const { pins } = await runtime.runs.read(args.run_id); const provenance = pins.root.provenance;
+        requireValue(provenance?.kind === 'skill_expansion_job' && provenance.source_workflow_id === args.workflow_id && provenance.source_revision === args.expected_revision,
+          'EXPANSION_RESULT_IDENTITY', 'Expansion result belongs to a different source Workflow revision');
+        return applyExpansion(store, args.workflow_id, state.nodes.expand.output, { expected_revision: args.expected_revision, context });
       }
       case 'apply_expansion': return applyExpansion(store, args.workflow_id, args.proposal, { expected_revision: args.expected_revision, context });
       case 'list': return Promise.all((await store.list()).map(async pack => ({ id: pack.workflow.id, name: pack.workflow.name, status: pack.workflow.status, enabled: pack.workflow.enabled, revision_hash: pack.revision_hash, description: pack.workflow.description, skill_policy: pack.workflow.skill_policy, validation: validateWorkflowGraph(pack.workflow, context) })));

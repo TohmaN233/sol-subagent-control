@@ -89,7 +89,7 @@ export class StrictSessionManager {
         return { path, sha256: pin.sha256, bytes: await readFile(join(envelope.resources_root, pin.sha256)) };
       }));
       entry.broker = await createCodexToolBroker({ workspace: envelope.workspace, access: envelope.access, allowedPaths: envelope.effective_allowed_paths,
-        deniedPaths: [this.configPath, runtime.workflows.root, runtime.runs.root, this.parent], resources, authorize: entry.authorize,
+        deniedPaths: [this.configPath, runtime.workflows.root, runtime.runs.root, join(dirname(this.configPath), 'workflow-expansion-jobs'), this.parent], resources, authorize: entry.authorize,
         onOperation: async metadata => { await event('tool_operation', metadata); if (metadata.tool === 'write_workspace' && metadata.phase === 'committed') entry.writes.add(metadata.path); },
       });
       entry.session = await this.sessionFactory({ parent: this.parent, owner: { run_id: runId, node_id: args.node_id, attempt_id: args.attempt_id },

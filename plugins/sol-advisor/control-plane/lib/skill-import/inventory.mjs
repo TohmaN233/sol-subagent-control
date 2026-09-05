@@ -27,7 +27,7 @@ export class SkillInventory {
           description: parsed.metadata.description, version: parsed.metadata.version ?? null, scope: skill.scope, enabled: skill.enabled, importable: true });
       } catch (error) { errors.push({ code: error.code ?? 'SKILL_READ_FAILED', path: skill.path ?? null }); }
     }
-    return { entries, errors, complete: errors.length === 0, discovered_by: result.discovered_by ?? 'host' };
+    return { entries, errors, complete: errors.length === 0, discovered_by: result.discovered_by ?? 'host', profile_scope: result.profile_scope ?? null, model_invocations: result.model_invocations ?? null };
   }
   async select(workspace, id) {
     const inventory = await this.list(workspace); const match = inventory.entries.find(entry => entry.id === id);

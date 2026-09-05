@@ -72,6 +72,9 @@ export class WorkflowRuntime {
   }
 
   async get(runId) { return publicRun(await this.runs.read(runId)); }
+  async authorizeController(runId, { control_token }) {
+    const record = await this.runs.read(runId); authorize(record.state, control_token); return publicRun(record);
+  }
   async recordExecutorEvent(runId, { node_id, attempt_id, lease_token, control_token, event }) {
     const fields = {
       codex_event: ['method', 'thread_id', 'turn_id', 'item_type', 'status'],

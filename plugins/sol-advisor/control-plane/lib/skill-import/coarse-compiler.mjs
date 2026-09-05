@@ -44,7 +44,7 @@ export async function importCoarseSkill(store, sourcePath, options) {
 export function verifyCoarseRelocation(pack, resources) {
   requireValue(pack.workflow.import_status?.mode === 'coarse', 'IMPORT_KIND', 'Relocation verification requires a coarse import');
   requireValue(!pack.workflow.import_status.unresolved.length, 'IMPORT_UNRESOLVED', 'Resolve every import observation before claiming source independence');
-  requireValue(!pack.workflow.requirements.executables.length && !(pack.workflow.requirements.environment ?? []).length, 'IMPORT_EXTERNAL_REQUIREMENTS', 'External requirements prevent a self-contained claim');
+  requireValue(!pack.workflow.requirements.executables.length && !(pack.workflow.requirements.environment ?? []).length && !pack.workflow.requirements.mcp_servers.length && pack.workflow.requirements.tools.every(tool => tool === 'read_workflow_resource'), 'IMPORT_EXTERNAL_REQUIREMENTS', 'External requirements prevent a self-contained claim');
   const prepared = prepareResources(resources);
   requireValue(canonicalJSON(prepared.manifest) === canonicalJSON(pack.resources), 'IMPORT_RESOURCE_CHANGED', 'Relocated resources differ from the pinned Pack');
   requireValue(resources['source/SKILL.md'], 'IMPORT_SOURCE_MISSING', 'Pinned source instructions are missing');

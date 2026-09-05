@@ -1,9 +1,16 @@
 # Skill import and expansion foundation
 
-The service exposes `skill_inventory`, `import_skill`, `verify_relocation`,
-`prepare_expansion` and `apply_expansion`, also registered as Workflow MCP tools.
-An actual host discovery adapter is required. Missing discovery is reported
-explicitly rather than approximated by a filesystem scan.
+The service exposes inventory/import, resource relocation, review packets,
+expansion packets and managed expansion Runs as Workflow MCP tools. The default
+inventory adapter runs the qualified Codex binary against the configured CODEX_HOME
+and requested workspace, using only initialize and skills/list. It starts no
+thread/turn/login and writes no configuration. Codex may refresh its own metadata
+or system caches; this is a normal profile inventory, not a Strict execution
+profile. Discovery is complete only relative to this configured profile and the
+errors returned by Codex, not every possible desktop task/environment. Binary
+settings are required even when Strict execution remains disabled. Configuration
+hashes before/after must match; concurrent edits are reported and never reverted.
+Per-path errors remain visible; the adapter never guesses filesystem roots.
 
 Inventory selection is an exact canonical path plus source hash. Import refreshes
 that selection, reads bounded UTF-8 instructions and snapshots portable resources.
@@ -17,6 +24,13 @@ Start, one instruction Provider, main final acceptance and End. The complete
 Skill text is a pinned resource, so arbitrary source text is not interpreted as
 the control plane's template syntax. Provider identity/role remain user-selected.
 `agents/openai.yaml` and `SKILL.json` are retained with hashes in provenance.
+Declared MCP tools, executables, environment names and allowed tools become
+requirements. Commands/transports/endpoints require explicit review, and no
+connection or Provider is automatically registered. Unsupported/malformed optional
+metadata remains a visible Draft blocker. The supported openai.yaml dependency
+shape was checked against Codex0.145.0 core-skills/loader.rs. Generic SKILL.json
+extensions outside the finite supported shape require review rather than silently
+implying portability.
 
 Unsafe/link/special/oversized resources, source-linked paths, scripts, binary
 assets and unresolved references are explicit observations. Known credential
@@ -33,21 +47,32 @@ understand every script or that every imported Workflow will execute successfull
 distinct classifications.
 
 Expansion preparation binds a user-selected enabled Provider and read-only
-access. It returns `invoked: false` and an explicit handoff packet. Current code
-does not claim to have called a model. The eventual dispatch must use the normal
-durable executor/approval path, not an unaudited direct retry loop.
+access. `prepare_expansion` still returns `invoked: false` and an explicit handoff
+packet. `create_expansion_run` now creates a separate immutable, read-only planning
+Pack under workflow-expansion-jobs and a normal journal Run. Native Provider
+execution uses the qualified Strict manager, normal claims/approval gates, exact
+dispatch receipts and durable output. Unqualified Provider types fail explicitly.
+The main controller must accept the planning result before apply_expansion_result
+changes the source Draft under its original revision CAS. The planning Provider
+never replaces the source Workflow's execution Provider. No retry loop, imported
+script or original source path is used by this planning Run.
 
 An expansion result must match the exact coarse revision. The compiler accepts
 a finite graph proposal with confidence and valid pinned source spans. It rejects
 Provider, write, approval or finalizer authority changes, validates the whole graph
 and saves only another Draft under CAS. Invalid proposals leave the coarse head
 and its immutable resources intact. Inferred items remain unreviewed and block
-launch until explicitly resolved in the editor.
+launch until explicitly resolved in the editor. The human-only review_import
+operation records a reason against each exact dependency observation or inferred
+node/edge. Blanket clearing of the inference summary does not clear per-item
+blockers. Review creates another Draft, retains requirements and full review history,
+and never automatically publishes Ready or claims functional independence.
 
-Remaining integration: production host inventory, full metadata/dependency
-interpretation and requirement resolution, actual selected-Provider expansion
-dispatch, resource capability checks, publish/review controls and graph UI. Tests
+Remaining integration: graph UI, source/requirement editing and publication, plus
+M9 pinned SkillRef/SubWorkflow execution and broader executor capabilities. Tests
 prove deterministic snapshots, resource relocation, observed dependency blockers,
 no script execution, source preservation, stale-selection refusal and expansion
-authority/CAS behavior. They do not substitute for M13 functional end-to-end import
-execution.
+authority/CAS behavior. Actual App Server/local-provider integration additionally
+verifies a source-removed synthetic import and selected-Provider expansion. This is
+not proof of arbitrary Skill portability or live-model semantic graph quality;
+M13 UI/end-to-end and cross-platform release gates remain.
