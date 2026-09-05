@@ -414,3 +414,13 @@ and unchanged shared config hashes. Reports release-path-manager.json and
 release-path-parallel.json record exact source and executable hashes. These use
 local synthetic model responses and do not repeat the three official-login cases.
 
+Third PR CI33954142382 passed all8 jobs on commit0d3e825: Windows189 core,
+Linux/macOS187 core plus2 Windows-only skips each, native4 on all three platforms,
+three isolation jobs, web and full Ubuntu repository verification. Final local
+POSIX verification passed189 core in46.55s and4 native. Added terminal-state guards
+against late cancellation errors after concurrent cleanup; focused3 passed.
+Browser source update showed exact before/after hashes without changing r1 Draft,
+with no warnings/errors. Source tree and packaged deliverables are prepared for
+maintainer review; no main merge, release publication, installed update or real
+configuration migration has been performed.
+

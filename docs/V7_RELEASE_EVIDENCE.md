@@ -32,9 +32,8 @@ graph containing a null node showed “草稿无法绘制” with an IR repair p
 its data and navigation. Live previews were verified through actual App Server
 deltas and a bounded-preview/journal-metadata regression test.
 
-Final local, package and remote CI results are appended below when observed.
-Do not treat a configured CI matrix as a completed run. Windows Git Bash is not
-Linux/macOS execution. Core tests on those platforms do not qualify their Strict
+Observed local, package and remote CI results are recorded below. Windows Git
+Bash is not Linux/macOS execution. Core tests on those platforms do not qualify their Strict
 executor; unsupported Strict remains fail-closed. Independent external review and
 maintainer merge are separate from automated testing. No remote release or installed
 plugin update is claimed by this candidate document.
@@ -45,9 +44,38 @@ the previous plugin version. Immutable Workflow/Run stores remain for later use.
 
 ## Final local checks
 
-Both repository POSIX verification scripts passed on Windows Git Bash. The full
-control-plane suite passed185 tests in47.06s and native role checks passed4.
-Final service16 passed after the Draft-only MCP publication guard. TypeScript,
-exact generated web assets/licenses, plugin manifest and Skill validation passed.
-Remote CI results are still pending for this candidate.
+Both repository POSIX verification scripts passed on Windows Git Bash after the
+platform and Cursor fixes. The full control-plane suite passed189 tests in46.55s;
+native role checks passed4. TypeScript, exact generated web assets/licenses, plugin
+manifest and Skill validation passed. A final four-line guard retains terminal
+state if concurrent cleanup causes a late cancellation error; its three relevant
+scope-stop/cancellation tests passed and the final PR head is checked separately.
+
+## Actual remote CI
+
+[PR CI33954142382](https://github.com/TohmaN233/sol-subagent-control/actions/runs/33954142382)
+on commit0d3e82561e29355b99de1e3dc7b954877c04798c passed all8 jobs:
+
+| Runner/check | Observed result |
+| --- | --- |
+| Windows core + native | 189/189 core;4/4 native |
+| Linux core + native | 187 core passed;2 Windows-only alias tests skipped;4/4 native |
+| macOS core + native | 187 core passed;2 Windows-only alias tests skipped;4/4 native |
+| Web | pinned dependency install, TypeScript and exact asset/license comparison passed |
+| Isolation invariants | passed on Windows, Linux and macOS |
+| Full repository | both POSIX verification scripts passed on Ubuntu |
+
+Each core job includes actual loopback console startup, authenticated migration,
+graph asset serving and token/CAS checks. macOS explicitly tests refusal of its
+unsupported process-ownership profile; this is not a skipped Strict qualification.
+The first two CI failures and root-cause fixes are in V7_WORK_LOG.md.
+
+The post-path-change actual Windows probes are release-path-manager.json (6 cases,
+17 local-provider requests) and release-path-parallel.json (2 cases,14 requests).
+All cases passed, zero errors; profiles were cleaned and shared config hashes
+were unchanged. Each report pins source and executable hashes.
+
+The final browser source-update fixture showed both expected hashes and
+update_available while remaining r1 Draft. Its browser warning/error log was empty.
+No model call or user configuration migration was performed by that UI check.
 

@@ -841,6 +841,8 @@ export class CursorCdpConnector {
       throw connectorError('CANCEL_UNCONFIRMED', 'The exact Cursor Agent did not expose a stable terminal state after Stop');
     } catch (error) {
       // Persistence failures poison the store and propagate through this write.
+      const current = await this.store.get(taskId);
+      if (!current || TERMINAL.has(current.state) || active.intentionalCleanup) return this.publicTask(current);
       await this.store.update(taskId, { state: 'needs_attention', error: publicConnectorError(error) });
       this.#signal(taskId);
       return this.publicTask(await this.store.get(taskId));
@@ -880,6 +882,8 @@ export class CursorCdpConnector {
       }
       await this.#confirmExactStop(active, { stopClicked: stopped.clicked === true });
     } catch (error) {
+      const current = await this.store.get(active.taskId);
+      if (!current || TERMINAL.has(current.state) || active.intentionalCleanup) return;
       await this.store.update(active.taskId, { state: 'needs_attention', error: publicConnectorError(error) });
       this.#signal(active.taskId);
     }
