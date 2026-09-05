@@ -20,6 +20,7 @@ const files = [
   'strict-execution.test.mjs',
   'codex-tool-broker.test.mjs',
   'codex-managed-login.test.mjs',
+  'strict-manager.test.mjs',
   'skill-import.test.mjs',
 ].map((name) => join(root, name));
 

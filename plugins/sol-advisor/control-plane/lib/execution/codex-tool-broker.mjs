@@ -58,10 +58,14 @@ export async function createCodexToolBroker({ workspace, access, allowedPaths = 
     ...(access === 'bounded_write' ? [{ name: 'write_workspace', description: 'Atomically write UTF-8 text inside the node scope. expected_sha256 must match the current file; null creates a new file. Parent directory must exist.', inputSchema: schema({ path: string, text: string, expected_sha256: { type: ['string', 'null'] } }) }] : []),
     ...(pinned.size ? [{ name: 'read_workflow_resource', description: 'Read an immutable resource pinned to this node.', inputSchema: schema({ path: { type: 'string', enum: [...pinned.keys()] } }) }] : []),
   ];
-  let queue = Promise.resolve();
+  let queue = Promise.resolve(); let revoked = false;
+  async function checkAuthority() {
+    requireValue(!revoked, 'CODEX_BROKER_REVOKED', 'Workspace broker was revoked');
+    await authorize(); requireValue(!revoked, 'CODEX_BROKER_REVOKED', 'Workspace broker was revoked during authorization');
+  }
   async function perform(name, args, callId) {
     requireValue(tools.some(tool => tool.name === name) && typeof callId === 'string' && callId.length <= 256, 'CODEX_TOOL_DENIED', 'Tool is outside this node broker');
-    await authorize();
+    await checkAuthority();
     argsShape(args, name === 'write_workspace' ? ['path', 'text', 'expected_sha256'] : ['path']);
     if (name === 'read_workflow_resource') {
       const item = pinned.get(args.path); requireValue(item, 'CODEX_RESOURCE_DENIED', 'Resource is outside the pinned node manifest');
@@ -96,7 +100,7 @@ export async function createCodexToolBroker({ workspace, access, allowedPaths = 
     try { await regular(path); previous = digest(await readFile(path)); } catch (error) { if (error.code !== 'ENOENT') throw error; previous = null; }
     requireValue(previous === args.expected_sha256, 'CODEX_TOOL_WRITE_CONFLICT', 'Workspace file changed since the caller observed it');
     const sha256 = digest(args.text); const operation = { call_id: callId, tool: name, path: args.path, before_sha256: previous, after_sha256: sha256 };
-    await onOperation({ ...operation, phase: 'intent' }); await authorize();
+    await onOperation({ ...operation, phase: 'intent' }); await checkAuthority();
     const temporary = join(parent, '.sol-write-' + randomUUID()); let committed = false;
     try {
       const handle = await open(temporary, 'wx', 0o600);
@@ -107,7 +111,7 @@ export async function createCodexToolBroker({ workspace, access, allowedPaths = 
       let current;
       try { await regular(path); current = digest(await readFile(path)); } catch (error) { if (error.code !== 'ENOENT') throw error; current = null; }
       requireValue(current === previous, 'CODEX_TOOL_WRITE_CONFLICT', 'Workspace changed while preparing the write');
-      await authorize(); await rename(temporary, path); committed = true;
+      await checkAuthority(); await rename(temporary, path); committed = true;
       await onOperation({ ...operation, phase: 'committed' });
       return textResult({ path: args.path, sha256 });
     } catch (error) {
@@ -116,7 +120,14 @@ export async function createCodexToolBroker({ workspace, access, allowedPaths = 
       throw error;
     }
   }
-  return { tools: () => structuredClone(tools), call(name, args, callId) {
+  return { tools: () => structuredClone(tools), revoke() { revoked = true; },
+    async quiesce() {
+      revoked = true;
+      // Preserve the failure as an explicit shutdown outcome. The tool caller
+      // also receives its original rejection; this only waits for it to settle.
+      return queue.then(() => ({ quiescent: true, error: null }), error => ({ quiescent: true, error }));
+    },
+    call(name, args, callId) {
     const next = queue.then(() => perform(name, args, callId));
     // A failed operation poisons this broker. No subsequent tool may hide it.
     queue = next; return next;

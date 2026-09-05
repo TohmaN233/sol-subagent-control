@@ -11,11 +11,13 @@ import { requireValue, insideRoot, noSymlinks } from './workflow-paths.mjs';
 import { importCoarseSkill, verifyCoarseRelocation } from './skill-import/coarse-compiler.mjs';
 import { expansionPacket, applyExpansion } from './skill-import/semantic-expander.mjs';
 import { buildProviderAdapter } from './providers.mjs';
+import { strictManagerFor } from './execution/strict-session-manager.mjs';
 
 export class WorkflowService {
   constructor({ configPath, defaultConfigPath, env = process.env, fetchImpl = globalThis.fetch, registry, capabilities = {} }) {
     this.configPath = resolve(configPath); this.defaultConfigPath = defaultConfigPath; this.env = env; this.fetchImpl = fetchImpl;
     this.registry = registry ?? connectorRegistryFor({ configPath: this.configPath, env }); this.capabilities = capabilities;
+    this.strictManager = capabilities.strictManager ?? strictManagerFor({ configPath: this.configPath, getConfig: () => this.config(), env });
   }
   async config() { return loadConfig({ configPath: this.configPath, defaultConfigPath: this.defaultConfigPath }); }
   async open() {
@@ -25,14 +27,15 @@ export class WorkflowService {
     // Provider authority always comes from the actual user config, never probes.
     context.providers = config.providers;
     context.environment = Object.keys(this.env).filter(key => Boolean(this.env[key]));
+    context.tools = [...new Set([...(context.tools ?? []), 'read_workflow_resource'])];
     const storeRoot = insideRoot(dirname(this.configPath), join(dirname(this.configPath), config.workflow_store.relative_path));
     await noSymlinks(storeRoot); // A missing migrated generation is corruption, not an empty new library.
     const store = await new WorkflowStore(storeRoot, { validationContext: context }).initialize();
     const runtime = await new WorkflowRuntime({ workflowStore: store, runRoot: join(dirname(this.configPath), 'workflow-runs'), context,
-      ...(this.capabilities.strictCapability ? { strictCapability: this.capabilities.strictCapability } : {}),
+      strictCapability: this.capabilities.strictCapability ?? (async pack => { await this.strictManager.capability(pack, config.providers); return true; }),
       ...(this.capabilities.parallelWriteCapability ? { parallelWriteCapability: this.capabilities.parallelWriteCapability } : {}),
     }).initialize();
-    const executor = new WorkflowExecutor({ runtime, getConfig: () => this.config(), registry: this.registry, env: this.env, fetchImpl: this.fetchImpl });
+    const executor = new WorkflowExecutor({ runtime, getConfig: () => this.config(), registry: this.registry, strictManager: this.strictManager, env: this.env, fetchImpl: this.fetchImpl });
     return { config, context, store, runtime, executor };
   }
   async call(operation, args = {}, { human = false } = {}) {
@@ -94,9 +97,20 @@ export class WorkflowService {
       case 'approve': return runtime.approve(args.run_id, args);
       case 'pause': return runtime.pause(args.run_id, args);
       case 'resume': return runtime.resume(args.run_id, args);
-      case 'cancel': return runtime.cancel(args.run_id, args);
+      case 'cancel': {
+        await runtime.cancel(args.run_id, args); // Fence leases before waiting for local tools/processes.
+        await this.strictManager.stopRun(args.run_id);
+        return runtime.get(args.run_id);
+      }
       case 'events': return runtime.events(args.run_id, args);
       case 'dispatch': return executor.dispatch(args.run_id, args);
+      case 'strict_status': return this.strictManager.status(runtime, args.run_id, args);
+      case 'strict_login': {
+        requireValue(human, 'HUMAN_AUTHENTICATION_REQUIRED', 'Managed login URLs are available only to the authenticated human console');
+        return this.strictManager.login(runtime, args.run_id, args);
+      }
+      case 'collect_strict': return this.strictManager.collect(runtime, args.run_id, args);
+      case 'cleanup_strict_orphans': return this.strictManager.cleanupOrphans(runtime, args.run_id, args);
       case 'dispatch_receipt': return runtime.recordDispatchReceipt(args.run_id, args);
       case 'reconcile_connector': return executor.reconcileConnector(args.run_id, args);
       case 'collect_connector': return executor.collectConnector(args.run_id, args);

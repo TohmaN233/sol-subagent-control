@@ -27,9 +27,9 @@ recovery and executor boundary contract is `docs/V7_RUN_CONTRACT.md`. M6 service
 and Provider integration is documented in `docs/V7_SERVICE_CONTRACT.md`. The
 loader supports migrated v7; bundled config and old console stay v6 pending the
 graph UI. Do not claim Strict from a caller flag or activate the old current-thread
-adapter for imported workflows. M7 candidate modules under `lib/execution` have
-actual App Server request and lifecycle evidence, but production integration and
-capability qualification remain gated. See `docs/V7_WORK_LOG.md` for current evidence
+adapter for imported workflows. M7 modules under `lib/execution` have
+actual App Server request/lifecycle evidence and opt-in service integration, while
+human authentication/capability UI and release remain gated. See `docs/V7_WORK_LOG.md` for current evidence
 and completed synthetic live qualification. Catalog controls include the independent native
 orchestrator Skills namespace; feature flags alone do not suppress it.
 
@@ -38,6 +38,15 @@ Actual host discovery and selected-Provider expansion dispatch are still integra
 work. The bundled ISC YAML parser needs no npm at runtime; build it using pinned
 development dependencies and preserve its license/source manifest. Never execute
 imported scripts during analysis or label resource relocation as functional proof.
+
+The development v7 service now has an opt-in Strict session manager. Its user-owned
+configuration remains default-off and only accepts the qualified Windows x64 binary
+hash. It persists exact dispatch identity, metadata events and hash-pinned result
+artifacts; final proposals require main acceptance. Cancel fences leases before
+waiting for broker/process shutdown. Same-Run writes are serialized in-process and
+still protected by the cross-process writer lock. Human login/capability UI and
+release review remain pending, so do not describe the upgrade as shipped. Preserve
+every failure and the limited scope of actual/local/live evidence in the work log.
 
 Relevant checks:
 

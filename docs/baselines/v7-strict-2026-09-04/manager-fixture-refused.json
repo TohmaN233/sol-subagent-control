@@ -1,0 +1,54 @@
+{
+  "kind": "strict-manager-actual-app-server-local-provider",
+  "production_qualified": false,
+  "cases": [],
+  "requests": [],
+  "errors": [
+    {
+      "code": "WORKFLOW_NOT_READY",
+      "message": "Workflow failed structural validation"
+    }
+  ],
+  "before": [
+    {
+      "path": "C:\\Users\\tgy23\\.codex\\config.toml",
+      "sha256": "111c76bffd0e4ec6bcdd0595e39fd5eed332aa07ad178f70638f4e053b853893"
+    }
+  ],
+  "executable_sha256": "83751f15cb6a0a7b97df67752c001e3fe1c20e18ffbfec3ff63567296205eb6c",
+  "source_hashes": {
+    "source-manifest.mjs": "49db4d7eeb5979766622cd3168c94c00cd14aaa3e0857c5942652919826cf93e",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-app-server-client.mjs": "828d0284890b5e3b5f19f14b89a63c60ec28fcb98714aab62ab79c1274df4199",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-profile-builder.mjs": "f5d9d4de4adc77e493965e38a384cf6b619cb86b6105853cf41b1b82bfcaf2cc",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-process-ownership.mjs": "1c55b2fbbb6d95ac6dd259c2ffcfa922acf92b5048428f5c647c2dc858c28eab",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-session.mjs": "f754d4dee0f2ac6d6316d5c6d93f624500b73606f585a7be7780268b208c8494",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-skill-policy.mjs": "ca8e4e31804c536deb629ddbaca07714a04b20da05dca58b700f8241e898cc66",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-tool-broker.mjs": "914713a4c692625aabb44c0521b00ad9ce9113128744625da948760ac7e0d34a",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-revisions.mjs": "a6f06ef14970866d71fcd3bafee8e3004ffa4dca702a4e6e56d780d5b01bc38f",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-paths.mjs": "78d5bd68dd9e3e48034d20a58996ca76c5a2e4cdee4a7392a0baf9dfccc200e7",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-events.mjs": "d3e04d5b4b43ed93a52eea4909cf9a35e80e9119dc162d1099bd7afc803da293",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-bindings.mjs": "5ded25ec188dd6c70cdaf443e65519889291501547cce8ed538a1fa13ca60272",
+    "../skill-isolation/create-temp-profile.mjs": "f49e0f1a53569d492d2a0168ac2d58d1a09d7eaea29e7de4935731640d7d7de5",
+    "../skill-isolation/fixtures/allowed-skill/SKILL.md": "8bf4a43404c1c526afee99699b2444de4880d1f38c28215efbfdd14e691793ad",
+    "../skill-isolation/fixtures/conflicting-skill-a/SKILL.md": "5a8b030cd2e7cd4bac0782948cd3b5000bea6dad6f4dc6640510b5a6530bc01b",
+    "../skill-isolation/fixtures/conflicting-skill-b/SKILL.md": "68b72630273eace61d9df6d010ea8303b6cf4810df28604b5d9f50079038ad3f",
+    "../../plugins/sol-advisor/control-plane/lib/execution/strict-session-manager.mjs": "44d5909c129685344837cb48fc22543ec415d281fd570835585db8a4ffe64da2",
+    "../../plugins/sol-advisor/control-plane/lib/execution/strict-config.mjs": "7b60e842e7297fff89df0d72b934dbf668704bf4d64b51ed05e2088672fdc196",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-managed-login.mjs": "ce9c3fd8980bd5e6d5b50e8c4e50c6eb3f9a0e13e90050ab7813a19a66281180",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-service.mjs": "ce2744d0d213f4e6df0e813ab2816a58a2d1b7f8545542b02a636ba0a8a2de54",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-executor.mjs": "4c12455983665ac33ff71f17904ba20667ae960627f3de6b38d2c47b4845c0a6",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-runtime.mjs": "7684b6597eda4a9085f52b83f5a9fa072f7342c79ae3872ebf64e158803c5dd9",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-run-store.mjs": "f838e4584526d160a4363fee06dd488fb57b84c14f87d37e9bd94182f1836a81",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-execution-envelope.mjs": "6d91a244fe013bbcb2e4237c9c5fe60e1d9a218cfa93713c9868c2228d7f7798",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-state.mjs": "4d2b9bd4542dc216e28c574c72f1c326bdc3b85ef0b8500f6845397cc1c35f64",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-validator.mjs": "50bf51a20a8af7e90e9860660d973653fab8ec6143bde96bf48fdf4fcc099583",
+    "../../plugins/sol-advisor/control-plane/lib/config.mjs": "9384c5663243284f68ea996af324aad54b3c269345967748452766d43da6a5a0"
+  },
+  "after": [
+    {
+      "path": "C:\\Users\\tgy23\\.codex\\config.toml",
+      "sha256": "111c76bffd0e4ec6bcdd0595e39fd5eed332aa07ad178f70638f4e053b853893"
+    }
+  ],
+  "shared_config_unchanged": true
+}

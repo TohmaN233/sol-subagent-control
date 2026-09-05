@@ -9,7 +9,7 @@ const properties = {
   constraints: {}, main_actor: string, require_approval: { type: 'boolean' }, completion: object, error: object,
   reconciliation: object, after_restart: { type: 'boolean' }, reason: string, approval_id: string, decision: { type: 'boolean' },
   after_sequence: { type: 'integer', minimum: 0 }, receipt: object,
-  skill_id: string, provider_id: string, name: string, proposal: object,
+  skill_id: string, provider_id: string, name: string, proposal: object, accepted: { type: 'boolean' },
 };
 const lease = ['run_id', 'node_id', 'attempt_id', 'lease_token'];
 const main = ['run_id', 'control_token'];
@@ -41,6 +41,9 @@ const specs = [
   ['dispatch_receipt', 'Persist exact task identity from the external tool result for one existing dispatch intent.', [...lease, 'control_token', 'request_id', 'receipt'], []],
   ['reconcile_connector', 'Inspect only the preallocated exact connector task after an uncertain dispatch. Does not retry it.', [...lease, 'control_token'], []],
   ['collect_connector', 'Collect an active exact connector task. Commit completion only with observed terminal and workspace-scope evidence.', [...lease, 'control_token'], []],
+  ['strict_status', 'Read one exact isolated session status. Login URLs are restricted to the human console.', [...lease, 'control_token'], []],
+  ['collect_strict', 'Read or reconcile a durable isolated result without another model submission. Finalization requires explicit main-controller acceptance.', [...lease, 'control_token'], ['accepted']],
+  ['cleanup_strict_orphans', 'After fencing an interrupted attempt, stop and remove only its verified orphan profile. Never resubmits work or terminates an active owner.', [...lease, 'control_token'], []],
 ];
 export const WORKFLOW_TOOL_OPERATIONS = new Set(specs.map(([name]) => name));
 export function workflowToolDefinitions() {

@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { resourcePath } from './workflow-paths.mjs';
 import { canonicalJSON } from './workflow-revisions.mjs';
+import { validateStrictConfig } from './execution/strict-config.mjs';
 
 export const CONFIG_VERSION = 6;
 export const PROVIDER_KINDS = new Set(['native_agent', 'builtin_connector', 'external_mcp', 'mcp_tool', 'web_review', 'openai_compatible']);
@@ -592,7 +593,7 @@ export function validateConfig(raw) {
         'global.max_prompt_chars'),
     },
     providers,
-    ...(raw.version === 7 ? { workflow_store: jsonClone(raw.workflow_store, 'config workflow store'), legacy_mapping: jsonClone(raw.legacy_mapping, 'config legacy mapping') } : { task_types: taskTypes }),
+    ...(raw.version === 7 ? { workflow_store: jsonClone(raw.workflow_store, 'config workflow store'), legacy_mapping: jsonClone(raw.legacy_mapping, 'config legacy mapping'), strict_executor: validateStrictConfig(raw.strict_executor) } : { task_types: taskTypes }),
   };
 }
 

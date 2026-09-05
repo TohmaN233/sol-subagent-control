@@ -35,6 +35,34 @@ const claim = (f, run, nodeId, extra = {}) => f.runtime.claimNode(run.run_id, { 
 const complete = (f, run, envelope, output = {}, extra = {}) => f.runtime.completeNode(run.run_id, { node_id: envelope.node_id, attempt_id: envelope.attempt_id, lease_token: envelope.lease_token, completion: payload(output, extra) });
 const control = run => ({ control_token: run.control_token });
 
+test('executor event journal accepts narrow metadata under controller authority and never revives a cancelled lease', async t => {
+  const f = await fixture(t); const run = await f.start(); const work = await claim(f, run, 'work');
+  const args = { node_id: work.node_id, attempt_id: work.attempt_id, lease_token: work.lease_token, control_token: run.control_token,
+    event: { kind: 'session_state', metadata: { status: 'auth_required' } } };
+  await assert.rejects(f.runtime.recordExecutorEvent(run.run_id, { ...args, control_token: 'wrong' }), { code: 'RUN_AUTHORITY' });
+  await assert.rejects(f.runtime.recordExecutorEvent(run.run_id, { ...args, event: { kind: 'codex_event', metadata: { authUrl: 'sensitive' } } }), { code: 'EXECUTOR_EVENT_SCHEMA' });
+  await assert.rejects(f.runtime.recordExecutorEvent(run.run_id, { ...args, event: { kind: 'session_state', metadata: { status: { authUrl: 'sensitive' } } } }), { code: 'EXECUTOR_EVENT_SCHEMA' });
+  await f.runtime.recordExecutorEvent(run.run_id, args);
+  await f.runtime.cancel(run.run_id, control(run));
+  await f.runtime.recordExecutorEvent(run.run_id, { ...args, event: { kind: 'session_state', metadata: { status: 'cancelled' } } });
+  const state = await f.runtime.get(run.run_id); assert.equal(state.status, 'cancelled'); assert.equal(state.nodes.work.attempts[0].executor_event_count, 2);
+  await assert.rejects(f.runtime.execution(run.run_id, args), { code: 'STALE_LEASE' });
+});
+
+test('concurrent local executors serialize one Run journal across runtime instances without losing events', async t => {
+  const f = await fixture(t, definition('parallel')); const run = await f.start();
+  const other = await new WorkflowRuntime(f.runtimeOptions).initialize();
+  const [a, b] = await Promise.all(['a', 'b'].map(node => claim(f, run, node)));
+  const calls = Array.from({ length: 24 }, (_, index) => {
+    const lease = index % 2 ? a : b; const runtime = index % 2 ? f.runtime : other;
+    return runtime.recordExecutorEvent(run.run_id, { node_id: lease.node_id, attempt_id: lease.attempt_id, lease_token: lease.lease_token, control_token: run.control_token,
+      event: { kind: 'session_state', metadata: { status: 'synthetic-' + index } } });
+  });
+  await Promise.all(calls);
+  const state = await other.get(run.run_id); assert.equal(state.nodes.a.attempts[0].executor_event_count, 12); assert.equal(state.nodes.b.attempts[0].executor_event_count, 12);
+  const events = await other.events(run.run_id, control(run)); assert.equal(events.filter(event => event.kind === 'executor_event').length, 24);
+});
+
 test('journal releases sequential nodes, binds leases, rejects conflicting duplicates and requires main acceptance', async t => {
   const f = await fixture(t); const run = await f.start();
   assert.deepEqual((await f.runtime.next(run.run_id)).ready, ['work']);

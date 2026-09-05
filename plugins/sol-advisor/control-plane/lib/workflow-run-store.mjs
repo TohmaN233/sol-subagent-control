@@ -6,6 +6,18 @@ import { insideRoot, noSymlinks, requireValue, workflowId } from './workflow-pat
 import { canonicalJSON, digest, LIMITS } from './workflow-revisions.mjs';
 import { appendEvent, readEvents, replayEvents, statePatch, recoverEventTail, writeDurableJSON } from './workflow-events.mjs';
 
+const runWriters = new Map();
+function serializeRun(root, action) {
+  const key = process.platform === 'win32' ? root.toLowerCase() : root;
+  const operation = (runWriters.get(key) ?? Promise.resolve()).then(action);
+  // Each caller receives its own failure. A later independent transition may
+  // proceed after it settles; the OS writer lock still protects other processes.
+  const settled = operation.then(() => undefined, () => undefined);
+  runWriters.set(key, settled);
+  void settled.then(() => { if (runWriters.get(key) === settled) runWriters.delete(key); });
+  return operation;
+}
+
 export class WorkflowRunStore {
   constructor(root) {
     requireValue(isAbsolute(root), 'ABSOLUTE_PATH_REQUIRED', 'Run store root must be absolute');
@@ -13,6 +25,35 @@ export class WorkflowRunStore {
   }
   async initialize() { await this.writer.initialize(); return this; }
   directory(id) { return join(this.root, `run-${workflowId(id)}.run`); }
+  withRunWriter(id, action) {
+    const root = this.directory(id);
+    return serializeRun(root, () => new WorkflowStore(root).withWriter(action));
+  }
+
+  async saveExecutorResult(id, attemptId, result) {
+    workflowId(attemptId); const bytes = canonicalJSON(result);
+    requireValue(Buffer.byteLength(bytes) <= 256 * 1024, 'EXECUTOR_RESULT_LIMIT', 'Executor result exceeds the durable artifact limit');
+    const sha256 = digest(bytes); const artifact = `executor-${attemptId}-${sha256}.json`;
+    const root = this.directory(id); const path = insideRoot(root, join(root, artifact));
+    await this.withRunWriter(id, async () => {
+      await noSymlinks(root);
+      try {
+        await noSymlinks(path); requireValue(digest(await readFile(path)) === sha256, 'EXECUTOR_RESULT_CORRUPT', 'Existing result artifact differs'); return;
+      } catch (error) { if (error.code !== 'ENOENT') throw error; }
+      const handle = await open(path, 'wx', 0o600);
+      try { await handle.writeFile(bytes); await handle.sync(); } finally { await handle.close(); }
+      await syncDirectory(root);
+    });
+    return { artifact, sha256 };
+  }
+
+  async readExecutorResult(id, attemptId, sha256) {
+    workflowId(attemptId); requireValue(/^[a-f0-9]{64}$/.test(sha256), 'EXECUTOR_RESULT_ID', 'Result needs an exact content pin');
+    const path = join(this.directory(id), `executor-${attemptId}-${sha256}.json`); await noSymlinks(path);
+    const stat = await lstat(path); requireValue(stat.isFile() && stat.nlink === 1 && stat.size <= 256 * 1024, 'EXECUTOR_RESULT_LIMIT', 'Result artifact must be a bounded regular file');
+    const bytes = await readFile(path); requireValue(digest(bytes) === sha256, 'EXECUTOR_RESULT_CORRUPT', 'Result artifact differs from its journal pin');
+    return JSON.parse(bytes.toString('utf8'));
+  }
 
   async create(id, pins, blobs, state) {
     const pinsHash = digest(canonicalJSON(pins));
@@ -76,7 +117,7 @@ export class WorkflowRunStore {
 
   async mutate(id, kind, mutate, { expected_sequence } = {}) {
     const root = this.directory(id);
-    return new WorkflowStore(root).withWriter(async () => {
+    return this.withRunWriter(id, async () => {
       const current = await this.read(id);
       if (expected_sequence !== undefined) requireValue(current.sequence === expected_sequence, 'RUN_SEQUENCE_CONFLICT', 'Run changed since it was read');
       const next = structuredClone(current.state);
@@ -93,6 +134,7 @@ export class WorkflowRunStore {
 
   async recover(id, repairState = () => {}, authorizeRecovery = () => {}) {
     const root = this.directory(id); const writer = new WorkflowStore(root);
+    return serializeRun(root, async () => {
     const owner = await writer.inspectWriter();
     if (owner) await writer.recoverWriter(owner.token); // Only a confirmed absent owner can be recovered.
     return writer.withWriter(async () => {
@@ -108,6 +150,7 @@ export class WorkflowRunStore {
       }
       await writeDurableJSON(join(root, 'run.json'), { sequence: event.sequence, event_hash: event.hash, state: next });
       return { state: next, pins: current.pins, sequence: event.sequence };
+    });
     });
   }
 

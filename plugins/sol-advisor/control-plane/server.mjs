@@ -7,6 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import readline from 'node:readline';
 import { WorkflowService } from './lib/workflow-service.mjs';
+import { closeStrictManagers } from './lib/execution/strict-session-manager.mjs';
 import { workflowToolDefinitions, WORKFLOW_TOOL_OPERATIONS } from './lib/workflow-tools.mjs';
 
 import {
@@ -520,16 +521,22 @@ async function main() {
     if (response) process.stdout.write(`${JSON.stringify(response)}\n`);
   }
   await stopConsole();
+  await closeStrictManagers();
 }
 
 const isMain = import.meta.url === pathToFileURL(process.argv[1] || '').href;
 if (isMain) {
-  process.on('SIGINT', () => {
-    void stopConsole().finally(() => process.exit(0));
-  });
-  process.on('SIGTERM', () => {
-    void stopConsole().finally(() => process.exit(0));
-  });
+  let shuttingDown = false;
+  const shutdown = () => {
+    if (shuttingDown) return; shuttingDown = true;
+    Promise.allSettled([stopConsole(), closeStrictManagers()]).then(results => {
+      const failures = results.filter(result => result.status === 'rejected');
+      if (failures.length) process.stderr.write('sol-control-plane shutdown failed; retained executor ownership requires reconciliation\n');
+      process.exit(failures.length ? 1 : 0);
+    });
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
   main().catch((error) => {
     process.stderr.write(`sol-control-plane fatal error: ${error.stack || error.message}\n`);
     process.exit(1);

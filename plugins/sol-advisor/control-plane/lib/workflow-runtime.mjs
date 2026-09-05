@@ -72,10 +72,40 @@ export class WorkflowRuntime {
   }
 
   async get(runId) { return publicRun(await this.runs.read(runId)); }
-  async execution(runId, { node_id, attempt_id, lease_token, control_token }, { allowInactive = false } = {}) {
+  async recordExecutorEvent(runId, { node_id, attempt_id, lease_token, control_token, event }) {
+    const fields = {
+      codex_event: ['method', 'thread_id', 'turn_id', 'item_type', 'status'],
+      tool_operation: ['call_id', 'tool', 'path', 'phase', 'sha256', 'before_sha256', 'after_sha256', 'entries'],
+      profile_owned: ['home', 'executable_sha256', 'pid'],
+      session_state: ['status', 'code'],
+      result_proposed: ['artifact', 'sha256', 'final_acceptance_required'],
+      skill_read: ['call_id', 'path'],
+    };
+    requireValue(event && Object.hasOwn(fields, event.kind) && event.metadata && Object.keys(event.metadata).every(key => fields[event.kind].includes(key)) &&
+      Object.values(event.metadata).every(value => value === null || typeof value === 'boolean' || typeof value === 'string' && value.length <= 4096 || Number.isSafeInteger(value)) &&
+      Buffer.byteLength(canonicalJSON(event)) <= 32000,
+      'EXECUTOR_EVENT_SCHEMA', 'Executor events accept bounded metadata only, never raw auth/model payloads');
+    const result = await this.runs.mutate(runId, 'executor_event', state => {
+      authorize(state, control_token);
+      // Late shutdown metadata may document an already fenced attempt; it never
+      // changes its lease or makes further execution permissible.
+      const { attempt } = attemptFor(state, node_id, attempt_id, lease_token, { active: false });
+      attempt.executor_event_count = (attempt.executor_event_count ?? 0) + 1;
+      attempt.executor_events = [...(attempt.executor_events ?? []).slice(-63), { sequence: attempt.executor_event_count, ...structuredClone(event) }];
+      if (event.kind === 'result_proposed') {
+        requireValue(/^[a-f0-9]{64}$/.test(event.metadata.sha256) && event.metadata.artifact === `executor-${attempt_id}-${event.metadata.sha256}.json`, 'EXECUTOR_RESULT_ID', 'Result metadata must identify this exact attempt artifact');
+        requireValue(!attempt.result_proposal || canonicalJSON(attempt.result_proposal) === canonicalJSON(event.metadata), 'EXECUTOR_RESULT_CONFLICT', 'Attempt already has a different result proposal');
+        attempt.result_proposal = structuredClone(event.metadata);
+      }
+      if (event.kind === 'session_state' && event.metadata.status === 'closed' && attempt.dispatch) attempt.dispatch.cancellation_pending = false;
+      touch(state);
+    });
+    return { sequence: result.sequence };
+  }
+  async execution(runId, { node_id, attempt_id, lease_token, control_token }, { allowInactive = false, allowPaused = false } = {}) {
     const { state, pins } = await this.runs.read(runId); authorize(state, control_token);
     const { attempt } = attemptFor(state, node_id, attempt_id, lease_token, { active: !allowInactive });
-    requireValue(allowInactive || state.status === 'running', 'RUN_NOT_RUNNING', 'Run must be running before dispatch');
+    requireValue(allowInactive || state.status === 'running' || allowPaused && state.status === 'paused', 'RUN_NOT_RUNNING', 'Run must be running before dispatch');
     const node = pins.root.workflow.nodes.find(item => item.id === node_id);
     return executionEnvelope(node, state, pins, attempt, lease_token, join(this.runs.directory(runId), 'objects'));
   }

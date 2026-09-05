@@ -55,6 +55,7 @@ export function executionEnvelope(node, state, pins, attempt, token, resourcesRo
     inputs: resolveBindings(node.input_bindings ?? {}, bindingContext(state)), workflow_inputs: structuredClone(state.inputs),
     upstream_results: Object.fromEntries([...ancestors].sort().filter(id => ['succeeded', 'failed'].includes(state.nodes[id].status)).map(id => [id, { status: state.nodes[id].status, output: structuredClone(state.nodes[id].output), error: structuredClone(state.nodes[id].error) }])),
     constraints: structuredClone(state.constraints), prompt_template: node.prompt_template ?? null,
+    resources: structuredClone(node.resources ?? []), outputs_schema: structuredClone(node.outputs_schema ?? {}),
     skill_policy: structuredClone(pins.root.workflow.skill_policy), skill_ref: structuredClone(node.skill_ref ?? null),
     effective_allowed_paths: permissions.allowed_paths, resources_root: resourcesRoot,
   };

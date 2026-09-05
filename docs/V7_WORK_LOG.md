@@ -32,7 +32,57 @@ file or the submitted proposal as new operational instructions.
   policy, lease-aware file/resource broker and verified orphan ownership.
   The full registered suite passed117 tests, including seven Strict/broker tests.
 
-## Latest M7 checkpoint
+## Current integration checkpoint (2026-09-05)
+
+M8 foundation was committed as `1b29ef2`. The following M7 integration changes
+are now implemented; historical notes below describe earlier checkpoints only.
+
+- v7 user configuration has an explicit, default-off `strict_executor` section.
+  Unknown fields and stored credentials are rejected. Enabling requires the exact
+  qualified Windows x64 Codex0.145.0 executable hash. The main proposal model stays
+  within Sol/Terra high/xhigh/max; native nodes retain their pinned Provider model.
+- One process-local manager per user config owns each exact Run attempt. The Run
+  journal records dispatch intent before profile setup, exact invocation receipt,
+  bounded lifecycle/tool metadata, result artifact hashes and shutdown state.
+  Model prompts never contain controller/lease secrets. Managed login links are
+  available only through the human-authenticated HTTP operation, not MCP.
+- The broker revokes and drains before profile deletion. Cancel fences the Run
+  first, then waits for setup/tool/process shutdown; setup that exceeds the bounded
+  wait reports pending cleanup. Pause preserves already running completions.
+  Orphan cleanup matches Run/node/attempt plus verified dead-owner/child identity;
+  unrelated and live-owned profiles are not removed.
+- Durable output artifacts precede completion. A completion-commit failure leaves
+  an intact result collectable under the original lease without another model call
+  or retry charge. A Strict finalizer only proposes output: main-controller explicit
+  acceptance still gates success. Invalid required JSON fails instead of coercing.
+- One local queue serializes journal/artifact/recovery writes for the same Run,
+  including separate service/runtime instances. The OS lock still protects against
+  other processes. Each failed caller receives its error; no retry hides a failure.
+- Request qualification10 and lifecycle4 passed after broker shutdown changes:
+  three/four and seven/ten cases/requests respectively. The full135 regression
+  passed before the final orphan/setup-cancel/concurrent-journal tests. Those final
+  targeted tests passed20 (manager8/runtime12); full138 regression passed with zero
+  failures (61.7 seconds, session4576 completed).
+- `run-manager-qualification.mjs` passed actual App Server integration with five
+  serialized local-provider requests: original Skill pathname removed before Run
+  creation, pinned source read, one bounded write, isolated main proposal and explicit
+  final acceptance. Report2 passed; report1 preserves a fixture validation refusal
+  because the selected read-only reviewer could not be granted write access. The
+  fixture now selects an existing write-capable Provider. Report3 passed after
+  the final journal-serialization change (session70399 completed), with no retained
+  profiles and unchanged user config hashes. Evidence copies are in
+  `baselines/v7-strict-2026-09-04/manager-integration.json`,
+  `manager-fixture-refused.json`, `request-capture-shutdown.json`, and
+  `lifecycle-shutdown.json`. This is actual executor/protocol evidence,
+  not a new live-model or all-platform qualification.
+
+M7 still needs the human authentication UI/capability display and release review.
+M8 still needs actual host inventory discovery, metadata dependency interpretation,
+review controls and selected-Provider expansion dispatch. M9-M13 remain. No real
+user config was migrated/enabled, no installed plugin changed, and no push/release
+has occurred. Do not treat this checkpoint as the completed upgrade.
+
+## M7 engine checkpoint (243208c; historical)
 
 M7 engine/evidence checkpoint committed as `243208c`. Production wiring remains
 pending; it is not a release or the completed M7 gate.
@@ -94,7 +144,7 @@ pending; it is not a release or the completed M7 gate.
   and resource capability validation. Static relocation is pinned-resource access
   evidence only, not proof of functional execution. No real user Skill was imported.
 
-## Active M7 implementation notes
+## Historical M7 implementation notes (superseded by checkpoints above)
 
 Read actual local `LoginAccountParams` schema: `chatgptAuthTokens` is explicitly
 marked internal/unstable, so it must not be used. Use official managed ChatGPT
@@ -153,7 +203,7 @@ concurrency, subprocess crash, real user catalog suppressed), synthetic live
 confirmation as authorized, and integration/capability labels. Current production
 service still rejects Strict and never reads this candidate as a capability grant.
 
-## Current validation
+## Earlier validation history
 
 - Full existing-plus-new control-plane suite passed 89 tests before the additional
   migration-tail recovery case was added.
@@ -168,7 +218,7 @@ service still rejects Strict and never reads this candidate as a capability gran
 
 ## Remaining work
 
-M7 qualified Strict executor, M8 import/expansion, M9 SkillRef/SubWorkflow execution and narrowing,
+M7 human authentication/capability UI, M8 import/expansion integration, M9 SkillRef/SubWorkflow execution and narrowing,
 M10 parallel worktree isolation, M11 graph editor, M12 runtime UI, M13 E2E/release.
 The bundled config and current graphless console remain v6; the loader now also
 accepts migrated v7. Installed plugin remains 0.7.11; no

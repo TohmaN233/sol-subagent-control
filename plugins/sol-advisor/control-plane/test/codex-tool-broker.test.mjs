@@ -64,3 +64,17 @@ test('revoked lease and failed audit prevent writes; a post-commit audit error r
   const revoked = await createCodexToolBroker(f.options); f.revoke();
   await assert.rejects(revoked.call('read_workspace', { path: 'src/main.txt' }, 'revoked'), /lease revoked/);
 });
+
+test('shutdown revokes a write waiting on its durable intent and waits for its explicit failure outcome', async t => {
+  const f = await fixture(t); let releaseIntent; let observedIntent;
+  const intentSeen = new Promise(resolve => { observedIntent = resolve; });
+  const intentGate = new Promise(resolve => { releaseIntent = resolve; });
+  const broker = await createCodexToolBroker({ ...f.options, onOperation: async event => {
+    if (event.phase === 'intent') { observedIntent(); await intentGate; }
+  } });
+  const pending = broker.call('write_workspace', { path: 'src/main.txt', text: 'must-not-write', expected_sha256: digest('before') }, 'shutdown-write');
+  const rejected = assert.rejects(pending, { code: 'CODEX_BROKER_REVOKED' });
+  await intentSeen; broker.revoke(); const drained = broker.quiesce(); releaseIntent(); await rejected;
+  const outcome = await drained; assert.equal(outcome.quiescent, true); assert.equal(outcome.error.code, 'CODEX_BROKER_REVOKED');
+  assert.equal(await readFile(join(f.root, 'src', 'main.txt'), 'utf8'), 'before');
+});

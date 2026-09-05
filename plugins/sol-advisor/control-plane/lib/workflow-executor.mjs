@@ -18,8 +18,9 @@ function compilePrompt(envelope, max) {
 const receiptIdentity = task => ({ task_id: task.task_id, connector: task.connector, ...(task.remote_identity ? { remote_identity: task.remote_identity } : {}) });
 
 export class WorkflowExecutor {
-  constructor({ runtime, getConfig, registry, env = process.env, fetchImpl = globalThis.fetch }) {
+  constructor({ runtime, getConfig, registry, strictManager, env = process.env, fetchImpl = globalThis.fetch }) {
     this.runtime = runtime; this.getConfig = getConfig; this.registry = registry; this.env = env; this.fetchImpl = fetchImpl;
+    this.strictManager = strictManager;
   }
 
   async externalCall(runId, args, envelope, call) {
@@ -45,6 +46,11 @@ export class WorkflowExecutor {
       requireValue(current?.enabled, 'PROVIDER_DISABLED', 'Pinned Provider was removed or disabled');
       requireValue(current.capabilities.read && (envelope.access === 'read_only' || current.capabilities.write), 'PROVIDER_CAPABILITY', 'Pinned Provider capability was revoked');
       requireValue(!current.requires_user_approval || envelope.provider.requires_user_approval, 'PROVIDER_POLICY_CHANGED', 'Provider now requires an approval absent from this pinned revision; start a new Run');
+    }
+    if (envelope.skill_policy.mode === 'strict') {
+      requireValue(this.strictManager, 'STRICT_EXECUTOR_REQUIRED', 'This host has no qualified Strict session manager');
+      const adapter = await this.strictManager.prepare(this.runtime, runId, args, envelope);
+      return { envelope, adapter, prompt: compilePrompt(envelope, config.global.max_prompt_chars) };
     }
     const adapter = envelope.executor.kind === 'main' ? { execution: 'main_agent', read_only: envelope.access === 'read_only' }
       : envelope.executor.kind === 'provider' ? buildProviderAdapter(envelope.provider, { access: envelope.access }, { env: this.env, allowDirectApi: config.global.allow_direct_api })
@@ -74,6 +80,7 @@ export class WorkflowExecutor {
       return { dispatched: false, idempotent: true, receipt };
     }
     const { envelope, adapter, prompt } = prepared;
+    if (adapter.execution === 'strict_codex') return this.strictManager.launch(this.runtime, runId, args, prepared);
     if (adapter.execution === 'builtin_connector') {
       const task = await this.externalCall(runId, args, envelope, () => this.registry.start({ provider: envelope.provider,
         stage: { id: envelope.node_id, read_only: envelope.access === 'read_only', requires_user_approval: envelope.provider.requires_user_approval },

@@ -19,7 +19,7 @@ export function codexEventMetadata(event) {
 // executor certificate before allowing production Strict dispatch through it.
 export async function createStrictSession(options) {
   const { cwd, model, effort, allowedSkills = [], skillPolicy, env = process.env, onEvent = () => {}, onToolRead = () => {} } = options;
-  const profile = await buildCodexProfile(options); let client; let policy; let activeThread = null; let activeTurn = null; let closed = false; let used = false;
+  const profile = await buildCodexProfile(options); let client; let policy; let activeThread = null; let activeTurn = null; let closed = false; let used = false; let closing;
   try {
     policy = await createSkillPolicy({ home: profile.home, cwd, skillPolicy, allowed: allowedSkills });
     // Trusted in-process lifecycle hook for the host ownership journal. This is
@@ -32,7 +32,7 @@ export async function createStrictSession(options) {
       overrides: profileOverrides(profile), env: isolatedEnvironment(env, profile.home),
       onEvent: event => onEvent(codexEventMetadata(event)),
       async onToolCall(params) {
-        requireValue(params.threadId === activeThread && !params.namespace, 'CODEX_TOOL_DENIED', 'Tool call is outside this node execution envelope');
+        requireValue(!closed && params.threadId === activeThread && !params.namespace, 'CODEX_TOOL_DENIED', 'Tool call is outside this node execution envelope');
         if (params.tool === 'read_allowed_skill') {
           if (options.authorize) await options.authorize();
           const result = policy.read(params.arguments); await onToolRead({ call_id: params.callId, path: params.arguments.path }); return result;
@@ -125,8 +125,20 @@ export async function createStrictSession(options) {
     },
     async interrupt() { if (activeThread && activeTurn) await client.call('turn/interrupt', { threadId: activeThread, turnId: activeTurn }); },
     async close() {
-      if (closed) return;
-      await client.close(); await cleanupCodexProfile(profile); closed = true;
+      if (closing) return closing;
+      closed = true; options.toolBroker?.revoke();
+      closing = (async () => {
+        await client.close();
+        let timer; let outcome;
+        try {
+          outcome = options.toolBroker ? await Promise.race([options.toolBroker.quiesce(), new Promise((_, reject) => {
+            timer = setTimeout(() => reject(Object.assign(new Error('Workspace tool did not quiesce; retain profile'), { code: 'CODEX_BROKER_SHUTDOWN_TIMEOUT' })), 5000);
+          })]) : null;
+        } finally { clearTimeout(timer); }
+        await cleanupCodexProfile(profile);
+        if (outcome?.error) throw Object.assign(new Error('Workspace tool failed during shutdown'), { code: 'CODEX_BROKER_SHUTDOWN_FAILURE', cause: outcome.error, profile_cleaned: true });
+      })();
+      return closing;
     },
   };
   return session;

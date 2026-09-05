@@ -2,8 +2,9 @@
 
 The M7 engine lives under `control-plane/lib/execution`. Its Windows execution
 surface has actual App Server request, process lifecycle and synthetic live model
-evidence. Production service integration and a capability grant remain pending.
-It must not be enabled through a caller's `strict: true` flag.
+evidence. The v7 service now integrates an opt-in session manager and executable
+qualification check. Human authentication/capability UI and release review remain
+pending. It cannot be enabled through a caller's `strict: true` flag.
 
 ## Execution boundary
 
@@ -45,6 +46,26 @@ Credential storage is pinned to files inside the owned profile, which is removed
 after the process closes. Transient official login URLs are human-only and never
 part of a Run journal or worker response.
 
+The session manager is shared by service instances for one config. A persisted
+dispatch intent elects one sender, followed by an exact invocation receipt. Each
+profile carries Run/node/attempt ownership. The host keeps controller capabilities
+in memory and checks active leases and current Provider/global permissions at every
+broker operation. Pause permits existing work to complete; cancel fences leases
+before waiting for the broker, profile preparation and subprocess to stop. A bounded
+shutdown timeout reports pending cleanup and retains ownership evidence. Orphan
+cleanup only selects the exact interrupted attempt under verified process identity.
+
+Only bounded lifecycle/operation metadata enters the Run journal. The result is a
+hash-pinned durable artifact before completion. Failed result submission is visibly
+collectable without another model invocation. A finalizer proposal cannot accept
+itself: `collect_strict` needs explicit main-controller acceptance. Required JSON
+output is parsed and schema-checked, with no prose-to-JSON fallback.
+
+Configuration is default-off, Windows x64 and binary-hash qualified. Native agent
+nodes and main proposals are supported; other Strict executor types and ambient
+allowances remain blocked pending immutable SkillRef/SubWorkflow integration. No
+shell/script tool is advertised. API credentials are environment names only.
+
 The managed flow in Codex0.145.0 emits `account/login/completed` before reloading
 the account manager. `waitForManagedLogin` therefore waits for the subsequent
 `account/updated` with ChatGPT auth, then ordinary account checks still apply.
@@ -75,11 +96,14 @@ tool call is rejected by App Server with an explicit tool error; it may not appe
 as a host call or terminate the whole turn. Do not claim complete attempt auditing
 from the host event stream.
 
-Still required: durable service/session ownership and cancellation integration,
-broker quiescence during shutdown, user-owned executor configuration and human
-auth UI, capability labels bound to reviewed evidence, and final main acceptance
-after any Strict finalizer proposal. No existing production adapter may silently
-take over Strict work.
+`run-manager-qualification.mjs` additionally exercises the actual integrated Run
+service with a local synthetic provider: import source path removed, pinned reads,
+bounded write, five serialized requests and explicit main acceptance. This does
+not represent a second live-model qualification or functional proof for arbitrary
+Skills. Still required: human auth UI, capability display and release review. The
+existing current-thread adapter never takes over Strict work. Restart lease
+reattachment is a separate M12 gate; finding a durable artifact alone does not
+revive a fenced attempt.
 
 Official implementation reference:
 [Codex0.145.0 account event ordering](https://github.com/openai/codex/blob/25af12f7e61572b0bc18ddb1008be543b91519b0/codex-rs/app-server/src/request_processors/account_processor.rs)

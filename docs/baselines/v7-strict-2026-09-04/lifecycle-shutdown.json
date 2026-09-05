@@ -1,0 +1,196 @@
+{
+  "kind": "strict-candidate-lifecycle-actual-app-server",
+  "production_qualified": false,
+  "cases": [
+    {
+      "name": "catalog-change-before-turn",
+      "passed": true,
+      "requests": 0
+    },
+    {
+      "name": "catalog-change-during-turn",
+      "passed": true
+    },
+    {
+      "name": "concurrent-distinct-policies",
+      "passed": true
+    },
+    {
+      "name": "actual-resource-read-workspace-read-and-write",
+      "passed": true,
+      "operations": [
+        {
+          "call_id": "call_broker_0",
+          "tool": "read_workflow_resource",
+          "path": "guide.txt",
+          "phase": "read",
+          "sha256": "8ca6558e5c4b3f47b4aee6122c9ab46e5dce92bc1996457589b05c34d76dc716"
+        },
+        {
+          "call_id": "call_broker_1",
+          "tool": "read_workspace",
+          "path": "artifact/result.txt",
+          "phase": "read",
+          "sha256": "c341c7fe1027f9487e8019198223ad7af0b9cfe1564d41c7e7c4d139cd0226f3"
+        },
+        {
+          "call_id": "call_broker_2",
+          "tool": "write_workspace",
+          "path": "artifact/result.txt",
+          "before_sha256": "c341c7fe1027f9487e8019198223ad7af0b9cfe1564d41c7e7c4d139cd0226f3",
+          "after_sha256": "94c3f1415d2061d05e4cce4d33e43e26a5ad7ebcf6e89acace6e8b84240a629c",
+          "phase": "intent"
+        },
+        {
+          "call_id": "call_broker_2",
+          "tool": "write_workspace",
+          "path": "artifact/result.txt",
+          "before_sha256": "c341c7fe1027f9487e8019198223ad7af0b9cfe1564d41c7e7c4d139cd0226f3",
+          "after_sha256": "94c3f1415d2061d05e4cce4d33e43e26a5ad7ebcf6e89acace6e8b84240a629c",
+          "phase": "committed"
+        }
+      ]
+    },
+    {
+      "name": "unadvertised-tool-rejected-by-app-server",
+      "passed": true
+    },
+    {
+      "name": "app-server-process-crash",
+      "passed": true
+    },
+    {
+      "name": "owner-process-crash-and-verified-orphan-cleanup",
+      "passed": true
+    }
+  ],
+  "requests": [
+    {
+      "case": "catalog-middle",
+      "index": 0,
+      "sha256": "c0ac565cc44e1ef1346e448eaf367933df21299c79a3e01cfd4eb5b9407a1abf",
+      "tools": [
+        "update_plan",
+        "request_user_input"
+      ]
+    },
+    {
+      "case": "concurrent-denied",
+      "index": 0,
+      "sha256": "2313c9bd2604cbfd3464545eb334766f865ec9fbcbf96527a10c8ac5a933c9ad",
+      "tools": [
+        "update_plan",
+        "request_user_input"
+      ]
+    },
+    {
+      "case": "concurrent-allowed",
+      "index": 0,
+      "sha256": "3da527484004b151446c2623a804bf64a85d53cb4282f6b2b7fa24def2d0cc1b",
+      "tools": [
+        "update_plan",
+        "request_user_input",
+        "read_allowed_skill"
+      ]
+    },
+    {
+      "case": "broker",
+      "index": 0,
+      "sha256": "d740bb79227c07c655d4bb0bc09d30691159a95b876864a6627a33d9e18b9a11",
+      "tools": [
+        "update_plan",
+        "request_user_input",
+        "list_workspace",
+        "read_workspace",
+        "write_workspace",
+        "read_workflow_resource"
+      ]
+    },
+    {
+      "case": "broker",
+      "index": 1,
+      "sha256": "fd8e320b15c819edcc1c648fb18f971e60dfd386387c1de53218d59361183824",
+      "tools": [
+        "update_plan",
+        "request_user_input",
+        "list_workspace",
+        "read_workspace",
+        "write_workspace",
+        "read_workflow_resource"
+      ]
+    },
+    {
+      "case": "broker",
+      "index": 2,
+      "sha256": "5736f8600e05e1ea31c0b416d69ddaef3d12d3e1a80234aca0f55b4357463ab3",
+      "tools": [
+        "update_plan",
+        "request_user_input",
+        "list_workspace",
+        "read_workspace",
+        "write_workspace",
+        "read_workflow_resource"
+      ]
+    },
+    {
+      "case": "broker",
+      "index": 3,
+      "sha256": "e81897aedc0a0fb179499296bdd411277d039c799622fc3fdbe41b673c639215",
+      "tools": [
+        "update_plan",
+        "request_user_input",
+        "list_workspace",
+        "read_workspace",
+        "write_workspace",
+        "read_workflow_resource"
+      ]
+    },
+    {
+      "case": "tool-denied",
+      "index": 0,
+      "sha256": "6543875addad3d9635fec3a1b09d9cbf1e5656f3d58a62fdab3bfc054f097254",
+      "tools": [
+        "update_plan",
+        "request_user_input"
+      ]
+    },
+    {
+      "case": "tool-denied",
+      "index": 1,
+      "sha256": "da302da9e82c82e5c06cd08a9c018df6d7d739cfdd11336e18f52c38547324f1",
+      "tools": [
+        "update_plan",
+        "request_user_input"
+      ]
+    },
+    {
+      "case": "process-crash",
+      "index": 0,
+      "sha256": "788ab20e066c4b58646dc12e6f61ef642d42b5d4ac11f93ad48670a9a22a5e6a",
+      "tools": [
+        "update_plan",
+        "request_user_input"
+      ]
+    }
+  ],
+  "errors": [],
+  "executable_sha256": "83751f15cb6a0a7b97df67752c001e3fe1c20e18ffbfec3ff63567296205eb6c",
+  "source_hashes": {
+    "source-manifest.mjs": "49db4d7eeb5979766622cd3168c94c00cd14aaa3e0857c5942652919826cf93e",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-app-server-client.mjs": "828d0284890b5e3b5f19f14b89a63c60ec28fcb98714aab62ab79c1274df4199",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-profile-builder.mjs": "f5d9d4de4adc77e493965e38a384cf6b619cb86b6105853cf41b1b82bfcaf2cc",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-process-ownership.mjs": "1c55b2fbbb6d95ac6dd259c2ffcfa922acf92b5048428f5c647c2dc858c28eab",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-session.mjs": "f754d4dee0f2ac6d6316d5c6d93f624500b73606f585a7be7780268b208c8494",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-skill-policy.mjs": "ca8e4e31804c536deb629ddbaca07714a04b20da05dca58b700f8241e898cc66",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-tool-broker.mjs": "914713a4c692625aabb44c0521b00ad9ce9113128744625da948760ac7e0d34a",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-revisions.mjs": "a6f06ef14970866d71fcd3bafee8e3004ffa4dca702a4e6e56d780d5b01bc38f",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-paths.mjs": "78d5bd68dd9e3e48034d20a58996ca76c5a2e4cdee4a7392a0baf9dfccc200e7",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-events.mjs": "391798659baff49255516fd59e84cb88b704c93f89e7eb6b9f4f8a2c05d1df12",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-bindings.mjs": "5ded25ec188dd6c70cdaf443e65519889291501547cce8ed538a1fa13ca60272",
+    "../skill-isolation/create-temp-profile.mjs": "f49e0f1a53569d492d2a0168ac2d58d1a09d7eaea29e7de4935731640d7d7de5",
+    "../skill-isolation/fixtures/allowed-skill/SKILL.md": "8bf4a43404c1c526afee99699b2444de4880d1f38c28215efbfdd14e691793ad",
+    "../skill-isolation/fixtures/conflicting-skill-a/SKILL.md": "5a8b030cd2e7cd4bac0782948cd3b5000bea6dad6f4dc6640510b5a6530bc01b",
+    "../skill-isolation/fixtures/conflicting-skill-b/SKILL.md": "68b72630273eace61d9df6d010ea8303b6cf4810df28604b5d9f50079038ad3f"
+  },
+  "retained_profiles": []
+}
