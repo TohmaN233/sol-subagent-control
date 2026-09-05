@@ -226,7 +226,7 @@ export class CursorCdpConnector {
     }
   }
 
-  async start({ provider, stage, prompt, workspace, taskTypeId, stageId, allowedPaths = [] }) {
+  async start({ provider, stage, prompt, workspace, taskTypeId, stageId, allowedPaths = [], taskId }) {
     const fullWorkspace = await validateWorkspace(workspace);
     const readOnly = stage.read_only === true;
     const boundedPaths = readOnly
@@ -246,6 +246,7 @@ export class CursorCdpConnector {
     const baseline = await captureWorkspaceSnapshot(fullWorkspace);
     const boundedPrompt = accessEnvelope(prompt, fullWorkspace, readOnly, boundedPaths);
     const task = await this.store.create({
+      ...(taskId ? { task_id: taskId } : {}),
       task_type_id: taskTypeId,
       stage_id: stageId,
       provider_id: provider.id,

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { writeDurableJSON } from '../lib/workflow-events.mjs';
 
 export const TERMINAL_STATES = new Set([
   'completed', 'failed', 'cancelled', 'scope_violation', 'abandoned',
@@ -21,9 +22,11 @@ export class ConnectorTaskStore {
     this.initialized = false;
     this.initializePromise = null;
     this.flushTail = Promise.resolve();
+    this.persistenceError = null;
   }
 
   async initialize() {
+    if (this.persistenceError) throw Object.assign(new Error(`Connector persistence failed; restart and reconcile: ${this.persistenceError.message}`), { code: 'CONNECTOR_STORE_FAILED', cause: this.persistenceError });
     if (this.initialized) return;
     if (this.initializePromise) return this.initializePromise;
     this.initializePromise = (async () => {
@@ -74,6 +77,7 @@ export class ConnectorTaskStore {
       error: null,
       ...clone(fields),
     };
+    if (this.tasks.has(task.task_id)) throw Object.assign(new Error(`connector task already exists: ${task.task_id}`), { code: 'TASK_ID_CONFLICT' });
     this.tasks.set(task.task_id, task);
     await this.flush();
     return clone(task);
@@ -106,14 +110,13 @@ export class ConnectorTaskStore {
   async flush() {
     const previous = this.flushTail;
     const run = previous.then(async () => {
+      if (this.persistenceError) throw this.persistenceError;
       await mkdir(dirname(this.statePath), { recursive: true, mode: 0o700 });
-      const temporary = `${this.statePath}.${randomUUID()}.tmp`;
-      const body = `${JSON.stringify({ version: 1, tasks: [...this.tasks.values()] }, null, 2)}\n`;
-      await writeFile(temporary, body, { mode: 0o600, flag: 'wx' });
-      await chmod(temporary, 0o600).catch(() => {});
-      await rename(temporary, this.statePath);
+      await writeDurableJSON(this.statePath, { version: 1, tasks: [...this.tasks.values()] });
     });
-    this.flushTail = run.catch(() => {});
+    // Keep the queue settled for cleanup, but poison this instance explicitly:
+    // no later read/dispatch may treat uncommitted in-memory tasks as durable.
+    this.flushTail = run.then(() => {}, error => { this.persistenceError = error; });
     return run;
   }
 }

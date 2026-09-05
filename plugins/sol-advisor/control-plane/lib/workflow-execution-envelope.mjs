@@ -42,12 +42,18 @@ export function leaseToken(controlToken, runId, nodeId, attemptId) {
 
 export function executionEnvelope(node, state, pins, attempt, token, resourcesRoot) {
   const permissions = nodePermissions(node, state);
+  const ancestors = new Set(); const queue = [node.id];
+  while (queue.length) {
+    const target = queue.pop();
+    for (const edge of pins.root.workflow.edges.filter(edge => edge.target === target)) if (!ancestors.has(edge.source)) { ancestors.add(edge.source); queue.push(edge.source); }
+  }
   return {
     run_id: state.run_id, workflow_id: state.workflow_id, workflow_revision: state.workflow_revision,
     node_id: node.id, attempt_id: attempt.id, lease_token: token, executor: structuredClone(node.executor),
     provider: node.executor.kind === 'provider' ? structuredClone(pins.providers.find(item => item.id === node.executor.provider_id)) : null,
     role: node.role ?? null, access: permissions.access, workspace: state.permissions.workspace,
     inputs: resolveBindings(node.input_bindings ?? {}, bindingContext(state)), workflow_inputs: structuredClone(state.inputs),
+    upstream_results: Object.fromEntries([...ancestors].sort().filter(id => ['succeeded', 'failed'].includes(state.nodes[id].status)).map(id => [id, { status: state.nodes[id].status, output: structuredClone(state.nodes[id].output), error: structuredClone(state.nodes[id].error) }])),
     constraints: structuredClone(state.constraints), prompt_template: node.prompt_template ?? null,
     skill_policy: structuredClone(pins.root.workflow.skill_policy), skill_ref: structuredClone(node.skill_ref ?? null),
     effective_allowed_paths: permissions.allowed_paths, resources_root: resourcesRoot,

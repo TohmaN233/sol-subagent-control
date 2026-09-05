@@ -99,7 +99,7 @@ export async function resolveSelection(args, {
       event: 'resolve',
       task_type_id: taskType.id,
       outcome: 'ok',
-    }).catch(() => {});
+    });
   }
   return { result, config, taskType, resolvedStages };
 }
@@ -141,7 +141,7 @@ export async function invokeSelection(args, {
       stage_id: stage.id,
       provider_id: provider.id,
       outcome: 'ok',
-    }).catch(() => {});
+    }, { effectCommitted: true });
     return {
       task_type: result.task_type,
       stage: selected.stage,
@@ -150,6 +150,7 @@ export async function invokeSelection(args, {
       response: invocation,
     };
   } catch (error) {
+    if (error.code === 'AUDIT_WRITE_FAILED') throw error;
     await appendAuditEvent(configPath, {
       event: 'invoke',
       task_type_id: taskType.id,
@@ -157,7 +158,7 @@ export async function invokeSelection(args, {
       provider_id: provider.id,
       outcome: 'error',
       detail: error.message,
-    }).catch(() => {});
+    });
     throw error;
   }
 }
@@ -217,7 +218,7 @@ export async function startConnectorSelection(args, {
   await appendAuditEvent(configPath, {
     event: 'connector-start', task_type_id: taskType.id, stage_id: stage.id, provider_id: provider.id,
     task_id: task.task_id, outcome: 'ok',
-  }).catch(() => {});
+  }, { effectCommitted: true });
   return task;
 }
 
@@ -239,6 +240,6 @@ export async function controlConnectorTask(args, {
   await appendAuditEvent(configPath, {
     event: 'connector-control', task_id: taskId,
     action: String(args?.action || ''), outcome: 'ok',
-  }).catch(() => {});
+  }, { effectCommitted: true });
   return result;
 }

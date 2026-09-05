@@ -1,0 +1,44 @@
+const string = { type: 'string' }; const object = { type: 'object' };
+const properties = {
+  workflow_id: string, revision_hash: string, run_id: string, node_id: string, attempt_id: string,
+  control_token: { type: 'string', description: 'Main-controller capability returned by workflow_start. Never include it in worker prompts.' },
+  lease_token: { type: 'string', description: 'Exact attempt lease returned by workflow_claim_node.' },
+  request_id: string, owner: string, expected_sequence: { type: 'integer', minimum: 1 },
+  expected_revision: string, workflow: object, resources: object, inputs: {}, workspace: string,
+  access: { type: 'string', enum: ['read_only', 'bounded_write'] }, allowed_paths: { type: 'array', items: string },
+  constraints: {}, main_actor: string, require_approval: { type: 'boolean' }, completion: object, error: object,
+  reconciliation: object, after_restart: { type: 'boolean' }, reason: string, approval_id: string, decision: { type: 'boolean' },
+  after_sequence: { type: 'integer', minimum: 0 }, receipt: object,
+};
+const lease = ['run_id', 'node_id', 'attempt_id', 'lease_token'];
+const main = ['run_id', 'control_token'];
+const specs = [
+  ['list', 'List Workflow metadata and structural/environment readiness, without prompt bodies.', [], []],
+  ['read', 'Read one explicit immutable Workflow revision for inspection or editing.', ['workflow_id'], ['revision_hash']],
+  ['validate', 'Validate a graph, pinned bindings and current launch blockers.', ['workflow'], []],
+  ['create', 'Create a user-requested Workflow Pack. Imported Skill drafts remain Strict.', ['workflow'], ['resources']],
+  ['save', 'Save one complete Workflow definition using the previously read revision hash.', ['workflow_id', 'workflow', 'expected_revision'], ['resources']],
+  ['start', 'Start one Ready Workflow with explicit workspace permissions. Preserve control_token only in the main controller. No implicit Provider fallback or Strict downgrade.', ['workflow_id', 'workspace', 'access', 'main_actor'], ['revision_hash', 'run_id', 'inputs', 'allowed_paths', 'constraints', 'require_approval']],
+  ['runs', 'List persisted Run metadata.', [], []],
+  ['get', 'Read the current state reconstructed from the authoritative Run journal.', ['run_id'], []],
+  ['next', 'Read ready node IDs and pending approvals. This does not claim or dispatch work.', ['run_id'], []],
+  ['claim_node', 'Atomically claim one ready node and return its narrow execution lease. Main nodes require the exact main actor.', [...main, 'node_id', 'owner', 'request_id'], ['expected_sequence']],
+  ['complete_node', 'Commit successful node output plus artifacts, evidence, changed_paths and outside_paths. Final acceptance requires main authority.', [...lease, 'completion'], []],
+  ['fail_node', 'Commit an explicit node failure diagnostic under its active lease.', [...lease, 'error'], []],
+  ['retry_node', 'Explicitly retry a failed/interrupted node within its pinned budget. Uncertain external dispatch requires reconciliation evidence.', [...main, 'node_id'], ['reconciliation']],
+  ['pause', 'Pause new node release and dispatch; active completions remain recorded.', main, ['reason']],
+  ['resume', 'Resume a paused Run, or fence and reconstruct it after_restart. Never silently resubmits an interrupted task.', main, ['after_restart']],
+  ['cancel', 'Fence local Run leases and mark external cancellation pending. Remote termination must be confirmed separately.', main, []],
+  ['approve', 'Record an authorized current-node approval bound to the pinned scope. Set decision only from actual user authorization.', [...main, 'approval_id', 'decision'], []],
+  ['events', 'Read sequenced event metadata without prompts or controller secrets.', main, ['after_sequence']],
+  ['dispatch', 'Persist intent, then invoke the pinned built-in/API Provider or return a main/native/MCP handoff. Repeated uncertain dispatch never resubmits.', [...lease, 'control_token'], []],
+  ['dispatch_receipt', 'Persist exact task identity from the external tool result for one existing dispatch intent.', [...lease, 'control_token', 'request_id', 'receipt'], []],
+  ['reconcile_connector', 'Inspect only the preallocated exact connector task after an uncertain dispatch. Does not retry it.', [...lease, 'control_token'], []],
+  ['collect_connector', 'Collect an active exact connector task. Commit completion only with observed terminal and workspace-scope evidence.', [...lease, 'control_token'], []],
+];
+export const WORKFLOW_TOOL_OPERATIONS = new Set(specs.map(([name]) => name));
+export function workflowToolDefinitions() {
+  return specs.map(([name, description, required, optional]) => ({ name: 'workflow_' + name, description,
+    inputSchema: { type: 'object', properties: Object.fromEntries([...required, ...optional].map(key => [key, properties[key]])), required, additionalProperties: false },
+  }));
+}

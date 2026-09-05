@@ -72,6 +72,13 @@ export class WorkflowRuntime {
   }
 
   async get(runId) { return publicRun(await this.runs.read(runId)); }
+  async execution(runId, { node_id, attempt_id, lease_token, control_token }, { allowInactive = false } = {}) {
+    const { state, pins } = await this.runs.read(runId); authorize(state, control_token);
+    const { attempt } = attemptFor(state, node_id, attempt_id, lease_token, { active: !allowInactive });
+    requireValue(allowInactive || state.status === 'running', 'RUN_NOT_RUNNING', 'Run must be running before dispatch');
+    const node = pins.root.workflow.nodes.find(item => item.id === node_id);
+    return executionEnvelope(node, state, pins, attempt, lease_token, join(this.runs.directory(runId), 'objects'));
+  }
   async next(runId) {
     const { state, pins, sequence } = await this.runs.read(runId);
     return {
@@ -117,6 +124,7 @@ export class WorkflowRuntime {
       requireValue(!['cancelled', 'succeeded'].includes(state.status), 'RUN_TERMINAL', 'Run cannot accept this completion');
       const definition = pins.root.workflow.nodes.find(item => item.id === node_id);
       validateData(payload.structured_output, definition.outputs_schema);
+      if (definition.executor?.kind === 'provider') requireValue(attempt.dispatch?.receipt, 'DISPATCH_RECEIPT_REQUIRED', 'Provider completion requires a persisted exact task identity');
       const permission = nodePermissions(definition, state);
       requireValue(!payload.outside_paths.length, 'SCOPE_VIOLATION', 'Completion reports writes outside the permitted scope');
       const changed = pathBoundaries(payload.changed_paths);
@@ -241,12 +249,13 @@ export class WorkflowRuntime {
       requireValue(state.status === 'running', 'RUN_NOT_RUNNING', 'Paused or terminal Runs cannot dispatch new external work');
       attempt.dispatch = { request_id, envelope_hash, phase: 'intent', receipt: null, cancellation_pending: false }; touch(state);
     });
-    return publicRun(result);
+    return { ...publicRun(result), idempotent: result.idempotent ?? false };
   }
 
   async recordDispatchReceipt(runId, { node_id, attempt_id, lease_token, request_id, receipt, control_token }) {
     const serialized = canonicalJSON(receipt);
     requireValue(receipt && typeof receipt === 'object' && !Array.isArray(receipt) && Buffer.byteLength(serialized) <= 16000 && !/"[^"\n]*(?:password|cookie|authorization|api_key|access_token|refresh_token)[^"\n]*"\s*:/i.test(serialized), 'DISPATCH_RECEIPT', 'Receipt must contain bounded task identity metadata without credentials');
+    requireValue(['task_id', 'thread_id', 'agent_id', 'invocation_id', 'main_actor', 'tool_call_id'].some(key => typeof receipt[key] === 'string' && receipt[key].length > 0 && receipt[key].length <= 256), 'DISPATCH_IDENTITY_REQUIRED', 'Receipt requires a concrete task, agent, invocation or tool-call identity');
     const result = await this.runs.mutate(runId, 'dispatch_receipt', state => {
       authorize(state, control_token); const { node, attempt } = attemptFor(state, node_id, attempt_id, lease_token, { active: false });
       requireValue(attempt.dispatch?.request_id === request_id, 'DISPATCH_INTENT_MISSING', 'Receipt does not match a persisted dispatch intent');

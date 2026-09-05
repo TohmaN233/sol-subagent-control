@@ -90,7 +90,8 @@ test('stdio MCP lists control tools and returns sanitized status', async (t) => 
 
   const listed = await client.request({ jsonrpc: '2.0', id: 3, method: 'tools/list', params: {} });
   const names = listed.result.tools.map((tool) => tool.name);
-  assert.deepEqual(names, ['sol_control_status', 'sol_control_console', 'sol_control_resolve', 'sol_connector_probe', 'sol_connector_start', 'sol_connector_status', 'sol_connector_control', 'sol_control_invoke']);
+  assert.deepEqual(names.filter(name => name.startsWith('sol_')), ['sol_control_status', 'sol_control_console', 'sol_control_resolve', 'sol_connector_probe', 'sol_connector_start', 'sol_connector_status', 'sol_connector_control', 'sol_control_invoke']);
+  for (const name of ['workflow_start', 'workflow_claim_node', 'workflow_complete_node', 'workflow_resume', 'workflow_dispatch']) assert(names.includes(name));
   const consoleTool = listed.result.tools.find((tool) => tool.name === 'sol_control_console');
   assert.equal(consoleTool.inputSchema.properties.port.default, 58712);
   const resolveTool = listed.result.tools.find((tool) => tool.name === 'sol_control_resolve');

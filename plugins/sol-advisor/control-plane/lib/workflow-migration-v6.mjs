@@ -45,6 +45,7 @@ export function migrateTaskType(taskType, providers) {
 }
 
 export function prepareV6Migration(raw) {
+  requireValue(raw?.version === 6, 'MIGRATION_VERSION', 'This migration only accepts v6 input');
   const config = validateConfig(raw);
   const workflows = config.task_types.map((taskType, index) => migrateTaskType({
     ...taskType,

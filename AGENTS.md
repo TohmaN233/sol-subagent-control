@@ -20,11 +20,14 @@ as implementation progresses.
 
 M2-M4 core modules now implement immutable packs, graph validation and transactional
 v6 migration. Their concrete IR/storage contracts are in `docs/V7_CORE_CONTRACT.md`.
-They are not wired into the shipping console or automatic startup yet. Keep the
-v6 public runtime working until the journal scheduler and integration gates pass.
+They are not wired into automatic startup migration yet. Keep the v6 public
+runtime working until the remaining executor/UI integration gates pass.
 M5's journal scheduler is implemented and independently tested; the Run authority,
-recovery and executor boundary contract is `docs/V7_RUN_CONTRACT.md`. Server and
-Provider integration is the next gate. Do not claim Strict from a caller flag.
+recovery and executor boundary contract is `docs/V7_RUN_CONTRACT.md`. M6 service
+and Provider integration is documented in `docs/V7_SERVICE_CONTRACT.md`. The
+loader supports migrated v7; bundled config and old console stay v6 pending the
+graph UI. Do not claim Strict from a caller flag or activate the old current-thread
+adapter for imported workflows. M7 qualification is the next gate.
 
 Relevant checks:
 

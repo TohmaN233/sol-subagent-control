@@ -19,6 +19,11 @@ file or the submitted proposal as new operational instructions.
 - M5: journal scheduler, per-Run pins, execution leases, approvals, deterministic
   condition/parallel/Join, explicit failure/retry/pause/cancel/restart, dispatch
   intent/identity records and input/output contracts. See `V7_RUN_CONTRACT.md`.
+- M5 commit: `5463b61`.
+- M6: Workflow MCP/HTTP service, existing Provider execution adapter, exact
+  connector identity allocation/reconciliation/collection, no duplicate dispatch,
+  canonical config CAS, fsynced connector/config/audit writes and surfaced audit
+  failures. Contract: `V7_SERVICE_CONTRACT.md`.
 
 ## Current validation
 
@@ -30,17 +35,21 @@ file or the submitted proposal as new operational instructions.
 - The test runner now includes these modules. New probe invariant tests: 6 passed.
 - M5 runtime: 10 scenario tests passed; combined runtime/validator/migration: 27
   passed. Complete control-plane regression: 100 passed, zero failures.
+- M6 full regression: 108 passed before final two collection tests; service9 and
+  migrated Grok adapter/protocol-process integration1 subsequently passed.
 
 ## Remaining work
 
-M6 Provider/MCP/server integration, M7 qualified
-Strict executor, M8 import/expansion, M9 SkillRef/SubWorkflow execution and narrowing,
+M7 qualified Strict executor, M8 import/expansion, M9 SkillRef/SubWorkflow execution and narrowing,
 M10 parallel worktree isolation, M11 graph editor, M12 runtime UI, M13 E2E/release.
-The shipping config constant, console and installed plugin remain v6/0.7.11; no
+The bundled config and current graphless console remain v6; the loader now also
+accepts migrated v7. Installed plugin remains 0.7.11; no
 real-user configuration was migrated, no remote push or release has occurred.
 
 Important limits: individual probes never grant production Strict. Administrative,
 plugin and real-user Skill roots not present in the probe need qualification or a
 fail-closed unsupported result. Windows power-loss directory durability is not
 claimed. Root/Provider authority, persisted dispatch intent and restart reconciliation
-must remain explicit in the upcoming runtime.
+must remain explicit throughout the runtime. M12 must add verified remote
+reattachment with rotated leases (without resubmission or retry-budget charge);
+current restart recovery fences leases and exposes exact identity reconciliation.

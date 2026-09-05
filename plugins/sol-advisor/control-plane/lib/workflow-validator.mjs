@@ -93,6 +93,10 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
         }
       }
       if (node.type === 'tool' && executor?.kind !== 'tool') issue('TOOL_EXECUTOR', 'Tool nodes require a tool executor', location);
+      if (node.type === 'tool' && executor?.kind === 'tool') {
+        if (typeof executor.tool !== 'string' || !executor.tool.trim() || executor.tool.length > 256) issue('TOOL_ID', 'Tool nodes must name an exact host tool', location);
+        else if (!(context.tools ?? []).includes(executor.tool)) issue('TOOL_UNAVAILABLE', 'Named host tool is unavailable', location, blockers);
+      }
       if (node.type === 'human_gate' && executor?.kind !== 'human') issue('HUMAN_EXECUTOR', 'Human gates require a human executor', location);
       if (['agent', 'skill_ref'].includes(node.type) && !['main', 'provider'].includes(executor?.kind)) issue('AGENT_EXECUTOR', 'Agent and SkillRef nodes require main or Provider execution', location);
       if (node.type === 'agent' && (typeof node.prompt_template !== 'string' || !node.prompt_template.trim())) issue('NODE_PROMPT', 'Agent requires instructions', location);

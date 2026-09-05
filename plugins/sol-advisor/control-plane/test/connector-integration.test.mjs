@@ -12,6 +12,7 @@ import { ConnectorRegistry } from '../connectors/registry.mjs';
 import { captureWorkspaceSnapshot, verifyWorkspaceScope } from '../connectors/scope-guard.mjs';
 import { loadConfig, saveConfig } from '../lib/config.mjs';
 import { startConnectorSelection } from '../lib/control.mjs';
+import { WorkflowService } from '../lib/workflow-service.mjs';
 import { DEFAULT_CONFIG_PATH } from '../server.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -154,6 +155,22 @@ async function respondAllow(registry, taskId) {
     option_id: 'allow-once',
   });
 }
+
+test('migrated Workflow dispatches the real connector adapter and collects observed terminal evidence', async t => {
+  const fx = await fixture(t);
+  const service = new WorkflowService({ configPath: fx.configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: fx.env, registry: fx.registry });
+  await service.call('migrate_v6', {}, { human: true });
+  const run = await service.call('start', { workflow_id: 'grok-readonly-advice', workspace: fx.workspace, access: 'read_only', main_actor: 'root', inputs: { task: 'WORKFLOW_E2E', verification: 'Observe exact identity and unchanged workspace' } });
+  const authority = { run_id: run.run_id, control_token: run.control_token };
+  await service.call('approve', { ...authority, approval_id: 'implementation:1', decision: true });
+  const lease = await service.call('claim_node', { ...authority, node_id: 'implementation', owner: 'worker', request_id: 'workflow-connector-claim' });
+  const request = { ...authority, node_id: lease.node_id, attempt_id: lease.attempt_id, lease_token: lease.lease_token };
+  const dispatched = await service.call('dispatch', request); assert.equal(dispatched.receipt.task_id, lease.attempt_id);
+  const finished = await fx.registry.status(dispatched.receipt.task_id, 5000); assert.equal(finished.state, 'completed');
+  const collected = await service.call('collect_connector', request); assert.equal(collected.nodes.implementation.status, 'succeeded');
+  assert.equal(collected.nodes.implementation.attempts[0].completion.evidence[0].scope.compliant, true);
+  assert.equal(collected.nodes['final-acceptance'].status, 'ready'); assert.equal(collected.status, 'running');
+});
 
 test('approval-gated bounded write is rejected before connector launch when approval is missing', async (t) => {
   const fx = await fixture(t);

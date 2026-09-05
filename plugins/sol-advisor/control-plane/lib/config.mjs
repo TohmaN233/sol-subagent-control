@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
-import { access, chmod, lstat, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { access, chmod, lstat, mkdir, open, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { resourcePath } from './workflow-paths.mjs';
+import { canonicalJSON } from './workflow-revisions.mjs';
 
 export const CONFIG_VERSION = 6;
 export const PROVIDER_KINDS = new Set(['native_agent', 'builtin_connector', 'external_mcp', 'mcp_tool', 'web_review', 'openai_compatible']);
@@ -537,13 +539,20 @@ export function migrateConfigV5(raw) {
 
 export function validateConfig(raw) {
   assert(object(raw), 'config must be an object');
-  assert(raw.version === CONFIG_VERSION, `config.version must be ${CONFIG_VERSION}`);
+  assert([CONFIG_VERSION, 7].includes(raw.version), `config.version must be ${CONFIG_VERSION} or 7`);
   const providersRaw = Array.isArray(raw.providers) ? raw.providers : [];
   const taskTypesRaw = Array.isArray(raw.task_types) ? raw.task_types : [];
   assert(providersRaw.length > 0 && providersRaw.length <= 100,
     'config must contain between 1 and 100 providers');
-  assert(taskTypesRaw.length > 0 && taskTypesRaw.length <= 200,
+  assert(raw.version === 7 ? taskTypesRaw.length === 0 : taskTypesRaw.length > 0 && taskTypesRaw.length <= 200,
     'config must contain between 1 and 200 task types');
+  if (raw.version === 7) {
+    assert(object(raw.workflow_store) && raw.workflow_store.schema_version === 1, 'config needs a v7 workflow store pointer');
+    const relativePath = resourcePath(raw.workflow_store.relative_path);
+    assert(!relativePath.includes('/') && !relativePath.startsWith('.'), 'config workflow store must be a direct named child');
+    assert(object(raw.legacy_mapping), 'config legacy mapping must be an object');
+    jsonClone(raw.legacy_mapping, 'config legacy mapping');
+  }
   const providers = providersRaw.map(validateProvider);
   const taskTypes = taskTypesRaw.map(validateTaskType);
   const providerIds = new Set();
@@ -573,7 +582,7 @@ export function validateConfig(raw) {
   }
   const global = object(raw.global) ? raw.global : {};
   return {
-    version: CONFIG_VERSION,
+    version: raw.version,
     global: {
       enabled: bool(global.enabled, true),
       allow_direct_api: bool(global.allow_direct_api, false),
@@ -583,7 +592,7 @@ export function validateConfig(raw) {
         'global.max_prompt_chars'),
     },
     providers,
-    task_types: taskTypes,
+    ...(raw.version === 7 ? { workflow_store: jsonClone(raw.workflow_store, 'config workflow store'), legacy_mapping: jsonClone(raw.legacy_mapping, 'config legacy mapping') } : { task_types: taskTypes }),
   };
 }
 
@@ -591,8 +600,9 @@ async function exists(path) {
   try {
     await access(path, fsConstants.F_OK);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
   }
 }
 
@@ -671,19 +681,26 @@ export async function loadConfig({ configPath, defaultConfigPath }) {
 }
 
 export function configRevision(config) {
-  return createHash('sha256').update(JSON.stringify(config)).digest('hex');
+  return createHash('sha256').update(canonicalJSON(config)).digest('hex');
 }
 
 export async function saveConfig(config, { configPath, expectedRevision = '' } = {}) {
   const validated = validateConfig(config);
+  const { WorkflowStore } = await import('./workflow-store.mjs');
+  const { writeDurableJSON } = await import('./workflow-events.mjs');
+  return new WorkflowStore(dirname(resolve(configPath))).withWriter(async () => {
   if (await exists(configPath)) await assertRegularNoSymlink(configPath, 'control-plane config path');
   if (expectedRevision) {
     const current = validateConfig(JSON.parse(await readFile(configPath, 'utf8')));
     assert(configRevision(current) === expectedRevision,
       'configuration changed since it was loaded');
   }
-  await writeConfigAtomic(validated, configPath);
+  const current = await exists(configPath) ? validateConfig(JSON.parse(await readFile(configPath, 'utf8'))) : null;
+  assert(current ? current.version === validated.version : validated.version === 6, 'configuration version changes require the transactional migration/restore API');
+  if (current?.version === 7) assert(canonicalJSON(current.workflow_store) === canonicalJSON(validated.workflow_store) && canonicalJSON(current.legacy_mapping) === canonicalJSON(validated.legacy_mapping), 'config save cannot replace the workflow store pointer or legacy mapping');
+  await writeDurableJSON(configPath, validated);
   return { config: validated, revision: configRevision(validated) };
+  });
 }
 
 function modelLabel(provider) {
@@ -721,7 +738,7 @@ export function sanitizeConfig(config, { env = process.env } = {}) {
       capabilities: provider.capabilities,
       model_label: modelLabel(provider),
     })),
-    task_types: config.task_types.map((taskType) => {
+    task_types: (config.task_types ?? []).map((taskType) => {
       const stages = taskType.stages.map((stage) => {
         const provider = providerMap.get(stage.provider_id);
         return {
@@ -755,6 +772,7 @@ export function sanitizeConfig(config, { env = process.env } = {}) {
 }
 
 export function findTaskType(config, taskTypeId) {
+  assert(config.version !== 7, 'v7 legacy selection requires an authoritative Workflow Run; use workflow_start with the migrated workflow_id');
   return config.task_types.find((taskType) => taskType.id === taskTypeId) || null;
 }
 
@@ -762,7 +780,7 @@ export function findProvider(config, providerId) {
   return config.providers.find((provider) => provider.id === providerId) || null;
 }
 
-export async function appendAuditEvent(configPath, event) {
+export async function appendAuditEvent(configPath, event, { effectCommitted = false } = {}) {
   const safe = {
     at: new Date().toISOString(),
     event: text(event.event, 'audit.event', { required: true, max: 64 }),
@@ -778,9 +796,12 @@ export async function appendAuditEvent(configPath, event) {
     error_code: text(event.error_code, 'audit.error_code', { max: 128 }),
   };
   const auditPath = resolveAuditPath(configPath);
-  await mkdir(dirname(auditPath), { recursive: true, mode: 0o700 });
-  if (await exists(auditPath)) await assertRegularNoSymlink(auditPath, 'control-plane audit path');
-  await writeFile(auditPath, `${JSON.stringify(safe)}\n`,
-    { encoding: 'utf8', mode: 0o600, flag: 'a' });
-  await chmod(auditPath, 0o600).catch(() => {});
+  try {
+    const { WorkflowStore } = await import('./workflow-store.mjs');
+    await new WorkflowStore(dirname(resolve(configPath))).withWriter(async () => {
+      if (await exists(auditPath)) await assertRegularNoSymlink(auditPath, 'control-plane audit path');
+      const file = await open(auditPath, 'a', 0o600);
+      try { await file.writeFile(`${JSON.stringify(safe)}\n`); await file.sync(); } finally { await file.close(); }
+    });
+  } catch (cause) { throw Object.assign(new Error(`Audit persistence failed: ${cause.message}`), { code: 'AUDIT_WRITE_FAILED', committed: effectCommitted, cause }); }
 }

@@ -6,6 +6,8 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import readline from 'node:readline';
+import { WorkflowService } from './lib/workflow-service.mjs';
+import { workflowToolDefinitions, WORKFLOW_TOOL_OPERATIONS } from './lib/workflow-tools.mjs';
 
 import {
   appendAuditEvent,
@@ -57,6 +59,7 @@ function errorToolPayload(error) {
     ...(error?.retryable === true ? { retryable: true } : {}),
     ...(error?.actionRequired ? { action_required: error.actionRequired } : {}),
     ...(error?.details && typeof error.details === 'object' ? { details: error.details } : {}),
+    ...(error?.committed === true ? { committed: true, sequence: error.sequence } : {}),
   };
 }
 
@@ -205,6 +208,12 @@ export async function startConsole({
         jsonResponse(res, 401, { error: 'unauthorized' }, { 'www-authenticate': 'Bearer' });
         return;
       }
+      if (url.pathname.startsWith('/api/workflow/') && req.method === 'POST') {
+        const operation = url.pathname.slice('/api/workflow/'.length);
+        const service = new WorkflowService({ configPath, defaultConfigPath, env });
+        jsonResponse(res, 200, await service.call(operation, await readJsonBody(req), { human: true }));
+        return;
+      }
       if (url.pathname === '/api/config' && req.method === 'GET') {
         const config = await loadConfig({ configPath, defaultConfigPath });
         jsonResponse(res, 200, { config, revision: configRevision(config), storage });
@@ -219,7 +228,7 @@ export async function startConsole({
         await appendAuditEvent(configPath, {
           event: 'console-save',
           outcome: 'ok',
-        }).catch(() => {});
+        }, { effectCommitted: true });
         jsonResponse(res, 200, saved);
         return;
       }
@@ -231,7 +240,7 @@ export async function startConsole({
       jsonResponse(res, 404, { error: 'not found' });
     } catch (error) {
       const status = /changed since/.test(error.message) ? 409 : 400;
-      jsonResponse(res, status, { error: error.message });
+      jsonResponse(res, status, errorToolPayload(error));
     }
   });
 
@@ -244,11 +253,12 @@ export async function startConsole({
   const url = `http://127.0.0.1:${actualPort}/#token=${encodeURIComponent(token)}`;
   consoleState = { server, token, url, port: actualPort, configPath, defaultConfigPath, storage, env };
   const browser = open ? await openBrowser(url) : { opened: false, error: null };
-  await appendAuditEvent(configPath, {
+  try { await appendAuditEvent(configPath, {
     event: 'console-open',
     outcome: browser.opened || !open ? 'ok' : 'browser-error',
     detail: browser.error || '',
-  }).catch(() => {});
+  }, { effectCommitted: true }); }
+  catch (error) { await stopConsole(); throw error; }
   return { ...consoleState, browser };
 }
 
@@ -269,6 +279,7 @@ export function buildToolDefinitions() {
     user_approved: { type: 'boolean', default: false, description: 'Set true only after explicit current-task approval when the selected Provider or Stage approval gate is enabled.' },
   };
   return [
+    ...workflowToolDefinitions(),
     {
       name: 'sol_control_status',
       description: 'Read sanitized control-plane metadata only: enabled Providers, Task Type ids, routes, ordered Stage bindings, capabilities, and approval flags. Prompt templates, provider endpoints, credential variable names, and console tokens are never returned.',
@@ -418,6 +429,11 @@ export async function handleRpc(request, {
     const name = String(params.name || '');
     const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};
     try {
+      if (name.startsWith('workflow_') && WORKFLOW_TOOL_OPERATIONS.has(name.slice('workflow_'.length))) {
+        const service = new WorkflowService({ configPath, defaultConfigPath, env, fetchImpl });
+        const result = await service.call(name.slice('workflow_'.length), args);
+        return { jsonrpc: '2.0', id, result: textToolResult(result) };
+      }
       if (name === 'sol_control_status') {
         const status = await getControlStatus({ configPath, defaultConfigPath, env });
         return { jsonrpc: '2.0', id, result: textToolResult(status) };
