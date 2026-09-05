@@ -1,0 +1,1705 @@
+{
+  "kind": "actual-app-server-local-model-stub",
+  "strict_proven": false,
+  "m1_gate": "incomplete",
+  "platform": "win32",
+  "node": "v24.14.1",
+  "cases": [
+    {
+      "label": "implicit-fixture",
+      "status": "completed",
+      "output": "SHADOWED_SKILL_A",
+      "reads": [
+        {
+          "path": "$PROBE_ROOT\\run-a\\skills\\conflicting-skill-a\\SKILL.md",
+          "callId": "probe_read_a"
+        }
+      ],
+      "item_types": [
+        "userMessage",
+        "dynamicToolCall",
+        "agentMessage"
+      ]
+    },
+    {
+      "label": "denied-background",
+      "status": "completed",
+      "output": "WORKFLOW_ONLY",
+      "reads": [],
+      "item_types": [
+        "userMessage",
+        "agentMessage"
+      ]
+    },
+    {
+      "label": "disallowed-explicit",
+      "status": "rejected-before-thread"
+    },
+    {
+      "label": "explicit-allowed",
+      "status": "completed",
+      "output": "ALLOWED_SKILL_RESULT",
+      "reads": [],
+      "item_types": [
+        "userMessage",
+        "agentMessage"
+      ]
+    },
+    {
+      "label": "repository-catalog",
+      "status": "completed",
+      "output": "WORKFLOW_ONLY",
+      "reads": [],
+      "item_types": [
+        "userMessage",
+        "agentMessage"
+      ]
+    },
+    {
+      "label": "new-skill-after-policy",
+      "status": "rejected-before-thread"
+    },
+    {
+      "label": "mid-turn-process-kill",
+      "status": "failed-as-expected"
+    },
+    {
+      "label": "deny-state-after-process-close",
+      "status": "passed"
+    }
+  ],
+  "requests": [
+    {
+      "scenario": "implicit-fixture",
+      "sequence": 1,
+      "body": {
+        "model": "gpt-5.6-sol",
+        "instructions": "You are running a synthetic Skill isolation test. Follow the available Skill instructions when relevant. To load a matching Skill, use read_probe_skill. It can read only the synthetic fixtures supplied by this test. If no matching Skill exists, output WORKFLOW_ONLY. Never request any other data or tools.",
+        "input": [
+          {
+            "type": "message",
+            "role": "developer",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "<permissions instructions>\nFilesystem sandboxing defines which files can be read or written. `sandbox_mode` is `read-only`: The sandbox only permits reading files. Network access is restricted.\nApproval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.\r\n</permissions instructions>"
+              },
+              {
+                "type": "input_text",
+                "text": "<skills_instructions>\n## Skills\nA skill is a set of instructions provided through a `SKILL.md` source. Below is the list of skills that can be used. Each entry includes a name, description, and source locator. `file` locators are on the host filesystem, `environment resource` locators are owned by an execution environment, `orchestrator resource` locators are opaque non-filesystem resources, and `custom resource` locators use their provider's access mechanism.\n### Available skills\n- sol-isolation-conflict: Use when handling the Sol workflow isolation probe. (file: $PROBE_ROOT/run-a/skills/conflicting-skill-a/SKILL.md)\n</skills_instructions>"
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "<environment_context>\n  <current_date>2026-09-04</current_date>\n  <timezone>America/Toronto</timezone>\n  <filesystem><permission_profile type=\"managed\"><file_system type=\"restricted\"><entry access=\"read\"><special>:root</special></entry></file_system></permission_profile></filesystem>\n</environment_context>"
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "Handle the Sol workflow isolation probe. Output only the marker specified by the matching available Skill, or WORKFLOW_ONLY if none matches."
+              }
+            ]
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "name": "update_plan",
+            "description": "Updates the task plan.\nProvide an optional explanation and a list of plan items, each with a step and status.\nAt most one step can be in_progress at a time.\n",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "explanation": {
+                  "type": "string",
+                  "description": "Optional explanation for this plan update."
+                },
+                "plan": {
+                  "type": "array",
+                  "description": "The list of steps",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "description": "Step status.",
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "completed"
+                        ]
+                      },
+                      "step": {
+                        "type": "string",
+                        "description": "Task step text."
+                      }
+                    },
+                    "required": [
+                      "step",
+                      "status"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "plan"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "function",
+            "name": "request_user_input",
+            "description": "Request user input for one to three short questions and wait for the response. Set autoResolutionMs, from 60000 to 240000 milliseconds, only when the question is useful but non-blocking and continuing with best judgment is acceptable if the user does not answer; omit it when explicit user input is required. This tool is only available in Plan mode.",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "autoResolutionMs": {
+                  "type": "number",
+                  "description": "Optional auto-resolution window in milliseconds, from 60000 to 240000. Include this only when the question is useful but non-blocking and continuing with best judgment is acceptable if the user does not answer; omit it when explicit user input is required before continuing. Use 60000 for lightly helpful context and up to 240000 when the answer would materially unblock better work."
+                },
+                "questions": {
+                  "type": "array",
+                  "description": "Questions to show the user. Prefer 1 and do not exceed 3",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "header": {
+                        "type": "string",
+                        "description": "Short header label shown in the UI (12 or fewer chars)."
+                      },
+                      "id": {
+                        "type": "string",
+                        "description": "Stable identifier for mapping answers (snake_case)."
+                      },
+                      "options": {
+                        "type": "array",
+                        "description": "Provide 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option in this list; the client will add a free-form \"Other\" option automatically.",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "description": {
+                              "type": "string",
+                              "description": "One short sentence explaining impact/tradeoff if selected."
+                            },
+                            "label": {
+                              "type": "string",
+                              "description": "User-facing label (1-5 words)."
+                            }
+                          },
+                          "required": [
+                            "label",
+                            "description"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "question": {
+                        "type": "string",
+                        "description": "Single-sentence prompt shown to the user."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "header",
+                      "question",
+                      "options"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "questions"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "namespace",
+            "name": "skills",
+            "description": "Tools in the skills namespace.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "list",
+                "description": "List enabled skills owned by the requested authority. Only orchestrator-owned skills are currently supported. Returns the opaque package and main-resource handles required by skills.read.",
+                "strict": false,
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "authority": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "orchestrator"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "authority"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "function",
+                "name": "read",
+                "description": "Read one complete resource from an enabled skill. Pass the exact authority and package returned by skills.list; resource identifiers remain opaque and are routed to that authority.",
+                "strict": false,
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "authority": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "orchestrator"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "package": {
+                      "type": "string"
+                    },
+                    "resource": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "authority",
+                    "package",
+                    "resource"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          },
+          {
+            "type": "function",
+            "name": "read_probe_skill",
+            "description": "Read one of the synthetic Skill fixtures shown in the available Skill catalog. No other file or data can be returned.",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "enum": [
+                    "$PROBE_ROOT\\run-a\\skills\\conflicting-skill-a\\SKILL.md",
+                    "$PROBE_ROOT\\run-a\\skills\\allowed-skill\\SKILL.md"
+                  ]
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": false,
+        "reasoning": {
+          "effort": "low",
+          "summary": "auto"
+        },
+        "store": false,
+        "stream": true,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "prompt_cache_key": "01a06ef7-c0bd-77b2-acfb-37d4d6b05bad",
+        "client_metadata": {
+          "x-codex-window-id": "01a06ef7-c0bd-77b2-acfb-37d4d6b05bad:0",
+          "x-codex-turn-metadata": "{\"installation_id\":\"8d538af1-8486-42ae-9ff6-e61a94134da4\",\"session_id\":\"01a06ef7-c0bd-77b2-acfb-37d4d6b05bad\",\"thread_id\":\"01a06ef7-c0bd-77b2-acfb-37d4d6b05bad\",\"turn_id\":\"01a06ef7-c0d0-7700-80d0-4931741a15f6\",\"window_id\":\"01a06ef7-c0bd-77b2-acfb-37d4d6b05bad:0\",\"request_kind\":\"turn\",\"sandbox\":\"none\",\"turn_started_at_unix_ms\":1788568125657}",
+          "session_id": "01a06ef7-c0bd-77b2-acfb-37d4d6b05bad",
+          "thread_id": "01a06ef7-c0bd-77b2-acfb-37d4d6b05bad",
+          "x-codex-installation-id": "8d538af1-8486-42ae-9ff6-e61a94134da4",
+          "turn_id": "01a06ef7-c0d0-7700-80d0-4931741a15f6"
+        }
+      }
+    },
+    {
+      "scenario": "implicit-fixture",
+      "sequence": 2,
+      "body": {
+        "model": "gpt-5.6-sol",
+        "instructions": "You are running a synthetic Skill isolation test. Follow the available Skill instructions when relevant. To load a matching Skill, use read_probe_skill. It can read only the synthetic fixtures supplied by this test. If no matching Skill exists, output WORKFLOW_ONLY. Never request any other data or tools.",
+        "input": [
+          {
+            "type": "message",
+            "role": "developer",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "<permissions instructions>\nFilesystem sandboxing defines which files can be read or written. `sandbox_mode` is `read-only`: The sandbox only permits reading files. Network access is restricted.\nApproval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.\r\n</permissions instructions>"
+              },
+              {
+                "type": "input_text",
+                "text": "<skills_instructions>\n## Skills\nA skill is a set of instructions provided through a `SKILL.md` source. Below is the list of skills that can be used. Each entry includes a name, description, and source locator. `file` locators are on the host filesystem, `environment resource` locators are owned by an execution environment, `orchestrator resource` locators are opaque non-filesystem resources, and `custom resource` locators use their provider's access mechanism.\n### Available skills\n- sol-isolation-conflict: Use when handling the Sol workflow isolation probe. (file: $PROBE_ROOT/run-a/skills/conflicting-skill-a/SKILL.md)\n</skills_instructions>"
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "<environment_context>\n  <current_date>2026-09-04</current_date>\n  <timezone>America/Toronto</timezone>\n  <filesystem><permission_profile type=\"managed\"><file_system type=\"restricted\"><entry access=\"read\"><special>:root</special></entry></file_system></permission_profile></filesystem>\n</environment_context>"
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "Handle the Sol workflow isolation probe. Output only the marker specified by the matching available Skill, or WORKFLOW_ONLY if none matches."
+              }
+            ]
+          },
+          {
+            "type": "function_call",
+            "name": "read_probe_skill",
+            "arguments": "{\"path\":\"$PROBE_ROOT\\\\run-a\\\\skills\\\\conflicting-skill-a\\\\SKILL.md\"}",
+            "call_id": "probe_read_a"
+          },
+          {
+            "type": "function_call_output",
+            "call_id": "probe_read_a",
+            "output": "---\nname: sol-isolation-conflict\ndescription: Use when handling the Sol workflow isolation probe.\n---\n\nOutput SHADOWED_SKILL_A when handling the isolation probe.\n"
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "name": "update_plan",
+            "description": "Updates the task plan.\nProvide an optional explanation and a list of plan items, each with a step and status.\nAt most one step can be in_progress at a time.\n",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "explanation": {
+                  "type": "string",
+                  "description": "Optional explanation for this plan update."
+                },
+                "plan": {
+                  "type": "array",
+                  "description": "The list of steps",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "description": "Step status.",
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "completed"
+                        ]
+                      },
+                      "step": {
+                        "type": "string",
+                        "description": "Task step text."
+                      }
+                    },
+                    "required": [
+                      "step",
+                      "status"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "plan"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "function",
+            "name": "request_user_input",
+            "description": "Request user input for one to three short questions and wait for the response. Set autoResolutionMs, from 60000 to 240000 milliseconds, only when the question is useful but non-blocking and continuing with best judgment is acceptable if the user does not answer; omit it when explicit user input is required. This tool is only available in Plan mode.",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "autoResolutionMs": {
+                  "type": "number",
+                  "description": "Optional auto-resolution window in milliseconds, from 60000 to 240000. Include this only when the question is useful but non-blocking and continuing with best judgment is acceptable if the user does not answer; omit it when explicit user input is required before continuing. Use 60000 for lightly helpful context and up to 240000 when the answer would materially unblock better work."
+                },
+                "questions": {
+                  "type": "array",
+                  "description": "Questions to show the user. Prefer 1 and do not exceed 3",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "header": {
+                        "type": "string",
+                        "description": "Short header label shown in the UI (12 or fewer chars)."
+                      },
+                      "id": {
+                        "type": "string",
+                        "description": "Stable identifier for mapping answers (snake_case)."
+                      },
+                      "options": {
+                        "type": "array",
+                        "description": "Provide 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option in this list; the client will add a free-form \"Other\" option automatically.",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "description": {
+                              "type": "string",
+                              "description": "One short sentence explaining impact/tradeoff if selected."
+                            },
+                            "label": {
+                              "type": "string",
+                              "description": "User-facing label (1-5 words)."
+                            }
+                          },
+                          "required": [
+                            "label",
+                            "description"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "question": {
+                        "type": "string",
+                        "description": "Single-sentence prompt shown to the user."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "header",
+                      "question",
+                      "options"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "questions"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "namespace",
+            "name": "skills",
+            "description": "Tools in the skills namespace.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "list",
+                "description": "List enabled skills owned by the requested authority. Only orchestrator-owned skills are currently supported. Returns the opaque package and main-resource handles required by skills.read.",
+                "strict": false,
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "authority": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "orchestrator"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "authority"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "function",
+                "name": "read",
+                "description": "Read one complete resource from an enabled skill. Pass the exact authority and package returned by skills.list; resource identifiers remain opaque and are routed to that authority.",
+                "strict": false,
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "authority": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "orchestrator"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "package": {
+                      "type": "string"
+                    },
+                    "resource": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "authority",
+                    "package",
+                    "resource"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          },
+          {
+            "type": "function",
+            "name": "read_probe_skill",
+            "description": "Read one of the synthetic Skill fixtures shown in the available Skill catalog. No other file or data can be returned.",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "enum": [
+                    "$PROBE_ROOT\\run-a\\skills\\conflicting-skill-a\\SKILL.md",
+                    "$PROBE_ROOT\\run-a\\skills\\allowed-skill\\SKILL.md"
+                  ]
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": false,
+        "reasoning": {
+          "effort": "low",
+          "summary": "auto"
+        },
+        "store": false,
+        "stream": true,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "prompt_cache_key": "01a06ef7-c0bd-77b2-acfb-37d4d6b05bad",
+        "client_metadata": {
+          "x-codex-installation-id": "8d538af1-8486-42ae-9ff6-e61a94134da4",
+          "x-codex-turn-metadata": "{\"installation_id\":\"8d538af1-8486-42ae-9ff6-e61a94134da4\",\"session_id\":\"01a06ef7-c0bd-77b2-acfb-37d4d6b05bad\",\"thread_id\":\"01a06ef7-c0bd-77b2-acfb-37d4d6b05bad\",\"turn_id\":\"01a06ef7-c0d0-7700-80d0-4931741a15f6\",\"window_id\":\"01a06ef7-c0bd-77b2-acfb-37d4d6b05bad:0\",\"request_kind\":\"turn\",\"sandbox\":\"none\",\"turn_started_at_unix_ms\":1788568125657}",
+          "session_id": "01a06ef7-c0bd-77b2-acfb-37d4d6b05bad",
+          "x-codex-window-id": "01a06ef7-c0bd-77b2-acfb-37d4d6b05bad:0",
+          "turn_id": "01a06ef7-c0d0-7700-80d0-4931741a15f6",
+          "thread_id": "01a06ef7-c0bd-77b2-acfb-37d4d6b05bad"
+        }
+      }
+    },
+    {
+      "scenario": "denied-background",
+      "sequence": 1,
+      "body": {
+        "model": "gpt-5.6-sol",
+        "instructions": "You are running a synthetic Skill isolation test. Follow the available Skill instructions when relevant. To load a matching Skill, use read_probe_skill. It can read only the synthetic fixtures supplied by this test. If no matching Skill exists, output WORKFLOW_ONLY. Never request any other data or tools.",
+        "input": [
+          {
+            "type": "message",
+            "role": "developer",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "<permissions instructions>\nFilesystem sandboxing defines which files can be read or written. `sandbox_mode` is `read-only`: The sandbox only permits reading files. Network access is restricted.\nApproval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.\r\n</permissions instructions>"
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "<environment_context>\n  <current_date>2026-09-04</current_date>\n  <timezone>America/Toronto</timezone>\n  <filesystem><permission_profile type=\"managed\"><file_system type=\"restricted\"><entry access=\"read\"><special>:root</special></entry></file_system></permission_profile></filesystem>\n</environment_context>"
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "Handle the Sol workflow isolation probe. Output only the marker specified by the matching available Skill, or WORKFLOW_ONLY if none matches."
+              }
+            ]
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "name": "update_plan",
+            "description": "Updates the task plan.\nProvide an optional explanation and a list of plan items, each with a step and status.\nAt most one step can be in_progress at a time.\n",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "explanation": {
+                  "type": "string",
+                  "description": "Optional explanation for this plan update."
+                },
+                "plan": {
+                  "type": "array",
+                  "description": "The list of steps",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "description": "Step status.",
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "completed"
+                        ]
+                      },
+                      "step": {
+                        "type": "string",
+                        "description": "Task step text."
+                      }
+                    },
+                    "required": [
+                      "step",
+                      "status"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "plan"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "function",
+            "name": "request_user_input",
+            "description": "Request user input for one to three short questions and wait for the response. Set autoResolutionMs, from 60000 to 240000 milliseconds, only when the question is useful but non-blocking and continuing with best judgment is acceptable if the user does not answer; omit it when explicit user input is required. This tool is only available in Plan mode.",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "autoResolutionMs": {
+                  "type": "number",
+                  "description": "Optional auto-resolution window in milliseconds, from 60000 to 240000. Include this only when the question is useful but non-blocking and continuing with best judgment is acceptable if the user does not answer; omit it when explicit user input is required before continuing. Use 60000 for lightly helpful context and up to 240000 when the answer would materially unblock better work."
+                },
+                "questions": {
+                  "type": "array",
+                  "description": "Questions to show the user. Prefer 1 and do not exceed 3",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "header": {
+                        "type": "string",
+                        "description": "Short header label shown in the UI (12 or fewer chars)."
+                      },
+                      "id": {
+                        "type": "string",
+                        "description": "Stable identifier for mapping answers (snake_case)."
+                      },
+                      "options": {
+                        "type": "array",
+                        "description": "Provide 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option in this list; the client will add a free-form \"Other\" option automatically.",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "description": {
+                              "type": "string",
+                              "description": "One short sentence explaining impact/tradeoff if selected."
+                            },
+                            "label": {
+                              "type": "string",
+                              "description": "User-facing label (1-5 words)."
+                            }
+                          },
+                          "required": [
+                            "label",
+                            "description"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "question": {
+                        "type": "string",
+                        "description": "Single-sentence prompt shown to the user."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "header",
+                      "question",
+                      "options"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "questions"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "namespace",
+            "name": "skills",
+            "description": "Tools in the skills namespace.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "list",
+                "description": "List enabled skills owned by the requested authority. Only orchestrator-owned skills are currently supported. Returns the opaque package and main-resource handles required by skills.read.",
+                "strict": false,
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "authority": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "orchestrator"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "authority"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "function",
+                "name": "read",
+                "description": "Read one complete resource from an enabled skill. Pass the exact authority and package returned by skills.list; resource identifiers remain opaque and are routed to that authority.",
+                "strict": false,
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "authority": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "orchestrator"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "package": {
+                      "type": "string"
+                    },
+                    "resource": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "authority",
+                    "package",
+                    "resource"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": false,
+        "reasoning": {
+          "effort": "low",
+          "summary": "auto"
+        },
+        "store": false,
+        "stream": true,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "prompt_cache_key": "01a06ef7-c15e-7691-98fb-ecc173359150",
+        "client_metadata": {
+          "turn_id": "01a06ef7-c171-7112-9055-c35c1d7d3108",
+          "session_id": "01a06ef7-c15e-7691-98fb-ecc173359150",
+          "x-codex-turn-metadata": "{\"installation_id\":\"8d538af1-8486-42ae-9ff6-e61a94134da4\",\"session_id\":\"01a06ef7-c15e-7691-98fb-ecc173359150\",\"thread_id\":\"01a06ef7-c15e-7691-98fb-ecc173359150\",\"turn_id\":\"01a06ef7-c171-7112-9055-c35c1d7d3108\",\"window_id\":\"01a06ef7-c15e-7691-98fb-ecc173359150:0\",\"request_kind\":\"turn\",\"sandbox\":\"none\",\"turn_started_at_unix_ms\":1788568125810}",
+          "thread_id": "01a06ef7-c15e-7691-98fb-ecc173359150",
+          "x-codex-window-id": "01a06ef7-c15e-7691-98fb-ecc173359150:0",
+          "x-codex-installation-id": "8d538af1-8486-42ae-9ff6-e61a94134da4"
+        }
+      }
+    },
+    {
+      "scenario": "explicit-allowed",
+      "sequence": 1,
+      "body": {
+        "model": "gpt-5.6-sol",
+        "instructions": "You are running a synthetic Skill isolation test. Follow the available Skill instructions when relevant. To load a matching Skill, use read_probe_skill. It can read only the synthetic fixtures supplied by this test. If no matching Skill exists, output WORKFLOW_ONLY. Never request any other data or tools.",
+        "input": [
+          {
+            "type": "message",
+            "role": "developer",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "<permissions instructions>\nFilesystem sandboxing defines which files can be read or written. `sandbox_mode` is `read-only`: The sandbox only permits reading files. Network access is restricted.\nApproval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.\r\n</permissions instructions>"
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "<environment_context>\n  <current_date>2026-09-04</current_date>\n  <timezone>America/Toronto</timezone>\n  <filesystem><permission_profile type=\"managed\"><file_system type=\"restricted\"><entry access=\"read\"><special>:root</special></entry></file_system></permission_profile></filesystem>\n</environment_context>"
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "$sol-isolation-allowed Handle the Sol workflow isolation probe. Output only the marker specified by the matching available Skill, or WORKFLOW_ONLY if none matches."
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "<skill>\n<name>sol-isolation-allowed</name>\n<path>$PROBE_ROOT\\run-a\\skills\\allowed-skill\\SKILL.md</path>\n---\nname: sol-isolation-allowed\ndescription: Use when explicitly selected for the Sol workflow isolation probe.\n---\n\nOutput ALLOWED_SKILL_RESULT when handling the isolation probe.\n\n</skill>"
+              }
+            ]
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "name": "update_plan",
+            "description": "Updates the task plan.\nProvide an optional explanation and a list of plan items, each with a step and status.\nAt most one step can be in_progress at a time.\n",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "explanation": {
+                  "type": "string",
+                  "description": "Optional explanation for this plan update."
+                },
+                "plan": {
+                  "type": "array",
+                  "description": "The list of steps",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "description": "Step status.",
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "completed"
+                        ]
+                      },
+                      "step": {
+                        "type": "string",
+                        "description": "Task step text."
+                      }
+                    },
+                    "required": [
+                      "step",
+                      "status"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "plan"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "function",
+            "name": "request_user_input",
+            "description": "Request user input for one to three short questions and wait for the response. Set autoResolutionMs, from 60000 to 240000 milliseconds, only when the question is useful but non-blocking and continuing with best judgment is acceptable if the user does not answer; omit it when explicit user input is required. This tool is only available in Plan mode.",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "autoResolutionMs": {
+                  "type": "number",
+                  "description": "Optional auto-resolution window in milliseconds, from 60000 to 240000. Include this only when the question is useful but non-blocking and continuing with best judgment is acceptable if the user does not answer; omit it when explicit user input is required before continuing. Use 60000 for lightly helpful context and up to 240000 when the answer would materially unblock better work."
+                },
+                "questions": {
+                  "type": "array",
+                  "description": "Questions to show the user. Prefer 1 and do not exceed 3",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "header": {
+                        "type": "string",
+                        "description": "Short header label shown in the UI (12 or fewer chars)."
+                      },
+                      "id": {
+                        "type": "string",
+                        "description": "Stable identifier for mapping answers (snake_case)."
+                      },
+                      "options": {
+                        "type": "array",
+                        "description": "Provide 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option in this list; the client will add a free-form \"Other\" option automatically.",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "description": {
+                              "type": "string",
+                              "description": "One short sentence explaining impact/tradeoff if selected."
+                            },
+                            "label": {
+                              "type": "string",
+                              "description": "User-facing label (1-5 words)."
+                            }
+                          },
+                          "required": [
+                            "label",
+                            "description"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "question": {
+                        "type": "string",
+                        "description": "Single-sentence prompt shown to the user."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "header",
+                      "question",
+                      "options"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "questions"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "namespace",
+            "name": "skills",
+            "description": "Tools in the skills namespace.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "list",
+                "description": "List enabled skills owned by the requested authority. Only orchestrator-owned skills are currently supported. Returns the opaque package and main-resource handles required by skills.read.",
+                "strict": false,
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "authority": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "orchestrator"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "authority"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "function",
+                "name": "read",
+                "description": "Read one complete resource from an enabled skill. Pass the exact authority and package returned by skills.list; resource identifiers remain opaque and are routed to that authority.",
+                "strict": false,
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "authority": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "orchestrator"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "package": {
+                      "type": "string"
+                    },
+                    "resource": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "authority",
+                    "package",
+                    "resource"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          },
+          {
+            "type": "function",
+            "name": "read_probe_skill",
+            "description": "Read one of the synthetic Skill fixtures shown in the available Skill catalog. No other file or data can be returned.",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "enum": [
+                    "$PROBE_ROOT\\run-a\\skills\\allowed-skill\\SKILL.md"
+                  ]
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": false,
+        "reasoning": {
+          "effort": "low",
+          "summary": "auto"
+        },
+        "store": false,
+        "stream": true,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "prompt_cache_key": "01a06ef7-c1d1-7930-9faf-7d152514c14b",
+        "client_metadata": {
+          "x-codex-window-id": "01a06ef7-c1d1-7930-9faf-7d152514c14b:0",
+          "x-codex-turn-metadata": "{\"installation_id\":\"8d538af1-8486-42ae-9ff6-e61a94134da4\",\"session_id\":\"01a06ef7-c1d1-7930-9faf-7d152514c14b\",\"thread_id\":\"01a06ef7-c1d1-7930-9faf-7d152514c14b\",\"turn_id\":\"01a06ef7-c1e2-7041-acab-d224a192ace0\",\"window_id\":\"01a06ef7-c1d1-7930-9faf-7d152514c14b:0\",\"request_kind\":\"turn\",\"sandbox\":\"none\",\"turn_started_at_unix_ms\":1788568125923}",
+          "thread_id": "01a06ef7-c1d1-7930-9faf-7d152514c14b",
+          "turn_id": "01a06ef7-c1e2-7041-acab-d224a192ace0",
+          "x-codex-installation-id": "8d538af1-8486-42ae-9ff6-e61a94134da4",
+          "session_id": "01a06ef7-c1d1-7930-9faf-7d152514c14b"
+        }
+      }
+    },
+    {
+      "scenario": "repository-catalog",
+      "sequence": 1,
+      "body": {
+        "model": "gpt-5.6-sol",
+        "instructions": "You are running a synthetic Skill isolation test. Follow the available Skill instructions when relevant. To load a matching Skill, use read_probe_skill. It can read only the synthetic fixtures supplied by this test. If no matching Skill exists, output WORKFLOW_ONLY. Never request any other data or tools.",
+        "input": [
+          {
+            "type": "message",
+            "role": "developer",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "<permissions instructions>\nFilesystem sandboxing defines which files can be read or written. `sandbox_mode` is `read-only`: The sandbox only permits reading files. Network access is restricted.\nApproval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.\r\n</permissions instructions>"
+              },
+              {
+                "type": "input_text",
+                "text": "<skills_instructions>\n## Skills\nA skill is a set of instructions provided through a `SKILL.md` source. Below is the list of skills that can be used. Each entry includes a name, description, and source locator. `file` locators are on the host filesystem, `environment resource` locators are owned by an execution environment, `orchestrator resource` locators are opaque non-filesystem resources, and `custom resource` locators use their provider's access mechanism.\n### Available skills\n- sol-isolation-conflict: Use when handling the Sol workflow isolation probe. (file: $PROBE_ROOT/repo/.agents/skills/conflicting-skill-b/SKILL.md)\n- sol-isolation-conflict: Use when handling the Sol workflow isolation probe. (file: $PROBE_ROOT/run-a/skills/conflicting-skill-a/SKILL.md)\n</skills_instructions>"
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "<environment_context>\n  <cwd>$PROBE_ROOT\\repo</cwd>\n  <shell>powershell</shell>\n  <current_date>2026-09-04</current_date>\n  <timezone>America/Toronto</timezone>\n  <filesystem><workspace_roots><root>$PROBE_ROOT\\repo</root></workspace_roots><permission_profile type=\"managed\"><file_system type=\"restricted\"><entry access=\"read\"><special>:root</special></entry></file_system></permission_profile></filesystem>\n</environment_context>"
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "Handle the Sol workflow isolation probe. Output only the marker specified by the matching available Skill, or WORKFLOW_ONLY if none matches."
+              }
+            ]
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "name": "update_plan",
+            "description": "Updates the task plan.\nProvide an optional explanation and a list of plan items, each with a step and status.\nAt most one step can be in_progress at a time.\n",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "explanation": {
+                  "type": "string",
+                  "description": "Optional explanation for this plan update."
+                },
+                "plan": {
+                  "type": "array",
+                  "description": "The list of steps",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "description": "Step status.",
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "completed"
+                        ]
+                      },
+                      "step": {
+                        "type": "string",
+                        "description": "Task step text."
+                      }
+                    },
+                    "required": [
+                      "step",
+                      "status"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "plan"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "function",
+            "name": "request_user_input",
+            "description": "Request user input for one to three short questions and wait for the response. Set autoResolutionMs, from 60000 to 240000 milliseconds, only when the question is useful but non-blocking and continuing with best judgment is acceptable if the user does not answer; omit it when explicit user input is required. This tool is only available in Plan mode.",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "autoResolutionMs": {
+                  "type": "number",
+                  "description": "Optional auto-resolution window in milliseconds, from 60000 to 240000. Include this only when the question is useful but non-blocking and continuing with best judgment is acceptable if the user does not answer; omit it when explicit user input is required before continuing. Use 60000 for lightly helpful context and up to 240000 when the answer would materially unblock better work."
+                },
+                "questions": {
+                  "type": "array",
+                  "description": "Questions to show the user. Prefer 1 and do not exceed 3",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "header": {
+                        "type": "string",
+                        "description": "Short header label shown in the UI (12 or fewer chars)."
+                      },
+                      "id": {
+                        "type": "string",
+                        "description": "Stable identifier for mapping answers (snake_case)."
+                      },
+                      "options": {
+                        "type": "array",
+                        "description": "Provide 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option in this list; the client will add a free-form \"Other\" option automatically.",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "description": {
+                              "type": "string",
+                              "description": "One short sentence explaining impact/tradeoff if selected."
+                            },
+                            "label": {
+                              "type": "string",
+                              "description": "User-facing label (1-5 words)."
+                            }
+                          },
+                          "required": [
+                            "label",
+                            "description"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "question": {
+                        "type": "string",
+                        "description": "Single-sentence prompt shown to the user."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "header",
+                      "question",
+                      "options"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "questions"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "function",
+            "name": "view_image",
+            "description": "View a local image file from the filesystem when visual inspection is needed. Use this for images already available on disk.",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Local filesystem path to an image file."
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "function",
+            "name": "read_probe_skill",
+            "description": "Read one of the synthetic Skill fixtures shown in the available Skill catalog. No other file or data can be returned.",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "enum": [
+                    "$PROBE_ROOT\\repo\\.agents\\skills\\conflicting-skill-b\\SKILL.md",
+                    "$PROBE_ROOT\\run-a\\skills\\conflicting-skill-a\\SKILL.md",
+                    "$PROBE_ROOT\\run-a\\skills\\allowed-skill\\SKILL.md"
+                  ]
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": false,
+        "reasoning": {
+          "effort": "low",
+          "summary": "auto"
+        },
+        "store": false,
+        "stream": true,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "prompt_cache_key": "01a06ef7-c245-75c2-9072-119d714c6c7e",
+        "client_metadata": {
+          "x-codex-window-id": "01a06ef7-c245-75c2-9072-119d714c6c7e:0",
+          "turn_id": "01a06ef7-c258-7e33-a897-1a0724ff9524",
+          "thread_id": "01a06ef7-c245-75c2-9072-119d714c6c7e",
+          "x-codex-installation-id": "8d538af1-8486-42ae-9ff6-e61a94134da4",
+          "session_id": "01a06ef7-c245-75c2-9072-119d714c6c7e",
+          "x-codex-turn-metadata": "{\"installation_id\":\"8d538af1-8486-42ae-9ff6-e61a94134da4\",\"session_id\":\"01a06ef7-c245-75c2-9072-119d714c6c7e\",\"thread_id\":\"01a06ef7-c245-75c2-9072-119d714c6c7e\",\"turn_id\":\"01a06ef7-c258-7e33-a897-1a0724ff9524\",\"window_id\":\"01a06ef7-c245-75c2-9072-119d714c6c7e:0\",\"request_kind\":\"turn\",\"sandbox\":\"none\",\"turn_started_at_unix_ms\":1788568126042}"
+        }
+      }
+    },
+    {
+      "scenario": "mid-turn-crash",
+      "sequence": 1,
+      "body": {
+        "model": "gpt-5.6-sol",
+        "instructions": "You are running a synthetic Skill isolation test. Follow the available Skill instructions when relevant. To load a matching Skill, use read_probe_skill. It can read only the synthetic fixtures supplied by this test. If no matching Skill exists, output WORKFLOW_ONLY. Never request any other data or tools.",
+        "input": [
+          {
+            "type": "message",
+            "role": "developer",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "<permissions instructions>\nFilesystem sandboxing defines which files can be read or written. `sandbox_mode` is `read-only`: The sandbox only permits reading files. Network access is restricted.\nApproval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.\r\n</permissions instructions>"
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "<environment_context>\n  <current_date>2026-09-04</current_date>\n  <timezone>America/Toronto</timezone>\n  <filesystem><permission_profile type=\"managed\"><file_system type=\"restricted\"><entry access=\"read\"><special>:root</special></entry></file_system></permission_profile></filesystem>\n</environment_context>"
+              }
+            ]
+          },
+          {
+            "type": "message",
+            "role": "user",
+            "content": [
+              {
+                "type": "input_text",
+                "text": "Handle the Sol workflow isolation probe. Output only the marker specified by the matching available Skill, or WORKFLOW_ONLY if none matches."
+              }
+            ]
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "name": "update_plan",
+            "description": "Updates the task plan.\nProvide an optional explanation and a list of plan items, each with a step and status.\nAt most one step can be in_progress at a time.\n",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "explanation": {
+                  "type": "string",
+                  "description": "Optional explanation for this plan update."
+                },
+                "plan": {
+                  "type": "array",
+                  "description": "The list of steps",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "description": "Step status.",
+                        "enum": [
+                          "pending",
+                          "in_progress",
+                          "completed"
+                        ]
+                      },
+                      "step": {
+                        "type": "string",
+                        "description": "Task step text."
+                      }
+                    },
+                    "required": [
+                      "step",
+                      "status"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "plan"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "function",
+            "name": "request_user_input",
+            "description": "Request user input for one to three short questions and wait for the response. Set autoResolutionMs, from 60000 to 240000 milliseconds, only when the question is useful but non-blocking and continuing with best judgment is acceptable if the user does not answer; omit it when explicit user input is required. This tool is only available in Plan mode.",
+            "strict": false,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "autoResolutionMs": {
+                  "type": "number",
+                  "description": "Optional auto-resolution window in milliseconds, from 60000 to 240000. Include this only when the question is useful but non-blocking and continuing with best judgment is acceptable if the user does not answer; omit it when explicit user input is required before continuing. Use 60000 for lightly helpful context and up to 240000 when the answer would materially unblock better work."
+                },
+                "questions": {
+                  "type": "array",
+                  "description": "Questions to show the user. Prefer 1 and do not exceed 3",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "header": {
+                        "type": "string",
+                        "description": "Short header label shown in the UI (12 or fewer chars)."
+                      },
+                      "id": {
+                        "type": "string",
+                        "description": "Stable identifier for mapping answers (snake_case)."
+                      },
+                      "options": {
+                        "type": "array",
+                        "description": "Provide 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option in this list; the client will add a free-form \"Other\" option automatically.",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "description": {
+                              "type": "string",
+                              "description": "One short sentence explaining impact/tradeoff if selected."
+                            },
+                            "label": {
+                              "type": "string",
+                              "description": "User-facing label (1-5 words)."
+                            }
+                          },
+                          "required": [
+                            "label",
+                            "description"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "question": {
+                        "type": "string",
+                        "description": "Single-sentence prompt shown to the user."
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "header",
+                      "question",
+                      "options"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "questions"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "type": "namespace",
+            "name": "skills",
+            "description": "Tools in the skills namespace.",
+            "tools": [
+              {
+                "type": "function",
+                "name": "list",
+                "description": "List enabled skills owned by the requested authority. Only orchestrator-owned skills are currently supported. Returns the opaque package and main-resource handles required by skills.read.",
+                "strict": false,
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "authority": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "orchestrator"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "authority"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "type": "function",
+                "name": "read",
+                "description": "Read one complete resource from an enabled skill. Pass the exact authority and package returned by skills.list; resource identifiers remain opaque and are routed to that authority.",
+                "strict": false,
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "authority": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "orchestrator"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "package": {
+                      "type": "string"
+                    },
+                    "resource": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "authority",
+                    "package",
+                    "resource"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        ],
+        "tool_choice": "auto",
+        "parallel_tool_calls": false,
+        "reasoning": {
+          "effort": "low",
+          "summary": "auto"
+        },
+        "store": false,
+        "stream": true,
+        "include": [
+          "reasoning.encrypted_content"
+        ],
+        "prompt_cache_key": "01a06ef7-c339-75e2-808b-5c330f91573b",
+        "client_metadata": {
+          "x-codex-turn-metadata": "{\"installation_id\":\"8d538af1-8486-42ae-9ff6-e61a94134da4\",\"session_id\":\"01a06ef7-c339-75e2-808b-5c330f91573b\",\"thread_id\":\"01a06ef7-c339-75e2-808b-5c330f91573b\",\"turn_id\":\"01a06ef7-c34e-7172-a37a-f64fdf1f7a5e\",\"window_id\":\"01a06ef7-c339-75e2-808b-5c330f91573b:0\",\"request_kind\":\"turn\",\"sandbox\":\"none\",\"turn_started_at_unix_ms\":1788568126288}",
+          "x-codex-window-id": "01a06ef7-c339-75e2-808b-5c330f91573b:0",
+          "x-codex-installation-id": "8d538af1-8486-42ae-9ff6-e61a94134da4",
+          "session_id": "01a06ef7-c339-75e2-808b-5c330f91573b",
+          "turn_id": "01a06ef7-c34e-7172-a37a-f64fdf1f7a5e",
+          "thread_id": "01a06ef7-c339-75e2-808b-5c330f91573b"
+        }
+      }
+    }
+  ],
+  "executable_sha256": "83751f15cb6a0a7b97df67752c001e3fe1c20e18ffbfec3ff63567296205eb6c",
+  "fixture_source_hashes": {
+    "fixture-policy.mjs": "9673d3130b9b29dba39bd1363209b82cff5f3b9afaecde2a3e1d85acd289d72b",
+    "synthetic-turns.mjs": "e320039d49b3bd554a33f75f080058d60e1c5bf2a7edc52aabb3b679edacad84",
+    "turn-probe-client.mjs": "62fc49cf65f6c3c686e9cf59dfd24f4be82b94157a65aeffe1ea77d24d710680",
+    "create-temp-profile.mjs": "f49e0f1a53569d492d2a0168ac2d58d1a09d7eaea29e7de4935731640d7d7de5",
+    "assertions.mjs": "74b1b4e439f354d09c67d9b551f899d2e752f28e14fb5914c436be3fb1135475",
+    "fixtures/conflicting-skill-a/SKILL.md": "5a8b030cd2e7cd4bac0782948cd3b5000bea6dad6f4dc6640510b5a6530bc01b",
+    "fixtures/conflicting-skill-b/SKILL.md": "68b72630273eace61d9df6d010ea8303b6cf4810df28604b5d9f50079038ad3f",
+    "fixtures/allowed-skill/SKILL.md": "8bf4a43404c1c526afee99699b2444de4880d1f38c28215efbfdd14e691793ad",
+    "fixtures/allowed-skill/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+  },
+  "status": "passed",
+  "profiles_cleaned": true,
+  "real_config_unchanged": true
+}

@@ -1,0 +1,298 @@
+{
+  "schema_version": 1,
+  "codex_version": "codex-cli 0.145.0",
+  "platform": "win32",
+  "inference_executed": false,
+  "strict_proven": false,
+  "m1_gate": "incomplete",
+  "untested": [
+    "model implicit invocation",
+    "model explicit SkillRef",
+    "hostile filesystem/tool bypass",
+    "mid-turn crash",
+    "plugin-provided skills",
+    "real user .agents/skills fixture",
+    "Linux/macOS live runtime",
+    "admin scope"
+  ],
+  "profiles": [
+    {
+      "label": "run-a",
+      "initial": [
+        {
+          "name": "sol-isolation-conflict",
+          "path": "$PROBE_ROOT\\repo\\.agents\\skills\\conflicting-skill-b\\SKILL.md",
+          "scope": "repo",
+          "enabled": true
+        },
+        {
+          "name": "imagegen",
+          "path": "$PROBE_ROOT\\run-a\\skills\\.system\\imagegen\\SKILL.md",
+          "scope": "system",
+          "enabled": true
+        },
+        {
+          "name": "openai-docs",
+          "path": "$PROBE_ROOT\\run-a\\skills\\.system\\openai-docs\\SKILL.md",
+          "scope": "system",
+          "enabled": true
+        },
+        {
+          "name": "plugin-creator",
+          "path": "$PROBE_ROOT\\run-a\\skills\\.system\\plugin-creator\\SKILL.md",
+          "scope": "system",
+          "enabled": true
+        },
+        {
+          "name": "review-agent",
+          "path": "$PROBE_ROOT\\run-a\\skills\\.system\\review-agent\\SKILL.md",
+          "scope": "system",
+          "enabled": true
+        },
+        {
+          "name": "skill-creator",
+          "path": "$PROBE_ROOT\\run-a\\skills\\.system\\skill-creator\\SKILL.md",
+          "scope": "system",
+          "enabled": true
+        },
+        {
+          "name": "skill-installer",
+          "path": "$PROBE_ROOT\\run-a\\skills\\.system\\skill-installer\\SKILL.md",
+          "scope": "system",
+          "enabled": true
+        },
+        {
+          "name": "sol-isolation-allowed",
+          "path": "$PROBE_ROOT\\run-a\\skills\\allowed-skill\\SKILL.md",
+          "scope": "user",
+          "enabled": true
+        },
+        {
+          "name": "sol-isolation-conflict",
+          "path": "$PROBE_ROOT\\run-a\\skills\\conflicting-skill-a\\SKILL.md",
+          "scope": "user",
+          "enabled": true
+        }
+      ],
+      "disabled_paths": [
+        "$PROBE_ROOT\\repo\\.agents\\skills\\conflicting-skill-b\\SKILL.md",
+        "$PROBE_ROOT\\run-a\\skills\\.system\\imagegen\\SKILL.md",
+        "$PROBE_ROOT\\run-a\\skills\\.system\\openai-docs\\SKILL.md",
+        "$PROBE_ROOT\\run-a\\skills\\.system\\plugin-creator\\SKILL.md",
+        "$PROBE_ROOT\\run-a\\skills\\.system\\review-agent\\SKILL.md",
+        "$PROBE_ROOT\\run-a\\skills\\.system\\skill-creator\\SKILL.md",
+        "$PROBE_ROOT\\run-a\\skills\\.system\\skill-installer\\SKILL.md",
+        "$PROBE_ROOT\\run-a\\skills\\conflicting-skill-a\\SKILL.md"
+      ],
+      "effective": [
+        {
+          "name": "sol-isolation-conflict",
+          "path": "$PROBE_ROOT\\repo\\.agents\\skills\\conflicting-skill-b\\SKILL.md",
+          "scope": "repo",
+          "enabled": false
+        },
+        {
+          "name": "imagegen",
+          "path": "$PROBE_ROOT\\run-a\\skills\\.system\\imagegen\\SKILL.md",
+          "scope": "system",
+          "enabled": false
+        },
+        {
+          "name": "openai-docs",
+          "path": "$PROBE_ROOT\\run-a\\skills\\.system\\openai-docs\\SKILL.md",
+          "scope": "system",
+          "enabled": false
+        },
+        {
+          "name": "plugin-creator",
+          "path": "$PROBE_ROOT\\run-a\\skills\\.system\\plugin-creator\\SKILL.md",
+          "scope": "system",
+          "enabled": false
+        },
+        {
+          "name": "review-agent",
+          "path": "$PROBE_ROOT\\run-a\\skills\\.system\\review-agent\\SKILL.md",
+          "scope": "system",
+          "enabled": false
+        },
+        {
+          "name": "skill-creator",
+          "path": "$PROBE_ROOT\\run-a\\skills\\.system\\skill-creator\\SKILL.md",
+          "scope": "system",
+          "enabled": false
+        },
+        {
+          "name": "skill-installer",
+          "path": "$PROBE_ROOT\\run-a\\skills\\.system\\skill-installer\\SKILL.md",
+          "scope": "system",
+          "enabled": false
+        },
+        {
+          "name": "sol-isolation-allowed",
+          "path": "$PROBE_ROOT\\run-a\\skills\\allowed-skill\\SKILL.md",
+          "scope": "user",
+          "enabled": true
+        },
+        {
+          "name": "sol-isolation-conflict",
+          "path": "$PROBE_ROOT\\run-a\\skills\\conflicting-skill-a\\SKILL.md",
+          "scope": "user",
+          "enabled": false
+        }
+      ],
+      "scope_coverage": {
+        "repo": "observed",
+        "user": "observed",
+        "admin": "not_observed",
+        "system": "observed"
+      },
+      "allowed_path": "$PROBE_ROOT\\run-a\\skills\\allowed-skill\\SKILL.md",
+      "discovery_allowlist_passed": true,
+      "repo_source_host_readable": true,
+      "repo_source_disabled": true,
+      "parallel_recheck_passed": true
+    },
+    {
+      "label": "run-b",
+      "initial": [
+        {
+          "name": "sol-isolation-conflict",
+          "path": "$PROBE_ROOT\\repo\\.agents\\skills\\conflicting-skill-b\\SKILL.md",
+          "scope": "repo",
+          "enabled": true
+        },
+        {
+          "name": "imagegen",
+          "path": "$PROBE_ROOT\\run-b\\skills\\.system\\imagegen\\SKILL.md",
+          "scope": "system",
+          "enabled": true
+        },
+        {
+          "name": "openai-docs",
+          "path": "$PROBE_ROOT\\run-b\\skills\\.system\\openai-docs\\SKILL.md",
+          "scope": "system",
+          "enabled": true
+        },
+        {
+          "name": "plugin-creator",
+          "path": "$PROBE_ROOT\\run-b\\skills\\.system\\plugin-creator\\SKILL.md",
+          "scope": "system",
+          "enabled": true
+        },
+        {
+          "name": "review-agent",
+          "path": "$PROBE_ROOT\\run-b\\skills\\.system\\review-agent\\SKILL.md",
+          "scope": "system",
+          "enabled": true
+        },
+        {
+          "name": "skill-creator",
+          "path": "$PROBE_ROOT\\run-b\\skills\\.system\\skill-creator\\SKILL.md",
+          "scope": "system",
+          "enabled": true
+        },
+        {
+          "name": "skill-installer",
+          "path": "$PROBE_ROOT\\run-b\\skills\\.system\\skill-installer\\SKILL.md",
+          "scope": "system",
+          "enabled": true
+        },
+        {
+          "name": "sol-isolation-allowed",
+          "path": "$PROBE_ROOT\\run-b\\skills\\allowed-skill\\SKILL.md",
+          "scope": "user",
+          "enabled": true
+        },
+        {
+          "name": "sol-isolation-conflict",
+          "path": "$PROBE_ROOT\\run-b\\skills\\conflicting-skill-a\\SKILL.md",
+          "scope": "user",
+          "enabled": true
+        }
+      ],
+      "disabled_paths": [
+        "$PROBE_ROOT\\run-b\\skills\\.system\\imagegen\\SKILL.md",
+        "$PROBE_ROOT\\run-b\\skills\\.system\\openai-docs\\SKILL.md",
+        "$PROBE_ROOT\\run-b\\skills\\.system\\plugin-creator\\SKILL.md",
+        "$PROBE_ROOT\\run-b\\skills\\.system\\review-agent\\SKILL.md",
+        "$PROBE_ROOT\\run-b\\skills\\.system\\skill-creator\\SKILL.md",
+        "$PROBE_ROOT\\run-b\\skills\\.system\\skill-installer\\SKILL.md",
+        "$PROBE_ROOT\\run-b\\skills\\allowed-skill\\SKILL.md",
+        "$PROBE_ROOT\\run-b\\skills\\conflicting-skill-a\\SKILL.md"
+      ],
+      "effective": [
+        {
+          "name": "sol-isolation-conflict",
+          "path": "$PROBE_ROOT\\repo\\.agents\\skills\\conflicting-skill-b\\SKILL.md",
+          "scope": "repo",
+          "enabled": true
+        },
+        {
+          "name": "imagegen",
+          "path": "$PROBE_ROOT\\run-b\\skills\\.system\\imagegen\\SKILL.md",
+          "scope": "system",
+          "enabled": false
+        },
+        {
+          "name": "openai-docs",
+          "path": "$PROBE_ROOT\\run-b\\skills\\.system\\openai-docs\\SKILL.md",
+          "scope": "system",
+          "enabled": false
+        },
+        {
+          "name": "plugin-creator",
+          "path": "$PROBE_ROOT\\run-b\\skills\\.system\\plugin-creator\\SKILL.md",
+          "scope": "system",
+          "enabled": false
+        },
+        {
+          "name": "review-agent",
+          "path": "$PROBE_ROOT\\run-b\\skills\\.system\\review-agent\\SKILL.md",
+          "scope": "system",
+          "enabled": false
+        },
+        {
+          "name": "skill-creator",
+          "path": "$PROBE_ROOT\\run-b\\skills\\.system\\skill-creator\\SKILL.md",
+          "scope": "system",
+          "enabled": false
+        },
+        {
+          "name": "skill-installer",
+          "path": "$PROBE_ROOT\\run-b\\skills\\.system\\skill-installer\\SKILL.md",
+          "scope": "system",
+          "enabled": false
+        },
+        {
+          "name": "sol-isolation-allowed",
+          "path": "$PROBE_ROOT\\run-b\\skills\\allowed-skill\\SKILL.md",
+          "scope": "user",
+          "enabled": false
+        },
+        {
+          "name": "sol-isolation-conflict",
+          "path": "$PROBE_ROOT\\run-b\\skills\\conflicting-skill-a\\SKILL.md",
+          "scope": "user",
+          "enabled": false
+        }
+      ],
+      "scope_coverage": {
+        "repo": "observed",
+        "user": "observed",
+        "admin": "not_observed",
+        "system": "observed"
+      },
+      "allowed_path": "$PROBE_ROOT\\repo\\.agents\\skills\\conflicting-skill-b\\SKILL.md",
+      "discovery_allowlist_passed": true,
+      "repo_source_host_readable": true,
+      "repo_source_disabled": false,
+      "parallel_recheck_passed": true
+    }
+  ],
+  "errors": [],
+  "processes_stopped": true,
+  "real_config_unchanged": true,
+  "profiles_cleaned": true,
+  "discovery_checks_passed": true,
+  "path_redaction": "Temporary root replaced with $PROBE_ROOT; real home with $USER_HOME."
+}

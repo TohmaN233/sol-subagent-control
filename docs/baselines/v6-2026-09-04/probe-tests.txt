@@ -1,0 +1,14 @@
+✔ allowlist is by path, and the allowed skill must still be present and enabled (8.5726ms)
+✔ inventory rejects incomplete, ambiguous, erroneous, and wrong-cwd responses (0.5752ms)
+✔ unobserved scopes are not reported as passing (0.1191ms)
+✔ temporary profiles use separate homes and reject linked cleanup targets (28.4227ms)
+✔ fixture reads cannot access an unknown path or bypass revoked permissions (21.3955ms)
+✔ live request policy rejects filesystem, image, agent and unexpected Skill tools (0.757ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 102.0695

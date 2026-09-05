@@ -1,0 +1,81 @@
+PASS: control-plane files present
+PASS: plugin and MCP manifests are valid
+default prompts fit the 128-character host cap
+PASS: plugin and skill prompt lengths
+PASS: safe Provider defaults and model-independent Task Types
+PASS: prompt minimization, connector contracts, and dual-platform CI documented
+✔ default config path is user-global and independent of the project directory (1.3882ms)
+✔ bundled defaults use delegate for light work and full for difficult work (11.0763ms)
+✔ task type route is derived from stages and cannot conflict with them (5.8954ms)
+✔ sanitized status omits templates, endpoints, and credential names (4.8912ms)
+✔ bundled approval gates default off and only explicit provider or stage opt-in requires approval (15.7979ms)
+✔ resolution returns only the selected compiled prompt and adapter (8.2637ms)
+✔ disabled and approval-gated routes fail closed (9.8532ms)
+✔ environment kill switch cannot be bypassed (4.5956ms)
+✔ configuration rejects stored MCP secrets and unknown placeholders (4.0016ms)
+✔ version-2 config migrates task types and removes untouched disabled provider-specific defaults (11.6284ms)
+✔ version-2 full route migrates disabled with a separate read-only reviewer (7.0878ms)
+✔ version-3 difficult default preserves a customized implementation while adding review (7.0092ms)
+✔ version-3 customized difficult Task Type keeps its user-owned workflow (8.1128ms)
+✔ version-4 difficult workflow retries migration after the strict v3 migration skipped it (6.9598ms)
+✔ version-5 migration clears inherited bundled approval gates and preserves custom opt-ins (7.419ms)
+✔ full resolves implementation then review with pinned providers and no fallback (10.9983ms)
+✔ version-1 migration adds both built-in connectors disabled when legacy config has only external descriptors (8.1225ms)
+✔ approval-gated bounded write is rejected before connector launch when approval is missing (213.4544ms)
+✔ bounded write does not ask for extra approval when provider and stage gates are off (599.2816ms)
+✔ registry defensively rejects an explicitly approval-gated connector start without approval (193.2854ms)
+✔ bounded write requires provider write capability and non-empty allowed_paths before process launch (204.7736ms)
+✔ Grok bounded write uses ACP permission and accepts only allowed paths (755.2677ms)
+✔ Grok pre-gates an outside write permission and reports scope_violation evidence (738.8452ms)
+✔ Grok runtime monitor catches an ignored outside write that bypasses ACP permission (762.5297ms)
+✔ Grok restart reconciliation reattaches the exact session without duplicate task submission (764.374ms)
+✔ Cursor launches through CDP, binds exact agent identity, and completes read-only work (2881.4889ms)
+✔ Cursor launch waits for verified identity and a usable target after CDP HTTP becomes ready (3122.0465ms)
+✔ Cursor Agents panel binds the exact composer identity exposed only after submission (2905.7063ms)
+✔ Cursor Agents panel creates a fresh exact composer for each sequential task (5222.6397ms)
+✔ Cursor bounded write completes for an allowed path and reports the observed path (2919.2406ms)
+✔ Cursor outside modification is rejected at acceptance with observable changed-path evidence (2921.3689ms)
+✔ Cursor runtime monitor catches ignored outside writes before Sol acceptance (2826.1305ms)
+✔ Cursor cancellation requires the exact returned agent identity (1051.8971ms)
+✔ Cursor timeout remains unconfirmed and restart reconcile reuses the exact agent (2298.8091ms)
+✔ Cursor Agents panel restart reconcile reattaches the exact visible composer without history (2266.3306ms)
+✔ Cursor transport loss redacts credential-shaped process diagnostics (1546.4557ms)
+✔ Cursor reuses an already attached verified CDP process without launching a second process (5209.5958ms)
+✔ Cursor launch_if_closed=false fails before process launch (357.0756ms)
+✔ Cursor already running without CDP is never force-closed or relaunched (335.3013ms)
+✔ Grok Leader process loss becomes an explicit needs_attention state (945.0025ms)
+✔ scope guard rejects a direct commit even when changed files are otherwise allowed (495.6878ms)
+✔ allowed_paths rejects escape, absolute, glob, and whole-workspace boundaries before launch (461.5685ms)
+✔ connector probe is non-dispatching and workspace-aware for both providers (2910.0663ms)
+✔ Cursor profile emits valid browser JavaScript for a Windows workspace (1.1269ms)
+✔ built-in Grok connector completes with exact task/session/run identity (745.0775ms)
+✔ permission is surfaced and only an exact returned option resumes the run (744.2846ms)
+✔ input elicitation validates the returned schema before resuming (740.9143ms)
+✔ cancel requires exact identity and reaches a confirmed cancelled terminal state (680.6705ms)
+✔ timeout is ambiguous and never auto-resubmits (1894.0227ms)
+✔ read-only workspace mutation produces scope_violation (830.7534ms)
+✔ credential-shaped stderr is redacted from connector errors (938.4595ms)
+✔ restart changes a nonterminal task to unknown_after_restart without creating a duplicate (733.1097ms)
+✔ task persistence stores a prompt digest but not the prompt body (687.9014ms)
+✔ loopback console requires token and revision-checks saves (70.1248ms)
+✔ ordinary console reports global storage under CODEX_HOME (12.7503ms)
+✔ an explicitly passed resolved global path is still reported as global (8.6165ms)
+✔ SOL_CONTROL_CONFIG is visibly reported as an override (9.3186ms)
+✔ plugin MCP launches from the installed plugin root with the global Codex environment (5.0261ms)
+✔ routing policy recommends a primary once, stays quiet on missing metadata, and never auto-falls back (2.0155ms)
+✔ stdio MCP lists control tools and returns sanitized status (91.5378ms)
+✔ one-click console CLI defaults to browser open and validates options (1.2502ms)
+✔ endpoint validation requires HTTPS except loopback HTTP (1.0303ms)
+✔ direct OpenAI-compatible invocation is text-only and env-authenticated (45.82ms)
+✔ direct API stays disabled until both provider and global switch allow it (8.1895ms)
+ℹ tests 64
+ℹ suites 0
+ℹ pass 64
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 45535.9706
+PASS: Node syntax and control-plane tests
+PASS: verification script syntax
+VERIFY PASSED: Sol Subagent Control extension checks completed

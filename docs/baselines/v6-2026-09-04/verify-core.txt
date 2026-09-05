@@ -1,0 +1,91 @@
+PASS: required files present and retired contract absent
+PASS: default-Sol primary eligibility with Terra/high-plus support and Luna refusal
+PASS: manifest JSON, v0.7.11 release, and selective-routing language
+three exact role pins are valid
+PASS: exact three-role TOML inventory
+PASS: immutable historical migration fingerprints
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\clean\sol-advisor-luna-implementer.toml
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\clean\sol-advisor-terra-implementer.toml
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\clean\sol-advisor-sol-reviewer.toml
+INSTALL PASSED: Luna, Terra, and Sol exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+CHECK PASSED: Luna, Terra, and Sol exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+ALREADY CURRENT: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\clean\sol-advisor-luna-implementer.toml
+ALREADY CURRENT: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\clean\sol-advisor-terra-implementer.toml
+ALREADY CURRENT: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\clean\sol-advisor-sol-reviewer.toml
+INSTALL PASSED: Luna, Terra, and Sol exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+PASS: clean install, exact check, and idempotence
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\selective\sol-advisor-luna-implementer.toml
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\selective\sol-advisor-terra-implementer.toml
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\selective\sol-advisor-sol-reviewer.toml
+INSTALL PASSED: Luna, Terra, and Sol exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+CHECK PASSED: selected role templates exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+PASS: selective Luna/Sol check, Terra refusal, all-role compatibility, and invalid-role refusal
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\upfront-terra\sol-advisor-luna-implementer.toml
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\upfront-terra\sol-advisor-terra-implementer.toml
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\upfront-terra\sol-advisor-sol-reviewer.toml
+INSTALL PASSED: Luna, Terra, and Sol exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+CHECK PASSED: selected role templates exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+PASS: selective Terra/Sol up-front path, Luna refusal, and all-role compatibility
+ERROR: Luna template is missing, not the current exact file: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\missing\sol-advisor-luna-implementer.toml
+ERROR: Terra template is missing, not the current exact file: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\missing\sol-advisor-terra-implementer.toml
+ERROR: Sol template is missing, not the current exact file: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\missing\sol-advisor-sol-reviewer.toml
+PASS: missing-target check refusal is non-mutating
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\codex-home\agents\sol-advisor-luna-implementer.toml
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\codex-home\agents\sol-advisor-terra-implementer.toml
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\codex-home\agents\sol-advisor-sol-reviewer.toml
+INSTALL PASSED: Luna, Terra, and Sol exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\relative-parent\relative-agents\sol-advisor-luna-implementer.toml
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\relative-parent\relative-agents\sol-advisor-terra-implementer.toml
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\relative-parent\relative-agents\sol-advisor-sol-reviewer.toml
+INSTALL PASSED: Luna, Terra, and Sol exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+PASS: CODEX_HOME and relative target behavior
+MIGRATED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\migration\sol-advisor-luna-implementer.toml
+MIGRATED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\migration\sol-advisor-terra-implementer.toml
+ALREADY CURRENT: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\migration\sol-advisor-sol-reviewer.toml
+INSTALL PASSED: Luna, Terra, and Sol exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+CHECK PASSED: Luna, Terra, and Sol exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+PASS: exact historical Luna/Terra migration
+MIGRATED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\v050-migration\sol-advisor-luna-implementer.toml
+MIGRATED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\v050-migration\sol-advisor-terra-implementer.toml
+ALREADY CURRENT: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\v050-migration\sol-advisor-sol-reviewer.toml
+INSTALL PASSED: Luna, Terra, and Sol exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+CHECK PASSED: Luna, Terra, and Sol exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+PASS: exact v0.5.0 Luna/Terra migration
+ERROR: Luna destination is conflict and will not be replaced: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\modified-v050-luna\sol-advisor-luna-implementer.toml
+PASS: modified v0.5.0 Luna refusal with zero partial mutation
+ERROR: Terra destination is conflict and will not be replaced: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\modified-v050-terra\sol-advisor-terra-implementer.toml
+PASS: modified v0.5.0 Terra refusal with zero partial mutation
+ERROR: Luna destination is conflict and will not be replaced: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\modified-luna\sol-advisor-luna-implementer.toml
+PASS: modified Luna refusal with zero partial mutation
+ERROR: Terra destination is conflict and will not be replaced: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\modified-terra\sol-advisor-terra-implementer.toml
+PASS: differing legacy Terra refusal with zero partial mutation
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\modified-current\sol-advisor-luna-implementer.toml
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\modified-current\sol-advisor-terra-implementer.toml
+INSTALLED: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\modified-current\sol-advisor-sol-reviewer.toml
+INSTALL PASSED: Luna, Terra, and Sol exactly match $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\sol-subagent-control\plugins\sol-advisor\agents.
+ERROR: Luna destination is conflict and will not be replaced: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\modified-current\sol-advisor-luna-implementer.toml
+PASS: modified current-role refusal with zero partial mutation
+ERROR: Luna destination is conflict and will not be replaced: $USER_HOME\Documents\Codex\2026-09-04\wo-m\work\verify-temp\sol-advisor-verify.yQ9XLW\unsafe\sol-advisor-luna-implementer.toml
+PASS: unsafe destination refusal with zero partial mutation
+PASS: runtime inspector Luna/Max routing and safe refusal
+PASS: native role contracts, selective route declaration, escalation, and correction checks
+PASS: operations reference preserves selective native operational detail
+two companion install examples are fail-closed and guarded
+PASS: README is concise, user-first, links detailed policy, and keeps maintainer machinery out
+obsolete workflow references are absent
+PASS: README selective routing and preserved Go deeper links
+PASS: obsolete single-lane claims and second Terra role absent
+✔ installs and checks exact native roles without a shell (131.5665ms)
+✔ selective checks ignore unselected conflicts and explicit mismatches fail (228.5543ms)
+✔ emits allowlisted runtime evidence without shell or jq (67.85ms)
+✔ documents unavailable validation as non-blocking and explicit mismatch as blocking (0.9768ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 507.9586
+PASS: shell wrappers and cross-platform native role tools
+VERIFY PASSED: Sol Advisor v0.7.11 selective routing checks completed in $USER_HOME/Documents/Codex/2026-09-04/wo-m/work/verify-temp/sol-advisor-verify.yQ9XLW

@@ -1,0 +1,12 @@
+✔ installs and checks exact native roles without a shell (123.3521ms)
+✔ selective checks ignore unselected conflicts and explicit mismatches fail (215.364ms)
+✔ emits allowlisted runtime evidence without shell or jq (66.2301ms)
+✔ documents unavailable validation as non-blocking and explicit mismatch as blocking (2.4672ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 476.2833
