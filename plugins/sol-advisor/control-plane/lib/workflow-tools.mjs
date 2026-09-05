@@ -10,6 +10,7 @@ const properties = {
   reconciliation: object, after_restart: { type: 'boolean' }, reason: string, approval_id: string, decision: { type: 'boolean' },
   after_sequence: { type: 'integer', minimum: 0 }, receipt: object,
   skill_id: string, provider_id: string, name: string, proposal: object, accepted: { type: 'boolean' },
+  region_id: string, patch_sha256: string,
 };
 const lease = ['run_id', 'node_id', 'attempt_id', 'lease_token'];
 const main = ['run_id', 'control_token'];
@@ -46,6 +47,10 @@ const specs = [
   ['reconcile_connector', 'Inspect only the preallocated exact connector task after an uncertain dispatch. Does not retry it.', [...lease, 'control_token'], []],
   ['collect_connector', 'Collect an active exact connector task. Commit completion only with observed terminal and workspace-scope evidence.', [...lease, 'control_token'], []],
   ['collect_subworkflow', 'Collect the exact child Run after its main-agent acceptance. Output stays in the parent node namespace; collection never invokes another executor.', [...lease, 'control_token'], []],
+  ['prepare_integration', 'Verify isolated branch changes and create an immutable merge proposal after Join. Conflicts or failed branches stop integration.', [...main, 'region_id'], []],
+  ['review_integration', 'Read the exact saved merge patch and branch evidence before main-controlled integration.', [...main, 'region_id'], []],
+  ['integrate_parallel', 'Apply a main-reviewed exact merge patch only if its target still matches the recorded base. Leaves the user branch and index unchanged.', [...main, 'region_id', 'accepted', 'patch_sha256'], []],
+  ['cleanup_parallel', 'Remove exact owned worktrees only after terminal execution and accepted unchanged branch snapshots. Unmerged or changed worktrees remain for inspection.', main, []],
   ['strict_status', 'Read one exact isolated session status. Login URLs are restricted to the human console.', [...lease, 'control_token'], []],
   ['collect_strict', 'Read or reconcile a durable isolated result without another model submission. Finalization requires explicit main-controller acceptance.', [...lease, 'control_token'], ['accepted']],
   ['cleanup_strict_orphans', 'After fencing an interrupted attempt, stop and remove only its verified orphan profile. Never resubmits work or terminates an active owner.', [...lease, 'control_token'], []],

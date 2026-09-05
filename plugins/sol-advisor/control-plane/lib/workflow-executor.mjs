@@ -65,6 +65,7 @@ export class WorkflowExecutor {
     if (initial.subworkflow) {
       const config = await this.getConfig();
       requireValue(config.global.enabled && !isEnvironmentDisabled(this.env), 'CONTROL_DISABLED', 'Workflow execution is disabled');
+      await this.runtime.parallelManager?.ensureNode(this.runtime, runId, args);
       return this.runtime.startSubworkflow(runId, args);
     }
     const current = await this.runtime.get(runId);
@@ -75,6 +76,7 @@ export class WorkflowExecutor {
     }
     // Reconstruct all policy and prompt data from the committed claim, never from
     // a caller-supplied Provider/envelope. Intent creation is the dispatch election.
+    await this.runtime.parallelManager?.ensureNode(this.runtime, runId, args);
     const prepared = await this.prepare(runId, args);
     const requestId = `dispatch-${prepared.envelope.attempt_id}`;
     const request = { ...args, request_id: requestId, envelope_hash: digest(canonicalJSON(prepared)) };

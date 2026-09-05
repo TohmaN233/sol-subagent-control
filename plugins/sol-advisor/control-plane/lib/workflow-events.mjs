@@ -8,6 +8,7 @@ import { syncDirectory } from './workflow-store.mjs';
 const MAX_JOURNAL = 128 * 1024 * 1024;
 const MAX_EVENT = 4 * 1024 * 1024;
 export const EVENT_KINDS = new Set(['started', 'claim', 'complete', 'fail', 'retry', 'cancel', 'pause', 'resume', 'approve', 'dispatch_intent', 'dispatch_receipt', 'executor_event', 'recover', 'control_recovery', 'child_intent', 'child_started']);
+for (const kind of ['parallel_intent', 'parallel_base', 'parallel_branch', 'parallel_ready', 'parallel_proposal', 'parallel_apply_intent', 'parallel_integrated', 'parallel_error', 'parallel_cleanup']) EVENT_KINDS.add(kind);
 
 export function decodeEvents(bytes, { allowTornTail = false } = {}) {
   const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);

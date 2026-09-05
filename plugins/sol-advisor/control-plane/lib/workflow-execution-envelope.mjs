@@ -5,6 +5,7 @@ import { intersectBoundaries, pathBoundaries, resolveBindings } from './workflow
 import { digest, canonicalJSON } from './workflow-revisions.mjs';
 import { skillPathKey } from './execution/codex-skill-policy.mjs';
 import { effectiveSkillPolicy } from './workflow-reference-schema.mjs';
+import { nodeWorkspace } from './parallel/workspace.mjs';
 
 export function runPermissions({ workspace, access, allowed_paths = [] }) {
   requireValue(typeof workspace === 'string' && isAbsolute(workspace), 'RUN_WORKSPACE', 'Run workspace must be absolute');
@@ -60,7 +61,7 @@ export function executionEnvelope(node, state, pins, attempt, token, resourcesRo
     run_id: state.run_id, workflow_id: state.workflow_id, workflow_revision: state.workflow_revision,
     node_id: node.id, attempt_id: attempt.id, lease_token: token, executor: structuredClone(node.executor),
     provider: node.executor.kind === 'provider' ? structuredClone(pins.providers.find(item => item.id === node.executor.provider_id)) : null,
-    role: node.role ?? null, access: permissions.access, workspace: state.permissions.workspace,
+    role: node.role ?? null, access: permissions.access, workspace: nodeWorkspace(node.id, state, pins),
     inputs: resolveBindings(node.input_bindings ?? {}, bindingContext(state)), workflow_inputs: structuredClone(state.inputs),
     upstream_results: Object.fromEntries([...ancestors].sort().filter(id => ['succeeded', 'failed'].includes(state.nodes[id].status)).map(id => [id, { status: state.nodes[id].status, output: structuredClone(state.nodes[id].output), error: structuredClone(state.nodes[id].error) }])),
     constraints: structuredClone(state.constraints), prompt_template: node.prompt_template ?? (node.type === 'skill_ref' ? 'Apply the explicitly pinned Skill to {{task}}. Read its references only from the mapped pinned resources.' : null),

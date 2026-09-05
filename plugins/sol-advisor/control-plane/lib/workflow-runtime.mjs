@@ -11,6 +11,7 @@ import { runPermissions, nodePermissions, approvalBinding, leaseToken, execution
 import { initialRunState, advanceRun, graphInfo, setOutcome, interruptActiveNodes, EXECUTOR_NODES } from './workflow-state.mjs';
 import { resolveWorkflowPins } from './workflow-pins.mjs';
 import { childIdentity, childPermissions, validateChildClosure } from './workflow-subworkflow.mjs';
+import { planParallelBranches } from './parallel/branch-planner.mjs';
 
 const CHILD_COMPLETION = Symbol('verified child completion');
 
@@ -42,9 +43,10 @@ function completionPayload(payload) {
 }
 
 export class WorkflowRuntime {
-  constructor({ workflowStore, runRoot, context = {}, strictCapability = () => false, parallelWriteCapability = () => false, supportedNodeTypes = ['agent', 'skill_ref', 'tool', 'human_gate', 'subworkflow'] }) {
+  constructor({ workflowStore, runRoot, context = {}, strictCapability = () => false, parallelWriteCapability = () => false, parallelManager, supportedNodeTypes = ['agent', 'skill_ref', 'tool', 'human_gate', 'subworkflow'] }) {
     this.workflows = workflowStore; this.runs = new WorkflowRunStore(runRoot); this.context = context;
     this.strictCapability = strictCapability; this.parallelWriteCapability = parallelWriteCapability;
+    this.parallelManager = parallelManager;
     this.supportedNodeTypes = new Set(supportedNodeTypes);
   }
   async initialize() { await this.runs.initialize(); return this; }
@@ -90,12 +92,17 @@ export class WorkflowRuntime {
     const pins = { schema_version: 1, root, providers: structuredClone(providers), children: closure.children, skills: closure.skills, resources: closure.resources };
     const controlToken = randomBytes(32).toString('hex');
     const state = initialRunState({ runId: run_id, pinsHash: digest(canonicalJSON(pins)), pins, inputs: structuredClone(inputs), permissions, constraints: structuredClone(constraints), controlHash: digest(controlToken), mainActor: main_actor, requireApproval: require_approval });
-    for (const scope of validateChildClosure(pins, state)) {
+    const scopes = validateChildClosure(pins, state);
+    for (const scope of scopes) {
       const graph = graphInfo(scope.pack.workflow);
       for (const node of scope.pack.workflow.nodes) if (EXECUTOR_NODES.has(node.type)) {
         const effective = nodePermissions(node, scope.state);
-        if (effective.access === 'bounded_write' && graph.regions.some(region => region.members.has(node.id))) requireValue(await this.parallelWriteCapability(node, scope.pack), 'PARALLEL_WRITE_UNAVAILABLE', 'Parallel write nodes require isolated worktrees and an integration gate');
+        if (effective.access === 'bounded_write' && graph.regions.some(region => region.members.has(node.id))) requireValue(this.parallelManager || await this.parallelWriteCapability(node, scope.pack), 'PARALLEL_WRITE_UNAVAILABLE', 'Parallel write nodes require isolated worktrees and an integration gate');
       }
+    }
+    if (this.parallelManager) {
+      const parallel = await this.parallelManager.preflight(root.workflow, permissions, scopes);
+      if (parallel) { pins.parallel = parallel; state.pins_hash = digest(canonicalJSON(pins)); }
     }
     advanceRun(state, pins);
     const created = await this.runs.create(run_id, pins, blobs, state);
@@ -126,9 +133,11 @@ export class WorkflowRuntime {
       const definition = pins.root.workflow.nodes.find(item => item.id === args.node_id);
       const child = pins.children[definition.subworkflow.workflow_id + '@' + definition.subworkflow.revision_pin];
       const inherited = childPermissions(definition, state, pins, child);
+      inherited.permissions.workspace = envelope.workspace;
       validateData(envelope.inputs, child.workflow.inputs_schema);
       const childPins = { ...pins, root: child, inherited_policy: inherited.policy, child_run_id: identity.run_id,
         parent: { run_id: runId, node_id: args.node_id, attempt_id: args.attempt_id, pins_hash: state.pins_hash } };
+      if (pins.parallel) childPins.parallel = { ...pins.parallel, ...planParallelBranches(child.workflow, { permissions: inherited.permissions }) };
       const childState = initialRunState({ runId: identity.run_id, pinsHash: digest(canonicalJSON(childPins)), pins: childPins,
         inputs: structuredClone(envelope.inputs), permissions: inherited.permissions, constraints: structuredClone(state.constraints),
         controlHash: digest(identity.control_token), mainActor: state.main_actor, requireApproval: inherited.require_approval });
@@ -239,6 +248,7 @@ export class WorkflowRuntime {
       parent_block: parentBlock,
       ready: state.status === 'running' && !parentBlock ? graphInfo(pins.root.workflow).order.filter(id => state.nodes[id].status === 'ready') : [],
       approvals: Object.values(state.approvals).filter(approval => approval.status === 'pending'),
+      integration_gates: (pins.parallel?.regions ?? []).filter(region => region.isolated && state.nodes[region.join_id].status === 'blocked').map(region => ({ region_id: region.id, join_id: region.join_id, phase: state.parallel?.[region.id]?.phase ?? 'not_prepared', proposal: state.parallel?.[region.id]?.proposal ?? null, error: state.parallel?.[region.id]?.error ?? null })),
     };
   }
 

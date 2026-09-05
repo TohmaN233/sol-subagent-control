@@ -19,12 +19,14 @@ import { discoverCodexSkills } from './skill-import/codex-inventory.mjs';
 import { resolveWorkflowPins } from './workflow-pins.mjs';
 import { canonicalJSON, digest } from './workflow-revisions.mjs';
 import { inlineSkillReference } from './skill-import/inline-skill.mjs';
+import { parallelManagerFor } from './parallel/worktree-manager.mjs';
 
 export class WorkflowService {
   constructor({ configPath, defaultConfigPath, env = process.env, fetchImpl = globalThis.fetch, registry, capabilities = {} }) {
     this.configPath = resolve(configPath); this.defaultConfigPath = defaultConfigPath; this.env = env; this.fetchImpl = fetchImpl;
     this.registry = registry ?? connectorRegistryFor({ configPath: this.configPath, env }); this.capabilities = capabilities;
     this.strictManager = capabilities.strictManager ?? strictManagerFor({ configPath: this.configPath, getConfig: () => this.config(), env });
+    this.parallelManager = capabilities.parallelManager ?? parallelManagerFor({ configPath: this.configPath, env });
     this.skillInventory = capabilities.skillInventory ?? new SkillInventory(async workspace => discoverCodexSkills(workspace, { config: await this.config(), env }));
   }
   async config() { return loadConfig({ configPath: this.configPath, defaultConfigPath: this.defaultConfigPath }); }
@@ -53,6 +55,7 @@ export class WorkflowService {
     await noSymlinks(storeRoot); // A missing migrated generation is corruption, not an empty new library.
     const store = await new WorkflowStore(storeRoot, { validationContext: context }).initialize();
     const runtime = await new WorkflowRuntime({ workflowStore: store, runRoot: join(dirname(this.configPath), 'workflow-runs'), context,
+      parallelManager: this.parallelManager,
       strictCapability: this.capabilities.strictCapability ?? (async (pack, closure) => { await this.strictManager.capability(pack, config.providers, closure?.skills); return true; }),
       ...(this.capabilities.parallelWriteCapability ? { parallelWriteCapability: this.capabilities.parallelWriteCapability } : {}),
     }).initialize();
@@ -63,7 +66,7 @@ export class WorkflowService {
     if (operation === 'migrate_v6') { requireValue(human, 'HUMAN_CONFIGURATION_REQUIRED', 'Migration is a user-owned console action'); await this.config(); return migrateV6OnDisk({ configPath: this.configPath }); }
     if (operation === 'restore_v6') { requireValue(human, 'HUMAN_CONFIGURATION_REQUIRED', 'Backup restoration is a user-owned console action'); return restoreV6Backup({ configPath: this.configPath, expected_current_sha256: args.expected_current_sha256 }); }
     const { config, context, store, runtime, executor } = await this.open();
-    if (['start', 'claim_node', 'dispatch', 'retry_node', 'resume'].includes(operation)) requireValue(config.global.enabled && !isEnvironmentDisabled(this.env), 'CONTROL_DISABLED', 'Workflow execution is disabled');
+    if (['start', 'claim_node', 'dispatch', 'retry_node', 'resume', 'prepare_integration', 'integrate_parallel'].includes(operation)) requireValue(config.global.enabled && !isEnvironmentDisabled(this.env), 'CONTROL_DISABLED', 'Workflow execution is disabled');
     switch (operation) {
       case 'skill_inventory': {
         return this.skillInventory.list(args.workspace);
@@ -178,6 +181,10 @@ export class WorkflowService {
       case 'reconcile_connector': return executor.reconcileConnector(args.run_id, args);
       case 'collect_connector': return executor.collectConnector(args.run_id, args);
       case 'collect_subworkflow': return runtime.collectSubworkflow(args.run_id, args);
+      case 'prepare_integration': return this.parallelManager.prepareIntegration(runtime, args.run_id, args);
+      case 'review_integration': return this.parallelManager.review(runtime, args.run_id, args);
+      case 'integrate_parallel': return this.parallelManager.integrate(runtime, args.run_id, args);
+      case 'cleanup_parallel': return this.parallelManager.cleanup(runtime, args.run_id, args);
       default: throw Object.assign(new Error(`Unknown Workflow operation: ${operation}`), { code: 'WORKFLOW_OPERATION' });
     }
   }

@@ -61,6 +61,14 @@ V7_SKILL_IMPORT_CONTRACT. Inline remains Draft until exact human review. M10-M13
 and all editor/authentication/release gates remain; full155 regression and actual
 App Server6-case/17-request evidence are recorded in the work log.
 
+M10 parallel dispatch now uses real detached Git worktrees, dynamic fork snapshots,
+and blocked Join integration gates. Only qualified Strict writers may use this lane.
+See V7_PARALLEL_CONTRACT for scope, patch review, source CAS and owned cleanup rules.
+Do not equate a cooperative handoff workspace field with enforced isolation, bypass
+the merge hash/acceptance gate, or remove unaccepted/changed worktrees. Full167 plus
+focused follow-up tests and actual overlapping Codex request evidence are recorded;
+M11-M13 remain before shipping or migration of real user configuration.
+
 Relevant checks:
 
 ```text

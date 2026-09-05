@@ -32,6 +32,7 @@ export function initialRunState({ runId, pinsHash, pins, inputs, permissions, co
     pins_hash: pinsHash, control_hash: controlHash, main_actor: mainActor, status: 'running',
     created_at: now, updated_at: now, inputs, permissions, constraints, require_approval: requireApproval,
     pause_reason: null, error: null, approvals: {}, output: null,
+    parallel: {},
     nodes: Object.fromEntries(pins.root.workflow.nodes.map(node => [node.id, {
       status: 'pending', attempts: [], active_attempt_id: null, output: null, error: null,
       approval_id: null, approval_round: 0, failure_handled: false,
@@ -99,6 +100,9 @@ export function advanceRun(state, pins) {
       }
     } else if (definition.type === 'join') {
       const region = graph.regions.find(item => item.parallel.join_id === id);
+      if (pins.parallel?.regions.some(item => item.id === region.parallel.id && item.isolated) && state.parallel?.[region.parallel.id]?.phase !== 'merged') {
+        node.status = 'blocked'; continue;
+      }
       const failures = [...region.members].filter(member => state.nodes[member].status === 'failed');
       node.output = { parallel_id: definition.parallel_id, failures, branch_results: Object.fromEntries(graph.out.get(definition.parallel_id).map(edge => [edge.label, { entry_node: edge.target }])) };
       setOutcome(state, graph, id, 'succeeded');

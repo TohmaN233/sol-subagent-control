@@ -30,6 +30,30 @@ export class WorkflowRunStore {
     return serializeRun(root, () => new WorkflowStore(root).withWriter(action));
   }
 
+  async saveArtifact(id, label, value) {
+    workflowId(label); const bytes = Buffer.from(value); const sha256 = digest(bytes);
+    requireValue(bytes.length <= 32 * 1024 * 1024, 'RUN_ARTIFACT_LIMIT', 'Run artifact exceeds its bounded size');
+    const artifact = `artifact-${label}-${sha256}.bin`; const path = insideRoot(this.directory(id), join(this.directory(id), artifact));
+    // Caller may already own the Run journal writer. Content addressing and wx
+    // handle concurrent artifact publication without nesting the writer lock.
+    try {
+      await noSymlinks(this.directory(id)); const handle = await open(path, 'wx', 0o600);
+      try { await handle.writeFile(bytes); await handle.sync(); } finally { await handle.close(); }
+      await syncDirectory(this.directory(id));
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      await this.readArtifact(id, { artifact, sha256, bytes: bytes.length });
+    }
+    return { artifact, sha256, bytes: bytes.length };
+  }
+
+  async readArtifact(id, reference) {
+    requireValue(reference && /^artifact-[a-z0-9._-]+-[a-f0-9]{64}\.bin$/.test(reference.artifact) && /^[a-f0-9]{64}$/.test(reference.sha256) && Number.isSafeInteger(reference.bytes) && reference.bytes >= 0 && reference.bytes <= 32 * 1024 * 1024, 'RUN_ARTIFACT_REFERENCE', 'Artifact reference needs its exact bounded identity');
+    const path = insideRoot(this.directory(id), join(this.directory(id), reference.artifact)); await noSymlinks(path);
+    const info = await lstat(path); requireValue(info.isFile() && info.nlink === 1 && info.size === reference.bytes, 'RUN_ARTIFACT_CORRUPT', 'Artifact size/type differs from its reference');
+    const bytes = await readFile(path); requireValue(bytes.length === reference.bytes && digest(bytes) === reference.sha256, 'RUN_ARTIFACT_CORRUPT', 'Artifact bytes differ from their committed hash'); return bytes;
+  }
+
   async saveExecutorResult(id, attemptId, result) {
     workflowId(attemptId); const bytes = canonicalJSON(result);
     requireValue(Buffer.byteLength(bytes) <= 256 * 1024, 'EXECUTOR_RESULT_LIMIT', 'Executor result exceeds the durable artifact limit');

@@ -115,6 +115,8 @@ has occurred. Do not treat this checkpoint as the completed upgrade.
 
 ## M9 integration checkpoint (2026-09-05)
 
+M9 implementation commit: `0a206a6`.
+
 - New Runs resolve whole transitive child Packs/resources, Provider identities and
   Skill snapshots before publication. Source name/hash/version, complete resource
   bytes and every ancestry context are checked. Reused children cannot hide a
@@ -154,6 +156,45 @@ has occurred. Do not treat this checkpoint as the completed upgrade.
 - Remaining: M10 worktrees/integration, M11 editor, M12 runtime UI and exact remote
   reattachment without retry charge, M13 end-to-end/release. The application broker
   is not an OS filesystem isolation boundary. No real user configuration changed.
+
+## M10 integration checkpoint (2026-09-05)
+
+- `lib/parallel` now implements graph-region planning, actual detached worktree
+  ownership, bounded Git operations, fork snapshots after prior serial writes,
+  nested workspace inheritance, durable provisioning, merge artifacts and cleanup.
+- Parallel writes require qualified Strict execution. A cooperative handoff cannot
+  claim enforcement merely because its packet names another directory. Read-only
+  parallelism remains available without a Git requirement. Worktrees never enable
+  a disabled Provider or grant additional Run paths.
+- Clean-source preflight rejects untracked edits, custom checkout/merge drivers,
+  config includes, links/submodules and unsupported paths. Existing ignored caches
+  are not copied. Newly created ignored branch files remain visible to scope checks;
+  known ignored outputs from preceding nodes/integrations are included in fork data.
+- Every writing region assigns an independent worktree to each sibling branch.
+  Sequential nodes in a branch share their branch results; nested forks snapshot
+  that enclosing workspace. Overlap is reported and only accepted behind this
+  worktree isolation and integration gate. Failed branches cannot pass write Join.
+- Join blocks until the controller reviews a durable exact patch/hash. Conflict,
+  outside paths or concurrent target changes stop integration. Applying retains
+  the user's branch HEAD and index. A journaled apply intent can reconcile an exact
+  already-applied result without applying twice; partial/other trees remain errors.
+- Terminal cleanup requires accepted unchanged snapshots and confirmed executor
+  completion. Exact ownership intent precedes removal; retry reconciles a completed
+  deletion. Unaccepted/changed branches remain available. Errors are journaled even
+  when a provisioning, merge or cleanup call fails; audit failures are surfaced too.
+- Full regression passed167 tests (59.5 seconds, session18359). Final ancestry
+  checks and Strict-only write qualification passed Git4, planner3 and focused
+  runtime1 tests afterward; the registered total is now168.
+- Actual App Server/local-provider report `baselines/v7-strict-2026-09-04/parallel-integration.json`
+  passed2 cases/14 requests: overlapping read-only turns and overlapping isolated
+  writes plus reviewed integration/cleanup. Request barriers observed arrival gaps
+  of215/225ms. Source HEAD/index and shared config hashes stayed unchanged; owned
+  model profiles were cleaned. It preserves source hashes before the final
+  ancestry/Strict-only gate refinements and is not a cross-platform release claim.
+- Remaining: M11 editor/authentication/publication, M12 runtime UI/remote lease
+  reattachment and broader interrupted-helper recovery, M13 E2E/release. Git calls
+  have bounded deadlines but do not claim OS isolation or tree-wide helper process
+  termination after every possible timeout. Uncertain worktrees remain inspectable.
 
 ## M7 engine checkpoint (243208c; historical)
 
