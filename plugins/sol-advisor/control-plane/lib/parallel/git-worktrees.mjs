@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { writeFile, readFile, lstat, rm, open, readdir } from 'node:fs/promises';
 import { join, resolve, sep, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { ensureDirectory, insideRoot, noSymlinks, requireValue, workflowId, resourcePath } from '../workflow-paths.mjs';
+import { ensureDirectory, insideRoot, noSymlinks, requireValue, workflowId, resourcePath, canonicalNoLinks } from '../workflow-paths.mjs';
 import { pathBoundaries } from '../workflow-bindings.mjs';
 import { canonicalJSON, digest } from '../workflow-revisions.mjs';
 import { syncDirectory } from '../workflow-store.mjs';
@@ -11,6 +11,7 @@ import { writeDurableJSON } from '../workflow-events.mjs';
 const oid = value => typeof value === 'string' && /^[a-f0-9]{40,64}$/.test(value);
 const key = value => process.platform === 'win32' ? resolve(value).toLowerCase() : resolve(value);
 const equalPath = (left, right) => key(left) === key(right);
+const samePhysicalPath = async (left, right) => equalPath(await canonicalNoLinks(left), await canonicalNoLinks(right));
 const contains = (root, path) => key(path) === key(root) || key(path).startsWith(key(root) + sep);
 const MAX_OUTPUT = 32 * 1024 * 1024;
 async function missing(path) { try { await lstat(path); return false; } catch (error) { if (error.code === 'ENOENT') return true; throw error; } }
@@ -95,8 +96,8 @@ export class GitWorktrees {
   async inspect(workspace, { clean = true } = {}) {
     await noSymlinks(workspace);
     const top = await this.text(workspace, ['rev-parse', '--show-toplevel']);
-    requireValue(equalPath(top, workspace), 'PARALLEL_REPOSITORY_ROOT', 'Parallel writes require the selected Git working-tree root');
-    const common = resolve(workspace, await this.text(workspace, ['rev-parse', '--git-common-dir'])); await noSymlinks(common);
+    requireValue(await samePhysicalPath(top, workspace), 'PARALLEL_REPOSITORY_ROOT', 'Parallel writes require the selected Git working-tree root', { git_root: top, requested_workspace: workspace });
+    const common = await canonicalNoLinks(resolve(workspace, await this.text(workspace, ['rev-parse', '--git-common-dir']))); await noSymlinks(common);
     const drivers = await this.git(workspace, ['config', '--includes', '--name-only', '--get-regexp', '^(include\.path|includeif\..*\.path|filter\..*\.(smudge|clean|process)|merge\..*\.driver)$'], { allowed: [0, 1] });
     requireValue(drivers.code === 1, 'PARALLEL_GIT_DRIVER_UNSUPPORTED', 'Custom checkout filters, merge drivers or configuration includes are not qualified for owned worktrees');
     const base = await this.text(workspace, ['rev-parse', '--verify', 'HEAD^{commit}']); requireValue(oid(base), 'PARALLEL_BASE', 'Git HEAD must identify an existing commit');
@@ -147,12 +148,12 @@ export class GitWorktrees {
     requireValue(canonicalJSON(JSON.parse(await readFile(this.manifest(ownership.owner), 'utf8'))) === canonicalJSON(ownership), 'PARALLEL_OWNER_CONFLICT', 'Worktree ownership changed');
     const actual = await this.inspect(ownership.workspace, { clean: false });
     requireValue((await this.git(ownership.workspace, ['symbolic-ref', '-q', 'HEAD'], { allowed: [0, 1] })).code === 1, 'PARALLEL_WORKTREE_CHANGED', 'Owned worktrees must remain detached from user branches');
-    requireValue(equalPath(actual.common_directory, ownership.common_directory) && actual.base_commit === ownership.base_commit, 'PARALLEL_WORKTREE_CHANGED', 'Worktree Git identity or HEAD changed outside its owned execution');
+    requireValue(await samePhysicalPath(actual.common_directory, ownership.common_directory) && actual.base_commit === ownership.base_commit, 'PARALLEL_WORKTREE_CHANGED', 'Worktree Git identity or HEAD changed outside its owned execution');
     const marker = await readFile(join(ownership.workspace, '.git'), 'utf8');
     requireValue(marker.startsWith('gitdir: '), 'PARALLEL_WORKTREE_CHANGED', 'Owned worktree Git marker is invalid');
     const gitDir = resolve(ownership.workspace, marker.slice(8).trim());
     requireValue(contains(join(ownership.common_directory, 'worktrees'), gitDir), 'PARALLEL_WORKTREE_CHANGED', 'Owned worktree points outside the expected repository metadata');
-    requireValue(equalPath((await readFile(join(gitDir, 'gitdir'), 'utf8')).trim(), join(ownership.workspace, '.git')), 'PARALLEL_WORKTREE_CHANGED', 'Git worktree registration does not point back to its exact owned path');
+    requireValue(await samePhysicalPath((await readFile(join(gitDir, 'gitdir'), 'utf8')).trim(), join(ownership.workspace, '.git')), 'PARALLEL_WORKTREE_CHANGED', 'Git worktree registration does not point back to its exact owned path');
     return actual;
   }
   async snapshot(workspace, baseCommit, allowedPaths, { includeIgnored = true, extraPaths = [] } = {}) {
@@ -211,7 +212,8 @@ export class GitWorktrees {
   }
   async registered(repository, workspace) {
     const records = (await this.git(repository, ['worktree', 'list', '--porcelain', '-z'])).stdout.toString('utf8').split('\0');
-    return records.some(record => record.startsWith('worktree ') && equalPath(record.slice(9), workspace));
+    for (const record of records) if (record.startsWith('worktree ') && await samePhysicalPath(record.slice(9), workspace)) return true;
+    return false;
   }
   async remove(ownership, { reconcile = false, beforeRemove } = {}) {
     try { await this.verify(ownership); }

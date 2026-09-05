@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm, link, symlink } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { tmpdir } from './physical-tempdir.mjs';
+import { tmpdir as osTmpdir } from 'node:os';
+import { join, relative } from 'node:path';
 import { createCodexToolBroker } from '../lib/execution/codex-tool-broker.mjs';
 import { digest } from '../lib/workflow-revisions.mjs';
 
@@ -51,6 +52,13 @@ test('pinned resources ignore mutable source files and do not permit arbitrary r
   const f = await fixture(t); const broker = await createCodexToolBroker({ ...f.options, resources: [{ path: 'references/guide.txt', bytes: 'Pinned text', sha256: digest('Pinned text') }] });
   assert.equal(output(await broker.call('read_workflow_resource', { path: 'references/guide.txt' }, 'resource')).text, 'Pinned text');
   await assert.rejects(broker.call('read_workflow_resource', { path: 'src/main.txt' }, 'denied'), { code: 'CODEX_RESOURCE_DENIED' });
+});
+
+test('Windows environment short paths retain denied-directory identity after workspace canonicalization', { skip: process.platform !== 'win32' }, async t => {
+  const f = await fixture(t); await mkdir(join(f.root, 'private')); await writeFile(join(f.root, 'private', 'secret'), 'do not expose');
+  const alias = join(osTmpdir(), relative(tmpdir(), f.root));
+  const broker = await createCodexToolBroker({ ...f.options, workspace: alias, deniedPaths: [join(alias, 'private'), join(alias, 'not-created')] });
+  for (const path of ['private/secret', 'not-created/file']) await assert.rejects(broker.call('read_workspace', { path }, path), { code: 'CODEX_TOOL_PATH_DENIED' });
 });
 
 test('revoked lease and failed audit prevent writes; a post-commit audit error reports its side effect', async t => {

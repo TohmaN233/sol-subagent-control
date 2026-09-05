@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { tmpdir } from './physical-tempdir.mjs';
 import { join, resolve } from 'node:path';
 import { WorkflowService } from '../lib/workflow-service.mjs';
 import { loadConfig, saveConfig } from '../lib/config.mjs';
@@ -214,7 +214,9 @@ test('orphan cleanup selects exact Run/node/attempt ownership and refuses a live
   const f = await fixture(t, { authenticated: false }); await f.service.call('dispatch', f.args);
   await f.service.call('cancel', f.args); await mkdir(f.manager.parent, { recursive: true });
   const active = join(f.manager.parent, 'strict-node-active'); const orphan = join(f.manager.parent, 'strict-node-orphan'); const other = join(f.manager.parent, 'strict-node-other');
-  const identity = await processIdentity(process.pid);
+  const supported = ['win32', 'linux'].includes(process.platform);
+  if (!supported) await assert.rejects(processIdentity(process.pid), { code: 'PROCESS_IDENTITY_UNSUPPORTED' });
+  const identity = supported ? await processIdentity(process.pid) : { pid: process.pid, started: 'synthetic-unqualified', executable: process.execPath };
   for (const home of [active, orphan, other]) {
     await mkdir(home);
     const parentIdentity = home === active ? identity : { pid: 999999999, started: 'synthetic-dead-parent', executable: process.execPath };
@@ -222,6 +224,12 @@ test('orphan cleanup selects exact Run/node/attempt ownership and refuses a live
       owner: { run_id: home === other ? 'another-run' : f.run.run_id, node_id: f.args.node_id, attempt_id: f.args.attempt_id } }));
   }
   const result = await f.service.call('cleanup_strict_orphans', f.args);
+  if (!supported) {
+    assert.deepEqual(result.cleaned, []); assert.equal(result.blocked.length, 3);
+    assert(result.blocked.every(item => item.code === 'PROCESS_IDENTITY_UNSUPPORTED'));
+    for (const home of [active, orphan, other]) assert(await readFile(join(home, 'owner.json')));
+    return;
+  }
   assert.deepEqual(result.cleaned, [orphan]); assert(result.blocked.some(item => item.home === active && item.code === 'PROFILE_OWNER_ACTIVE'));
   assert.equal(result.resubmitted, false); await assert.rejects(readFile(join(orphan, 'owner.json')), { code: 'ENOENT' });
   assert(await readFile(join(other, 'owner.json'))); assert(await readFile(join(active, 'owner.json')));

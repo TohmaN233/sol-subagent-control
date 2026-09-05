@@ -1,7 +1,7 @@
 import { lstat, readFile, readdir, open, rename, unlink, realpath } from 'node:fs/promises';
 import { dirname, join, resolve, relative, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { resourcePath, requireValue, noSymlinks, insideRoot } from '../workflow-paths.mjs';
+import { resourcePath, requireValue, noSymlinks, insideRoot, canonicalNoLinks } from '../workflow-paths.mjs';
 import { pathBoundaries } from '../workflow-bindings.mjs';
 import { digest } from '../workflow-revisions.mjs';
 
@@ -24,7 +24,7 @@ export async function createCodexToolBroker({ workspace, access, allowedPaths = 
   await noSymlinks(workspace); const root = await realpath(workspace);
   const boundaries = pathBoundaries(allowedPaths).map(path => join(root, ...path.split('/')));
   requireValue(access !== 'bounded_write' || boundaries.length > 0, 'CODEX_BROKER_SCOPE', 'Write tools require concrete narrowed path boundaries');
-  const denied = deniedPaths.map(path => resolve(path));
+  const denied = await Promise.all(deniedPaths.map(path => canonicalNoLinks(path)));
   const pinned = new Map();
   requireValue(resources.length <= 512, 'CODEX_RESOURCE_LIMIT', 'Too many node resources');
   let totalResourceBytes = 0;

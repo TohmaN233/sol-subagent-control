@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdtemp, rm, readdir } from 'node:fs/promises';
 import { join, relative, isAbsolute } from 'node:path';
-import { tmpdir } from 'node:os';
+import { tmpdir } from './physical-tempdir.mjs';
 import { fileURLToPath } from 'node:url';
 import { prepareV6Migration, migrateV6OnDisk, restoreV6Backup } from '../lib/workflow-migration-v6.mjs';
 import { digest } from '../lib/workflow-revisions.mjs';

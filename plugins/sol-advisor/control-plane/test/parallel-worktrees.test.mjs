@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { tmpdir } from './physical-tempdir.mjs';
+import { tmpdir as osTmpdir } from 'node:os';
+import { join, resolve, relative } from 'node:path';
 import { GitWorktrees, statusPaths } from '../lib/parallel/git-worktrees.mjs';
 import { spawn } from 'node:child_process';
 
@@ -16,6 +17,11 @@ async function fixture(t) {
   return { root, workspace, git, base: await git.inspect(workspace) };
 }
 
+test('Windows environment short paths resolve to the same Git root without accepting subdirectories', { skip: process.platform !== 'win32' }, async t => {
+  const f = await fixture(t); const alias = join(osTmpdir(), relative(tmpdir(), f.workspace));
+  const observed = await f.git.inspect(alias); assert.equal(observed.base_commit, f.base.base_commit); assert.equal(observed.common_directory, f.base.common_directory);
+  await assert.rejects(f.git.inspect(join(alias, 'src')), { code: 'PARALLEL_REPOSITORY_ROOT' });
+});
 test('actual detached worktrees isolate disjoint edits and merge a proposal without changing the source workspace', async t => {
   const f = await fixture(t); const a = await f.git.create(f.base, 'branch-a'); const b = await f.git.create(f.base, 'branch-b');
   assert.notEqual(a.workspace, b.workspace);

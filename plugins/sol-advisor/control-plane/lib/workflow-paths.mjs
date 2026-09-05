@@ -1,4 +1,4 @@
-import { lstat, mkdir } from 'node:fs/promises';
+import { lstat, mkdir, realpath } from 'node:fs/promises';
 import { dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 
 export function requireValue(condition, code, message, details = {}) {
@@ -46,6 +46,19 @@ export async function ensureDirectory(path) {
   }
   requireValue((await lstat(absolute)).isDirectory(), 'NOT_DIRECTORY', `Expected directory: ${absolute}`);
   return absolute;
+}
+
+// Canonicalize Windows short names/casing only after rejecting every link in the
+// supplied path. Missing suffixes are allowed for denied state not yet created.
+// This never turns a symlink alias into an authorized path.
+export async function canonicalNoLinks(path) {
+  const absolute = resolve(path);
+  try { await noSymlinks(absolute); return await realpath(absolute); }
+  catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    const parent = dirname(absolute); requireValue(parent !== absolute, 'STORE_ROOT_MISSING', 'Filesystem root is unavailable');
+    return join(await canonicalNoLinks(parent), relative(parent, absolute));
+  }
 }
 
 export function insideRoot(root, path) {

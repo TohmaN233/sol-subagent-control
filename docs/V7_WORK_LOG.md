@@ -387,3 +387,14 @@ flag with persisted state; corrected that distinction and both presets passed.
 Final service16 passed after the model-publication gate; typecheck/build comparison
 and plugin/skill validation passed. Remote three-platform CI remains to observe.
 
+
+First real PR CI (33953220452, head7850a7c): Linux core and web passed;
+Windows exposed8.3-vs-long-path comparisons in Git roots and broker deny paths.
+macOS temp fixtures inherited /var's system symlink and correctly hit the no-link
+boundary. Fixed physical path identity after link rejection, retained explicit
+root checks/diagnostics, and gave fixtures canonical temporary roots. Added two
+Windows environment-alias regressions. Platform-independent catalog tests now use
+static catalog fixtures; actual unsupported macOS ownership is asserted to refuse
+profile startup and retain orphan state. No Strict qualification was extended.
+Focused broker/Git/runtime17 and Strict manager/catalog18 passed locally.
+

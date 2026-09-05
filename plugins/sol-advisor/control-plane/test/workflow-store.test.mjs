@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm, symlink, readdir } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { tmpdir } from './physical-tempdir.mjs';
 import { join, resolve } from 'node:path';
 import { fork } from 'node:child_process';
 import { WorkflowStore } from '../lib/workflow-store.mjs';
