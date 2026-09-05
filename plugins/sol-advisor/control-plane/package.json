@@ -1,9 +1,9 @@
 {
   "name": "sol-advisor-control-plane",
-  "version": "0.4.5",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
-  "description": "Local Task Type/Stage/Provider control plane with repository-owned Cursor CDP and Grok Leader + ACP connectors.",
+  "description": "Local versioned Workflow editor and journal-backed execution with pinned Providers and opt-in Strict sessions.",
   "engines": {
     "node": ">=20"
   },

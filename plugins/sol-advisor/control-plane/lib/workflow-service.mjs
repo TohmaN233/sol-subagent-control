@@ -27,6 +27,7 @@ import { childIdentity } from './workflow-subworkflow.mjs';
 import { nodePermissions } from './workflow-execution-envelope.mjs';
 import { effectiveSkillPolicy } from './workflow-reference-schema.mjs';
 import { nodeWorkspace } from './parallel/workspace.mjs';
+import { skillSourceStatus } from './skill-import/source-status.mjs';
 
 export class WorkflowService {
   constructor({ configPath, defaultConfigPath, env = process.env, fetchImpl = globalThis.fetch, registry, capabilities = {} }) {
@@ -134,6 +135,7 @@ export class WorkflowService {
       case 'apply_expansion': return applyExpansion(store, args.workflow_id, args.proposal, { expected_revision: args.expected_revision, context });
       case 'list': return Promise.all((await store.list()).map(async pack => ({ id: pack.workflow.id, name: pack.workflow.name, status: pack.workflow.status, enabled: pack.workflow.enabled, revision_hash: pack.revision_hash, description: pack.workflow.description, skill_policy: pack.workflow.skill_policy, validation: (await this.validationContext(store, pack.workflow, context)).validation })));
       case 'read': return store.snapshot(args.workflow_id, args.revision_hash);
+      case 'source_status': return skillSourceStatus(await store.snapshot(args.workflow_id, args.revision_hash));
       case 'revisions': return store.revisions(args.workflow_id);
       case 'read_resource': return readEditorResource(store, args);
       case 'write_resource': return writeEditorResource(store, args);

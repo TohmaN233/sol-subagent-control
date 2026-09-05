@@ -1,7 +1,7 @@
 {
   "name": "sol-advisor",
-  "version": "0.7.11",
-  "description": "Primary-agent-led routing with pluggable Task Types, pinned Stage providers, and opt-in Cursor/Grok connectors.",
+  "version": "0.8.0",
+  "description": "Versioned visual Workflows, explicit Skill imports, journal-backed Runs and pinned Provider execution.",
   "author": {
     "name": "TohmaN233",
     "url": "https://github.com/TohmaN233"
@@ -21,8 +21,8 @@
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Sol Subagent Control",
-    "shortDescription": "Keep one qualifying primary agent in charge while Task Type stages use user-pinned providers.",
-    "longDescription": "Sol Advisor recommends GPT-5.6 Sol with high, xhigh, or max reasoning at startup, permits GPT-5.6 Terra, and rejects GPT-5.6 Luna for architecture, root implementation, verification, and acceptance. Unavailable primary-session metadata is not repeatedly surfaced and never blocks work; a proven mismatch stops the controlled route. Before the first task tool call, the primary agent declares a machine-auditable SELECTIVE ROUTE: delegate is the default for light or ordinary work; audit is explicitly review-only; full combines implementation then review for difficult, broad, or high-risk work; solo requires an explicit primary-only request and is never an activation-error fallback. Public auxiliary-role metadata is authoritative. An explicit role/model/effort mismatch stops that native lane; an unavailable optional checker is reported as unverified and does not stop the task. The optional control plane exposes sanitized Task Type and ordered Stage metadata. Route is derived from those Stages rather than configured independently. Each Stage has exactly one Provider pinned by the user; Sol cannot substitute Providers or auto-fallback. Disabled-by-default repository-owned Cursor CDP and Grok Leader plus ACP connectors support read-only and policy-bounded write work. Provider and Stage approval gates default off and add an extra model-call confirmation only when explicitly enabled. Writes require Provider write capability, a bounded-write Stage, and bounded allowed_paths; Git scope evidence fails closed. Cursor and Grok compatibility still require user-machine live smoke, and no external or paid Provider is called merely because it is installed.",
+    "shortDescription": "Build and run versioned Workflows with pinned Providers and main-agent acceptance.",
+    "longDescription": "Sol Advisor recommends GPT-5.6 Sol with high, xhigh, or max reasoning, permits GPT-5.6 Terra, and rejects GPT-5.6 Luna as the primary. Unavailable primary-session metadata is not repeatedly surfaced and never blocks work; a proven mismatch stops the controlled route. In v7 the user owns a versioned Workflow graph with pinned Providers, Skill policies, resources, permissions and main final acceptance. Ready definition validity is separate from launch capability. Imported Skills become Strict Drafts with visible dependencies and human review; source files are never edited. Strict fails closed unless the exact Windows x64 Codex 0.145.0 binary and supported catalog, explicit input and broker boundary qualify. It is not an OS filesystem sandbox. Non-native Providers and Strict default off. Parallel writers use owned Git worktrees with reviewed integration. A durable Run journal fences stale leases and supports exact recovery without automatic resubmission. The legacy v6 and native-only SELECTIVE ROUTE remain compatible: delegate is the default; full combines implementation then review for difficult work. Route is derived from those Stages rather than configured independently. Configuration migration is explicit and backed up.",
     "developerName": "TohmaN233",
     "category": "Productivity",
     "capabilities": [
@@ -31,8 +31,8 @@
     ],
     "websiteURL": "https://github.com/TohmaN233/sol-subagent-control",
     "defaultPrompt": [
-      "Use $sol-advisor:sol-control-plane; keep a qualifying primary agent in charge and verify every auxiliary claim.",
-      "Keep built-in and paid providers off unless the user enabled the Provider and pinned it to the selected Task Type."
+      "Use $sol-advisor:sol-control-plane; run a pinned Workflow and retain main-agent verification and acceptance.",
+      "Keep external Providers off unless explicitly enabled and bound to the selected Workflow."
     ]
   }
 }

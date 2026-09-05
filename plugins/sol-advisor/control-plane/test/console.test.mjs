@@ -12,7 +12,7 @@ test('loopback console requires token and revision-checks saves', async (t) => {
   const state = await startConsole({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, open: false });
   t.after(stopConsole);
   const base = `http://127.0.0.1:${state.port}`;
-  assert.equal(SERVER_VERSION, '0.4.5');
+  assert.equal(SERVER_VERSION, '0.5.0');
   assert.deepEqual(await (await fetch(`${base}/health`)).json(), {
     status: 'ok', version: SERVER_VERSION,
   });

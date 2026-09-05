@@ -113,10 +113,37 @@ test('service imports only a fresh actual inventory selection and prepares expan
   await assert.rejects(f.service.call('import_skill', { workspace: f.workspace, skill_id: selected.id, workflow_id: 'stale' }), { code: 'SKILL_SELECTION_STALE' });
 });
 
+test('migrated bounded and judgment-heavy presets preserve native lanes through journaled main acceptance', async t => {
+  const f = await fixture(t); const legacy = await f.service.config(); await f.migrate();
+  for (const id of ['bounded-code-change', 'judgment-heavy-change']) {
+    const source = legacy.task_types.find(item => item.id === id); const pack = await f.service.call('read', { workflow_id: id });
+    const run = await f.service.call('start', { workflow_id: id, revision_hash: pack.revision_hash, workspace: f.workspace, access: 'bounded_write', allowed_paths: ['out.txt'], main_actor: 'root', inputs: { task: 'Synthetic host handoff verification' } });
+    for (const stage of source.stages) {
+      const definition = pack.workflow.nodes.find(node => node.id === stage.id);
+      assert.equal(definition.executor.provider_id, stage.provider_id); assert.equal(definition.prompt_template, stage.template);
+      const lease = await claim(f, run, stage.id); const args = leaseArgs(run, lease); const handoff = await f.service.call('dispatch', args);
+      assert.equal(handoff.handoff_required, true); assert.equal(handoff.envelope.provider.id, stage.provider_id); assert.equal(handoff.envelope.access, stage.access);
+      if (stage.role === 'reviewer') { assert.equal(handoff.envelope.access, 'read_only'); assert(Object.keys(handoff.envelope.upstream_results).includes('implementation')); }
+      await f.service.call('dispatch_receipt', { ...args, request_id: handoff.request_id, receipt: { agent_id: 'synthetic-' + id + '-' + stage.id } });
+      await f.service.call('complete_node', { ...args, completion: completion({ synthetic_stage: stage.id, actual_model_called: false }) });
+    }
+    const final = await claim(f, run, 'final-acceptance'); const args = leaseArgs(run, final);
+    await assert.rejects(f.service.call('complete_node', { ...args, completion: completion({}) }), { code: 'FINAL_ACCEPTANCE_REQUIRED' });
+    const accepted = await f.service.call('complete_node', { ...args, completion: { ...completion({ verified_handoff_contract: id }), acceptance: { accepted: true } } });
+    assert.equal(accepted.status, 'succeeded'); assert.equal(Object.values(accepted.nodes).flatMap(node => node.attempts).length, source.stages.length + 1);
+    const fresh = new WorkflowService({ configPath: f.configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: {} });
+    const { idempotent, ...acceptedState } = accepted; assert.equal(idempotent, false);
+    assert.deepEqual(await fresh.call('get', control(run)), acceptedState);
+  }
+});
 test('service migration is human-owned; MCP executes a native handoff and main finalization with upstream results', async t => {
   const f = await fixture(t);
   await assert.rejects(f.service.call('list'), { code: 'WORKFLOW_MIGRATION_REQUIRED' });
   await assert.rejects(f.service.call('migrate_v6'), { code: 'HUMAN_CONFIGURATION_REQUIRED' });
+  for (const name of ['workflow_create', 'workflow_save']) {
+    const rejected = await handleRpc({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: { workflow: { status: 'ready' } } } }, { configPath: f.configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: {} });
+    assert.equal(rejected.result.isError, true); assert.match(JSON.stringify(rejected), /HUMAN_PUBLICATION_REQUIRED|must remain Draft/);
+  }
   await f.migrate(); const list = await f.service.call('list'); assert(list.some(w => w.id === 'brainstorm')); assert.doesNotMatch(JSON.stringify(list), /CONSTRAINTS AND OWNERSHIP/);
   const run = await f.start(); const work = await claim(f, run); const args = leaseArgs(run, work);
   const rpc = await handleRpc({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'workflow_dispatch', arguments: args } }, { configPath: f.configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: {} });

@@ -79,6 +79,7 @@ export async function reattachAttempt(runtime, runId, args, observation) {
     }
     const token = rotateAttempt(state, args.node_id, attempt, args.control_token);
     const previousOwner = attempt.owner;
+    delete attempt.finished_at;
     if (definition.executor?.kind === 'main') attempt.owner = state.main_actor;
     attempt.status = attempt.dispatch ? 'running' : 'claimed'; attempt.reconciliation = { ...observation, previous_owner: previousOwner, owner: attempt.owner, at: new Date().toISOString(), resubmitted: false };
     node.status = attempt.status; node.error = null; state.updated_at = new Date().toISOString();

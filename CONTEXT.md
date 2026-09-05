@@ -1,5 +1,17 @@
 # Sol Subagent Control
 
+Version0.8.0 uses configuration v7 after explicit transactional migration. A
+Workflow is an immutable graph definition plus pinned resources; a Run owns its
+journal, attempts, approvals, whole dependency closure and final acceptance. Nodes
+bind main, a fixed Provider, a bounded tool/human gate or an exact SubWorkflow.
+Draft is editable and non-executable; Ready is structurally reviewed, while current
+capabilities and permissions are checked again at launch. Strict means qualified
+catalog/explicit-injection/broker control, never an OS ACL. Recovery reconnects
+exact identities, never latest or automatically resubmitted tasks.
+
+Read docs/V7_UPGRADE.md and the V7_*_CONTRACT documents for current definitions.
+The language below is retained only for v6 compatibility and the native-only skill.
+
 This context defines the control-plane language used to bind reusable work semantics to concrete auxiliary execution backends without giving Sol provider-selection authority.
 
 ## Language

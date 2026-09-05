@@ -15,7 +15,7 @@ export function compileCoarseSkill(snapshot, { id, name = snapshot.metadata.name
   const shared = { access: 'read_only', approval: { required: false }, retry: { max_attempts: 1 }, input_bindings: {} };
   workflow.nodes = [
     { id: 'start', type: 'start' },
-    { ...shared, id: 'instructions', type: 'agent', role, executor: { kind: 'provider', provider_id: providerId ?? '' },
+    { ...shared, id: 'instructions', type: 'agent', role, executor: providerId ? { kind: 'provider', provider_id: providerId } : { kind: 'main' },
       prompt_template: 'Read the pinned Workflow resource source/SKILL.md using read_workflow_resource and apply its complete instructions to this task: {{task}}. Resolve its local references within the pinned source/ resources. Report unmet requirements instead of inventing tools or accessing the original Skill.',
       resources: Object.keys(snapshot.files).sort(), origin: { kind: 'source', source_span: { resource: 'source/SKILL.md', start_line: snapshot.instructions_start_line, end_line: snapshot.files['source/SKILL.md'].toString().split('\n').length } } },
     { ...shared, id: 'final', type: 'agent', role: 'finalizer', executor: { kind: 'main' },

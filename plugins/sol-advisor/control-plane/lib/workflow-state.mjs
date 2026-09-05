@@ -128,7 +128,7 @@ export function advanceRun(state, pins) {
 export function interruptActiveNodes(state, reason) {
   for (const node of Object.values(state.nodes)) if (['claimed', 'running'].includes(node.status)) {
     const attempt = node.attempts.find(item => item.id === node.active_attempt_id);
-    attempt.status = 'interrupted'; attempt.interruption = reason;
+    attempt.status = 'interrupted'; attempt.finished_at = new Date().toISOString(); attempt.interruption = reason;
     node.status = 'interrupted'; node.error = { code: 'INTERRUPTED', message: reason };
   }
 }

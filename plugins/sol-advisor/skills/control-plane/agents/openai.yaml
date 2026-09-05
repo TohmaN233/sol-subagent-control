@@ -1,4 +1,4 @@
 interface:
   display_name: "Sol Subagent Control"
-  short_description: "Keep one qualifying primary agent in charge while resolving one Task Type with pinned Stage providers"
-  default_prompt: "Use $sol-control-plane; read metadata once, resolve one Task Type, and verify every auxiliary claim."
+  short_description: "Run versioned Workflows with pinned Providers and explicit main acceptance"
+  default_prompt: "Use $sol-control-plane; read metadata once, run a pinned Workflow, and verify actual evidence."

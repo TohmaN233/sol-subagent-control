@@ -24,6 +24,7 @@ test('plugin MCP launches from the installed plugin root with the global Codex e
 test('routing policy recommends a primary once, stays quiet on missing metadata, and never auto-falls back', async () => {
   const controlSkill = await readFile(join(pluginDir, 'skills', 'control-plane', 'SKILL.md'), 'utf8');
   const nativeSkill = await readFile(join(pluginDir, 'skills', 'orchestration', 'SKILL.md'), 'utf8');
+  const legacySkill = await readFile(join(pluginDir, 'skills', 'control-plane', 'references', 'v6-control-plane.md'), 'utf8');
   assert.doesNotMatch(controlSkill, /use the native[\s\S]{0,100}workflow or stay solo/i);
   assert.match(controlSkill, /request\s+permission[\s\S]{0,100}retry once/i);
   assert.doesNotMatch(nativeSkill, /ask the user to confirm[\s\S]{0,80}stop[\s\S]{0,40}until confirmed/i);
@@ -33,8 +34,10 @@ test('routing policy recommends a primary once, stays quiet on missing metadata,
     assert.doesNotMatch(skill, /non-blocking reminder|user is responsible/i);
     assert.match(skill, /proven mismatch|explicit.*mismatch/i);
   }
-  assert.match(controlSkill, /delegate is the default/i);
-  assert.match(controlSkill, /full[\s\S]{0,120}(difficult|high-risk)/i);
+  assert.match(legacySkill, /delegate is the default/i);
+  assert.match(legacySkill, /full[\s\S]{0,120}(difficult|high-risk)/i);
+  assert.match(controlSkill, /version: 6[\s\S]{0,100}v6-control-plane.md/);
+  for (const operation of ['workflow_start', 'workflow_claim_node', 'workflow_dispatch', 'workflow_complete_node', 'workflow_reattach_connector']) assert(controlSkill.includes(operation));
   assert.match(controlSkill, /CONTROL PLANE UNAVAILABLE/);
   const unavailableSection = controlSkill.match(/If the control tools are absent[\s\S]*?(?=\n## )/i)?.[0] || '';
   assert.match(unavailableSection, /Do not emit[\s\S]{0,40}`SELECTIVE ROUTE`/i);

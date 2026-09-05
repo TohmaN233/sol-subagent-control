@@ -36,6 +36,8 @@ test('coarse import is deterministic, preserves both metadata formats and surviv
   const one = compileCoarseSkill(source, { id: 'imported', providerId: 'chosen' });
   const two = compileCoarseSkill(source, { id: 'imported', providerId: 'chosen' });
   assert.equal(canonicalJSON(one.workflow), canonicalJSON(two.workflow)); assert.equal(one.workflow.status, 'draft');
+  const main = compileCoarseSkill(source, { id: 'main-import' }); assert.deepEqual(main.workflow.nodes[1].executor, { kind: 'main' });
+  assert.deepEqual(main.workflow.requirements.providers, []); assert.equal(main.workflow.skill_policy.mode, 'strict');
   assert.deepEqual(one.workflow.nodes.map(node => node.type), ['start', 'agent', 'agent', 'end']);
   assert.equal(one.workflow.nodes[1].executor.provider_id, 'chosen'); assert.deepEqual(Object.keys(one.provenance.metadata_files).sort(), ['SKILL.json', 'agents/openai.yaml']);
   const pack = await f.store.create(one.workflow, one); assert.deepEqual(await readFile(f.source), original);

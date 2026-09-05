@@ -271,7 +271,7 @@ export class WorkflowRuntime {
       const approval = approvalBinding(definition, state, pins);
       if (approval.required) requireValue(state.approvals[node.approval_id]?.status === 'approved' && state.approvals[node.approval_id].binding_hash === approval.hash, 'APPROVAL_REQUIRED', 'Exact node approval is required before claim');
       const id = randomUUID(); const token = leaseToken(control_token, runId, node_id, id);
-      const attempt = { id, owner, claim_request_id: request_id, lease_hash: digest(token), status: 'claimed', dispatch: null, completion_hash: null, reconciliation: null };
+      const attempt = { id, owner, started_at: new Date().toISOString(), claim_request_id: request_id, lease_hash: digest(token), status: 'claimed', dispatch: null, completion_hash: null, reconciliation: null };
       const envelope = executionEnvelope(definition, state, pins, attempt, token, join(this.runs.directory(runId), 'objects'));
       node.attempts.push(attempt); node.active_attempt_id = id; node.status = 'claimed'; touch(state);
       return envelope;
@@ -300,7 +300,7 @@ export class WorkflowRuntime {
       requireValue(changed.every(path => permission.allowed_paths.some(root => key(path) === key(root) || key(path).startsWith(key(root) + '/'))), 'SCOPE_VIOLATION', 'Changed paths exceed the exact execution envelope');
       if (node_id === pins.root.workflow.finalization.node_id) requireValue(definition.executor.kind === 'main' && attempt.owner === state.main_actor && payload.acceptance?.accepted === true, 'FINAL_ACCEPTANCE_REQUIRED', 'Finalization requires explicit main-agent acceptance');
       node.output = payload.structured_output; node.error = null;
-      attempt.status = 'succeeded'; attempt.completion_hash = fingerprint; attempt.completion = payload;
+      attempt.status = 'succeeded'; attempt.finished_at = new Date().toISOString(); attempt.completion_hash = fingerprint; attempt.completion = payload;
       setOutcome(state, graphInfo(pins.root.workflow), node_id, 'succeeded');
       advanceRun(state, pins); touch(state);
     }, {}, { allowPaused: true });
@@ -312,7 +312,7 @@ export class WorkflowRuntime {
     const result = await this.transition(runId, 'fail', (state, pins) => {
       const { node, attempt } = attemptFor(state, node_id, attempt_id, lease_token);
       node.error = { code: typeof error.code === 'string' ? error.code : 'EXECUTOR_FAILED', message: error.message };
-      attempt.status = 'failed'; attempt.error = node.error;
+      attempt.status = 'failed'; attempt.finished_at = new Date().toISOString(); attempt.error = node.error;
       setOutcome(state, graphInfo(pins.root.workflow), node_id, 'failed');
       if (state.status === 'failed') interruptActiveNodes(state, 'Another node failed without a recovery edge');
       else advanceRun(state, pins);

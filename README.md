@@ -1,6 +1,8 @@
 # Sol Subagent Control
 
-A Sol Advisor fork with a console.
+A Sol Advisor fork with a console. Build versioned visual Workflows and follow their local execution journal.
+
+Version0.8.0 introduces the v7 Workflow runtime. Read the [v7 upgrade guide](docs/V7_UPGRADE.md) for migration, execution boundaries and release evidence.
 
 You choose the tasks, the subagent models, and their thinking levels. Plug them in, take them out, add your own, and turn each model connection on or off. Cursor and Grok are extra subagent entries. ChatGPT review uses the installed chatgpt-review-agent skill.
 
@@ -11,7 +13,10 @@ The main agent stays in charge. Use GPT-5.6 Sol or Terra at high, xhigh, or max.
 - Turn the whole thing on or off
 - Turn each model connection on or off (Cursor, Grok, ChatGPT web review, custom API). All start off. Turning one on does not call it.
 - Set a subagent's model and thinking level
-- Use, edit, copy, or delete the bundled task presets, or add a new one
+- Create, connect, edit, version, copy and delete Workflow graphs
+- Import Skills as reviewable Drafts and inspect source updates without changing existing Runs
+- Follow real node state, approvals, output previews and exact recovery in the Run view
+- Isolate parallel writes in owned Git worktrees and review the integration patch
 - Pick which model runs each step of a task
 
 Ask Codex to open the Sol Subagent Control console, or use the one-click script in the tutorial.
@@ -37,12 +42,12 @@ plugin_dir="$(codex plugin list --json | jq -r '.installed[] | select(.pluginId 
 Start a fresh task, then use:
 
 ~~~text
-Use $sol-advisor:sol-control-plane. Keep a qualifying primary agent in charge, read sanitized metadata once, declare one selective route, and verify every auxiliary claim.
+Use $sol-advisor:sol-control-plane. Keep a qualifying primary agent in charge, read sanitized metadata once, execute a pinned Workflow, and verify actual evidence.
 ~~~
 
 The native-only workflow remains `$sol-advisor:orchestration`.
 
-Read the [English tutorial](docs/TUTORIAL.md) or [中文教程](docs/TUTORIAL.zh-CN.md) for one-click console scripts, configuration examples, and tests.
+For v7 use the [upgrade and Workflow guide](docs/V7_UPGRADE.md). The following tutorials describe legacy v6 settings. Read the [English tutorial](docs/TUTORIAL.md) or [中文教程](docs/TUTORIAL.zh-CN.md) for one-click console scripts, configuration examples, and tests.
 
 Configuration is user-global at `$CODEX_HOME/sol-advisor/control-plane.json` or `~/.codex/sol-advisor/control-plane.json` when `CODEX_HOME` is unset.
 

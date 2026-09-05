@@ -31,7 +31,7 @@ import {
 const CONTROL_DIR = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = join(CONTROL_DIR, 'default-config.json');
 const WEB_DIR = join(CONTROL_DIR, 'web');
-const SERVER_VERSION = '0.4.5';
+const SERVER_VERSION = '0.5.0';
 const DEFAULT_CONSOLE_PORT = 58712;
 const MAX_HTTP_BODY = 8 * 1024 * 1024;
 
@@ -255,7 +255,7 @@ export async function startConsole({
   });
   const address = server.address();
   const actualPort = typeof address === 'object' && address ? address.port : port;
-  const url = `http://127.0.0.1:${actualPort}/#token=${encodeURIComponent(token)}`;
+  const url = `http://127.0.0.1:${actualPort}/workflows#token=${encodeURIComponent(token)}`;
   consoleState = { server, token, url, port: actualPort, configPath, defaultConfigPath, storage, env };
   const browser = open ? await openBrowser(url) : { opened: false, error: null };
   try { await appendAuditEvent(configPath, {
@@ -435,6 +435,9 @@ export async function handleRpc(request, {
     const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};
     try {
       if (name.startsWith('workflow_') && WORKFLOW_TOOL_OPERATIONS.has(name.slice('workflow_'.length))) {
+        if (['workflow_create', 'workflow_save'].includes(name) && args.workflow?.status !== 'draft') {
+          throw Object.assign(new Error('Model tool edits must remain Draft; publish the exact reviewed revision in the human console'), { code: 'HUMAN_PUBLICATION_REQUIRED' });
+        }
         const service = new WorkflowService({ configPath, defaultConfigPath, env, fetchImpl });
         const result = await service.call(name.slice('workflow_'.length), args);
         return { jsonrpc: '2.0', id, result: textToolResult(result) };

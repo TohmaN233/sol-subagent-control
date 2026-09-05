@@ -55,7 +55,7 @@ jq empty "$manifest"
 jq empty "$mcp_manifest"
 jq empty "$config"
 jq empty "$control/package.json"
-[ "$(jq -r '.version' "$manifest")" = 0.7.11 ] || fail "native manifest version drifted"
+[ "$(jq -r '.version' "$manifest")" = 0.8.0 ] || fail "native manifest version drifted"
 [ "$(jq -r '.mcpServers' "$manifest")" = './.mcp.json' ] || fail "plugin manifest does not load control-plane MCP"
 [ "$(jq -r '.mcpServers["sol-control-plane"].command' "$mcp_manifest")" = node ] || fail "control-plane MCP does not use node"
 [ "$(jq -r '.mcpServers["sol-control-plane"].enabled' "$mcp_manifest")" = true ] || fail "control-plane MCP is disabled"
@@ -112,7 +112,7 @@ done
 grep -Fq 'workflow-review' "$web_app" || fail "console omits the independent review workflow switch"
 if grep -Fq 'task-type-route' "$web_app"; then fail "console still exposes an independent route selector"; fi
 grep -Fq 'CONTROL PLANE UNAVAILABLE' "$skill" || fail "control-plane skill hides activation failure"
-grep -Fq 'Delegate is the default' "$skill" || fail "control-plane skill does not default to delegate"
+grep -Fq 'Delegate is the default' "$plugin_dir/skills/control-plane/references/v6-control-plane.md" || fail "control-plane skill does not default to delegate"
 for phrase in \
   'Read metadata, not the prompt library' \
   'Write delivery opens only when all three facts are true' \
@@ -121,7 +121,7 @@ for phrase in \
   'Built-in Grok connector' \
   'Use hard-path web advice only after a real signal' \
   'Auxiliary work substitutes for root work'; do
-  grep -Fq "$phrase" "$skill" || fail "control-plane skill omits: $phrase"
+  grep -Fq "$phrase" "$plugin_dir/skills/control-plane/references/v6-control-plane.md" || fail "v6 compatibility contract omits: $phrase"
 done
 for phrase in \
   'This is minimization, not a hostile-model secrecy sandbox' \
@@ -142,7 +142,11 @@ done
 grep -Fq 'windows-latest' "$workflow" || fail "CI does not cover Windows"
 grep -Fq 'ubuntu-latest' "$workflow" || fail "CI does not cover Linux"
 grep -Fq 'connector-protocol-' "$workflow" || fail "CI does not expose connector protocol matrix"
-pass "prompt minimization, connector contracts, and dual-platform CI documented"
+grep -Fq 'macos-latest' "$workflow" || fail "CI does not cover macOS"
+for operation in workflow_start workflow_claim_node workflow_dispatch workflow_complete_node workflow_reattach_connector; do
+  grep -Fq "$operation" "$skill" || fail "v7 skill omits $operation"
+done
+pass "v7 execution, v6 compatibility, connector contracts, and three-platform CI documented"
 
 node --check "$server"
 node --check "$control/open-console.mjs"

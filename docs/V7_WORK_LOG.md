@@ -369,3 +369,21 @@ asserted against the sanitized event endpoint; corrected it to inspect the actua
 journal and fixed fixture shutdown ordering so assertion failures cannot hang.
 Malformed Draft canvas now reports errors and preserves IR for repair. M13 continues.
 
+
+## M13 candidate checkpoint (2026-09-05)
+
+Version0.8.0 / control-plane0.5.0 prepared. Workflow is the default console entry;
+new installations explicitly migrate the retained v6 seed. Skill instructions now
+route v7 through journaled Workflow tools and retain the v6 contract separately.
+Added source update observations, attempt elapsed timestamps, main import binding,
+current-permission rechecks on connector input/recovery, and Draft-only MCP edits.
+Ready publication cannot be reached through model create/save tools.
+
+Both POSIX scripts passed under reviewed Windows Git Bash execution. The control
+script included185 passing tests in47.06s; native role checks passed4. An earlier
+run exposed stale version/skill text assertions, corrected to validate v7 plus its
+v6 reference. The migrated E2E initially compared a transient idempotent response
+flag with persisted state; corrected that distinction and both presets passed.
+Final service16 passed after the model-publication gate; typecheck/build comparison
+and plugin/skill validation passed. Remote three-platform CI remains to observe.
+

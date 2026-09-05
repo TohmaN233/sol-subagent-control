@@ -4,7 +4,7 @@ import { requireValue } from './workflow-paths.mjs';
 import { canonicalJSON, digest } from './workflow-revisions.mjs';
 import { isEnvironmentDisabled } from './config.mjs';
 import { controllerAttempt, reattachAttempt } from './workflow-recovery.mjs';
-import { leaseToken } from './workflow-execution-envelope.mjs';
+import { leaseToken, nodePermissions } from './workflow-execution-envelope.mjs';
 
 function compilePrompt(envelope, max) {
   const input = envelope.workflow_inputs;
@@ -163,7 +163,7 @@ export class WorkflowExecutor {
     const provider = record.pins.providers.find(item => item.id === record.definition.executor?.provider_id);
     if (provider) {
       const current = config.providers.find(item => item.id === provider.id);
-      requireValue(current?.enabled && current.capabilities.read && (record.definition.access !== 'bounded_write' || current.capabilities.write), 'PROVIDER_DISABLED', 'Pinned Provider permission was revoked');
+      requireValue(current?.enabled && current.capabilities.read && (nodePermissions(record.definition, record.state).access !== 'bounded_write' || current.capabilities.write), 'PROVIDER_DISABLED', 'Pinned Provider permission was revoked');
       requireValue(!current.requires_user_approval || provider.requires_user_approval, 'PROVIDER_POLICY_CHANGED', 'Provider approval requirements changed');
     }
     return { ...record, provider };
@@ -178,6 +178,8 @@ export class WorkflowExecutor {
       await this.runtime.execution(runId, args);
       const config = await this.getConfig(); const provider = config.providers.find(item => item.id === envelope.provider.id);
       requireValue(config.global.enabled && !isEnvironmentDisabled(this.env) && provider?.enabled, 'PROVIDER_DISABLED', 'A disabled executor cannot receive new permission or input');
+      requireValue(provider.capabilities.read && (envelope.access !== 'bounded_write' || provider.capabilities.write), 'PROVIDER_CAPABILITY', 'Provider capability was revoked before its permission/input response');
+      requireValue(!provider.requires_user_approval || envelope.provider.requires_user_approval, 'PROVIDER_POLICY_CHANGED', 'Provider now requires approval absent from this Run');
     }
     const task = await this.registry.status(args.attempt_id, 0);
     const receipt = receiptIdentity(task);

@@ -49,6 +49,7 @@ export function RunPanel({ runId, act, onRun }: { runId: string, act: (work: () 
       {merge && <article className="review-item"><h3>精确合并提案</h3><pre>{typeof merge.patch === 'string' ? merge.patch : pretty(merge)}</pre><button disabled={!token} onClick={() => call('integrate_parallel', { region_id: merge.region_id, patch_sha256: merge.patch_sha256 ?? merge.proposal?.patch_sha256, accepted: true })}>接受并应用所示补丁</button></article>}
       {current && <><Status value={current.status}/><Details title="节点输出、证据和诊断" value={current}/>
         <p>尝试 {current.attempts.length} · {attempt?.owner ?? '尚未领取'}</p>
+        {attempt?.started_at && <p>本次尝试历时 {Math.max(0, Math.floor(((attempt.finished_at ? Date.parse(attempt.finished_at) : Date.now()) - Date.parse(attempt.started_at)) / 1000))} 秒（含暂停和恢复等待）</p>}
         {nodeDetails && <Details title="固定 Provider、有效访问范围与 Skill 策略" value={nodeDetails}/>}
         {attempt?.dispatch?.cancellation_pending && <p role="status">本地执行已停止接受结果；远程停止尚未确认。请核对原任务状态。</p>}
         {live && <><p role="status">Strict 会话：{live.status}</p>{live.error && <Details title="会话诊断" value={live.error}/>}<details open={!!live.output_preview?.text}><summary>实时输出预览 · 尚未验收</summary><pre>{live.output_preview?.text || '尚无输出'}</pre>{live.output_preview?.truncated && <small>仅展示最近 32K 字符；最终结果以持久化产物为准。</small>}</details></>}

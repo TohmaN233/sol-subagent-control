@@ -9,6 +9,8 @@ import { createDraft } from '../lib/workflow-schema.mjs';
 import { readEditorResource, writeEditorResource, publishEditorWorkflow } from '../lib/workflow-editor.mjs';
 import { canvasIssues, toCanvas, moveNode, connectNodes, removeElements, layoutGraph } from '../web-src/graph-adapter.mjs';
 import { DEFAULT_CONFIG_PATH, startConsole, stopConsole } from '../server.mjs';
+import { skillSourceStatus } from '../lib/skill-import/source-status.mjs';
+import { digest } from '../lib/workflow-revisions.mjs';
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'workflow-editor-'));
   t.after(async () => { assert(resolve(root).startsWith(resolve(tmpdir()))); await rm(root, { recursive: true, maxRetries: 3, retryDelay: 100 }); });
@@ -43,6 +45,16 @@ test('canvas view and explicit layout preserve opaque domain metadata without pe
   assert.deepEqual(layoutGraph(moved).extension, before.extension); assert.equal(JSON.stringify(moved).includes('measured'), false);
   const connected = connectNodes(moved, 'b', 'a', 'ba'); assert.deepEqual(connected.edges[0], before.edges[0]);
   const removed = removeElements(connected, ['a']); assert.deepEqual(removed.nodes, [before.nodes[1]]); assert.deepEqual(removed.edges, []);
+});
+test('source update status is explicit and leaves saved revisions and pinned resources intact', async t => {
+  const { root, store, pack } = await fixture(t); const path = join(root, 'SKILL.md'); await writeFile(path, 'source version one');
+  const source = { ...pack, provenance: { ...pack.provenance, source_path: path, source_hash: digest('source version one') } };
+  assert.equal((await skillSourceStatus(source)).entries[0].status, 'unchanged');
+  await writeFile(path, 'source version two'); const changed = await skillSourceStatus(source);
+  assert.equal(changed.entries[0].status, 'update_available'); assert.equal(changed.workflow_changed, false);
+  assert.deepEqual(await store.snapshot('editor', pack.revision_hash), pack);
+  assert.equal((await store.resources('editor', pack.revision_hash))['instructions/task.md'].toString(), 'Original\n');
+  await rm(path); const missing = await skillSourceStatus(source); assert.equal(missing.entries[0].status, 'unavailable'); assert.equal(missing.entries[0].error.code, 'ENOENT');
 });
 test('malformed Draft canvas reports null, duplicate, missing endpoint and invalid position without altering recoverable IR', () => {
   const workflow = { nodes: [null, { id: 'a', type: 'agent', ui: { position: { x: 'invalid', y: 0 } } }, { id: 'a', type: 'end' }], edges: [null, { id: 'bad', source: 'a', target: 'missing' }] };
