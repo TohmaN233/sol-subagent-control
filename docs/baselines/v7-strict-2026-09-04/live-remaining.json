@@ -1,0 +1,127 @@
+{
+  "kind": "strict-candidate-managed-auth-synthetic-live",
+  "production_qualified": false,
+  "model": "gpt-5.6-sol",
+  "effort": "low",
+  "executable_sha256": "83751f15cb6a0a7b97df67752c001e3fe1c20e18ffbfec3ff63567296205eb6c",
+  "source_hashes": {
+    "source-manifest.mjs": "49db4d7eeb5979766622cd3168c94c00cd14aaa3e0857c5942652919826cf93e",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-app-server-client.mjs": "828d0284890b5e3b5f19f14b89a63c60ec28fcb98714aab62ab79c1274df4199",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-profile-builder.mjs": "f5d9d4de4adc77e493965e38a384cf6b619cb86b6105853cf41b1b82bfcaf2cc",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-process-ownership.mjs": "1c55b2fbbb6d95ac6dd259c2ffcfa922acf92b5048428f5c647c2dc858c28eab",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-session.mjs": "40bcd1380912338191548a3e2a3a6f2f0d09aff38daaec69cad235c0c88bcd37",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-skill-policy.mjs": "ca8e4e31804c536deb629ddbaca07714a04b20da05dca58b700f8241e898cc66",
+    "../../plugins/sol-advisor/control-plane/lib/execution/codex-tool-broker.mjs": "94c2eb390677ebef3c15ae4996bf808a432cb60af4f777099ea52b696d5196b0",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-revisions.mjs": "a6f06ef14970866d71fcd3bafee8e3004ffa4dca702a4e6e56d780d5b01bc38f",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-paths.mjs": "78d5bd68dd9e3e48034d20a58996ca76c5a2e4cdee4a7392a0baf9dfccc200e7",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-events.mjs": "391798659baff49255516fd59e84cb88b704c93f89e7eb6b9f4f8a2c05d1df12",
+    "../../plugins/sol-advisor/control-plane/lib/workflow-bindings.mjs": "5ded25ec188dd6c70cdaf443e65519889291501547cce8ed538a1fa13ca60272",
+    "../skill-isolation/create-temp-profile.mjs": "f49e0f1a53569d492d2a0168ac2d58d1a09d7eaea29e7de4935731640d7d7de5",
+    "../skill-isolation/fixtures/allowed-skill/SKILL.md": "8bf4a43404c1c526afee99699b2444de4880d1f38c28215efbfdd14e691793ad",
+    "../skill-isolation/fixtures/conflicting-skill-a/SKILL.md": "5a8b030cd2e7cd4bac0782948cd3b5000bea6dad6f4dc6640510b5a6530bc01b",
+    "../skill-isolation/fixtures/conflicting-skill-b/SKILL.md": "68b72630273eace61d9df6d010ea8303b6cf4810df28604b5d9f50079038ad3f"
+  },
+  "cases": [
+    {
+      "name": "dynamic-read",
+      "passed": true,
+      "output_sha256": "422dd543f2e660d451df20fcbc2c4e1d021158ab22f0f3cda87adbce915fbc96",
+      "controlled_skill_reads": 1,
+      "audit": {
+        "discovered_skills": [
+          {
+            "name": "sol-isolation-conflict",
+            "path": "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\repo\\.agents\\skills\\conflicting-skill-b\\SKILL.md",
+            "scope": "repo",
+            "enabled": true
+          },
+          {
+            "name": "imagegen",
+            "path": "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\.system\\imagegen\\SKILL.md",
+            "scope": "system",
+            "enabled": true
+          },
+          {
+            "name": "openai-docs",
+            "path": "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\.system\\openai-docs\\SKILL.md",
+            "scope": "system",
+            "enabled": true
+          },
+          {
+            "name": "plugin-creator",
+            "path": "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\.system\\plugin-creator\\SKILL.md",
+            "scope": "system",
+            "enabled": true
+          },
+          {
+            "name": "review-agent",
+            "path": "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\.system\\review-agent\\SKILL.md",
+            "scope": "system",
+            "enabled": true
+          },
+          {
+            "name": "skill-creator",
+            "path": "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\.system\\skill-creator\\SKILL.md",
+            "scope": "system",
+            "enabled": true
+          },
+          {
+            "name": "skill-installer",
+            "path": "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\.system\\skill-installer\\SKILL.md",
+            "scope": "system",
+            "enabled": true
+          },
+          {
+            "name": "sol-isolation-allowed",
+            "path": "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\101a95e87f92746013989fef024d7f55464e8da97fb194bd6a2aa05ba8f91f74\\SKILL.md",
+            "scope": "user",
+            "enabled": true
+          }
+        ],
+        "allowed_skills": [
+          {
+            "name": "sol-isolation-allowed",
+            "path": "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\101a95e87f92746013989fef024d7f55464e8da97fb194bd6a2aa05ba8f91f74\\SKILL.md",
+            "source_path": "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\sol-subagent-control\\spikes\\skill-isolation\\fixtures\\allowed-skill\\SKILL.md",
+            "source_hash": "8bf4a43404c1c526afee99699b2444de4880d1f38c28215efbfdd14e691793ad"
+          }
+        ],
+        "shadowed_skills": [
+          "c:\\users\\tgy23\\documents\\codex\\2026-09-04\\wo-m\\work\\skill-isolation-cqsrfr\\repo\\.agents\\skills\\conflicting-skill-b\\skill.md"
+        ],
+        "disabled_skills": [
+          "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\repo\\.agents\\skills\\conflicting-skill-b\\SKILL.md",
+          "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\.system\\imagegen\\SKILL.md",
+          "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\.system\\openai-docs\\SKILL.md",
+          "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\.system\\plugin-creator\\SKILL.md",
+          "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\.system\\review-agent\\SKILL.md",
+          "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\.system\\skill-creator\\SKILL.md",
+          "C:\\Users\\tgy23\\Documents\\Codex\\2026-09-04\\wo-m\\work\\skill-isolation-cQsRFR\\strict-node-iaJwtx\\skills\\.system\\skill-installer\\SKILL.md"
+        ],
+        "uncontrolled_system_skills": [],
+        "inventory_hash": "548a94cfd7e4abee3ef02fb728320333abdfcbc10063f47856dbb44b8373e200",
+        "profile_hash": "5675fcddb9a72859e6eb93f9249454933723c2fe60f3f2e6069ad5b05a9b7680",
+        "executable_sha256": "83751f15cb6a0a7b97df67752c001e3fe1c20e18ffbfec3ff63567296205eb6c",
+        "schema": "codex-0.145.0-stdio-v2-experimental",
+        "skill_input_items": [],
+        "input_sha256": "bca06ff0e18b62ec19e301740d98b1f4be2fb59e3a4b04aee373c6cdfa4fddbe"
+      }
+    }
+  ],
+  "errors": [],
+  "auth_wait_sha256": "ce9c3fd8980bd5e6d5b50e8c4e50c6eb3f9a0e13e90050ab7813a19a66281180",
+  "before": [
+    {
+      "path": "C:\\Users\\tgy23\\.codex\\config.toml",
+      "sha256": "111c76bffd0e4ec6bcdd0595e39fd5eed332aa07ad178f70638f4e053b853893"
+    }
+  ],
+  "retained_profiles": [],
+  "after": [
+    {
+      "path": "C:\\Users\\tgy23\\.codex\\config.toml",
+      "sha256": "111c76bffd0e4ec6bcdd0595e39fd5eed332aa07ad178f70638f4e053b853893"
+    }
+  ],
+  "shared_config_unchanged": true
+}

@@ -17,6 +17,9 @@ const files = [
   'workflow-migration.test.mjs',
   'workflow-runtime.test.mjs',
   'workflow-service.test.mjs',
+  'strict-execution.test.mjs',
+  'codex-tool-broker.test.mjs',
+  'codex-managed-login.test.mjs',
 ].map((name) => join(root, name));
 
 const child = spawn(process.execPath, ['--test', ...files], {

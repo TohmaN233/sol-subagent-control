@@ -27,7 +27,11 @@ recovery and executor boundary contract is `docs/V7_RUN_CONTRACT.md`. M6 service
 and Provider integration is documented in `docs/V7_SERVICE_CONTRACT.md`. The
 loader supports migrated v7; bundled config and old console stay v6 pending the
 graph UI. Do not claim Strict from a caller flag or activate the old current-thread
-adapter for imported workflows. M7 qualification is the next gate.
+adapter for imported workflows. M7 candidate modules under `lib/execution` have
+actual App Server request and lifecycle evidence, but production integration and
+capability qualification remain gated. See `docs/V7_WORK_LOG.md` for current evidence
+and pending live qualification. Catalog controls include the independent native
+orchestrator Skills namespace; feature flags alone do not suppress it.
 
 Relevant checks:
 
