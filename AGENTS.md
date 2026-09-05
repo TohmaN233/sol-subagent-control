@@ -18,6 +18,11 @@ user Codex configuration or installed skill sources for run-level experiments.
 Keep accepted architecture, probe limitations, and observed test evidence current
 as implementation progresses.
 
+M2-M4 core modules now implement immutable packs, graph validation and transactional
+v6 migration. Their concrete IR/storage contracts are in `docs/V7_CORE_CONTRACT.md`.
+They are not wired into the shipping console or automatic startup yet. Keep the
+v6 public runtime working until the journal scheduler and integration gates pass.
+
 Relevant checks:
 
 ```text

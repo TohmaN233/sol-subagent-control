@@ -12,6 +12,9 @@ const files = [
   'mcp.test.mjs',
   'open-console.test.mjs',
   'providers.test.mjs',
+  'workflow-store.test.mjs',
+  'workflow-validator.test.mjs',
+  'workflow-migration.test.mjs',
 ].map((name) => join(root, name));
 
 const child = spawn(process.execPath, ['--test', ...files], {
