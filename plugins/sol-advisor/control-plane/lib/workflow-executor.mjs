@@ -61,7 +61,12 @@ export class WorkflowExecutor {
   }
 
   async dispatch(runId, args) {
-    await this.runtime.execution(runId, args, { allowInactive: true });
+    const initial = await this.runtime.execution(runId, args, { allowInactive: true });
+    if (initial.subworkflow) {
+      const config = await this.getConfig();
+      requireValue(config.global.enabled && !isEnvironmentDisabled(this.env), 'CONTROL_DISABLED', 'Workflow execution is disabled');
+      return this.runtime.startSubworkflow(runId, args);
+    }
     const current = await this.runtime.get(runId);
     const existing = current.nodes[args.node_id].attempts.find(item => item.id === args.attempt_id)?.dispatch;
     if (existing) {

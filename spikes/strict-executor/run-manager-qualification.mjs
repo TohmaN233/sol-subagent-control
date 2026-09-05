@@ -20,7 +20,7 @@ const [binary, workRoot, reportPath] = process.argv.slice(2);
 assert(process.argv.length === 5 && [binary, workRoot, reportPath].every(isAbsolute));
 const reportFile = await open(reportPath, 'wx');
 const report = { kind: 'strict-manager-actual-app-server-local-provider', production_qualified: false, cases: [], requests: [], errors: [] };
-let fixture, manager, service, serverError, run, source, planningNode, planningProposal;
+let fixture, manager, service, serverError, run, source, planningNode, planningProposal, linkedResource, nestedPhase;
 const counts = new Map(); const markers = new Map();
 const configs = [...new Set([join(homedir(), '.codex', 'config.toml'), ...(process.env.CODEX_HOME ? [join(process.env.CODEX_HOME, 'config.toml')] : [])])];
 async function hashes() { return Promise.all(configs.map(async path => { try { return { path, sha256: digest(await readFile(path)) }; } catch (error) { if (error.code === 'ENOENT') return { path, missing: true }; throw error; } })); }
@@ -30,16 +30,17 @@ const server = createServer(async (req, res) => {
     for await (const chunk of req) { size += chunk.length; assert(size <= 512000); chunks.push(chunk); }
     const body = JSON.parse(Buffer.concat(chunks)); const input = JSON.stringify(body.input);
     const matches = [...markers].filter(([marker]) => input.includes(marker));
-    if (!planningNode) assert.equal(matches.length, 1); else assert(input.includes('analysis/request.txt'));
-    const [marker, node] = planningNode ? [planningNode, planningNode] : matches[0]; const index = counts.get(marker) ?? 0; counts.set(marker, index + 1);
+    if (!planningNode && !linkedResource) assert.equal(matches.length, 1); else if (planningNode) assert(input.includes('analysis/request.txt'));
+    const [marker, node] = linkedResource ? ['linked-skill', 'linked-skill'] : planningNode ? [planningNode, planningNode] : matches[0]; const index = counts.get(marker) ?? 0; counts.set(marker, index + 1);
     assert.equal(body.instructions, STRICT_INSTRUCTIONS);
     assert(!input.includes(run.control_token) && !input.includes('SHADOWED_SKILL_') && !input.includes('sol-isolation-conflict'));
-    const allowed = new Set(['update_plan', 'request_user_input', 'read_workflow_resource', 'list_workspace', 'read_workspace', ...(node === 'instructions' ? ['write_workspace'] : [])]);
+    const allowed = new Set(['update_plan', 'request_user_input', 'read_workflow_resource', 'list_workspace', 'read_workspace', ...(node === 'instructions' && !nestedPhase ? ['write_workspace'] : []), ...(linkedResource ? ['read_allowed_skill'] : [])]);
     assert(body.tools.every(tool => tool.type === 'function' && allowed.has(tool.name)));
-    report.requests.push({ node, index, sha256: digest(JSON.stringify(body)), tools: body.tools.map(tool => tool.name) });
-    const step = index === 0 ? { name: 'read_workflow_resource', args: { path: planningNode ? 'analysis/request.txt' : 'source/SKILL.md' } }
-      : index === 1 && node === 'instructions' ? { name: 'write_workspace', args: { path: 'result.txt', text: 'MANAGER_VERIFIED', expected_sha256: null } } : null;
-    if (index > 0) assert(input.includes('PINNED_SOURCE_ONLY'));
+    report.requests.push({ node, ...(nestedPhase ? { nested_phase: nestedPhase } : {}), index, sha256: digest(JSON.stringify(body)), tools: body.tools.map(tool => tool.name) });
+    const step = index === 0 ? { name: 'read_workflow_resource', args: { path: linkedResource ?? (planningNode ? 'analysis/request.txt' : 'source/SKILL.md') } }
+      : index === 1 && node === 'instructions' && !nestedPhase ? { name: 'write_workspace', args: { path: 'result.txt', text: 'MANAGER_VERIFIED', expected_sha256: null } } : null;
+    if (linkedResource) { assert(input.includes('PINNED_LINKED_SOURCE')); if (index > 0) assert(input.includes('LINKED_REFERENCE_BYTES')); }
+    else if (index > 0) assert(input.includes('PINNED_SOURCE_ONLY'));
     const item = step ? { type: 'function_call', id: `fc_${node}_${index}`, call_id: `call_${node}_${index}`, name: step.name, arguments: JSON.stringify(step.args) }
       : { type: 'message', id: `msg_${node}`, role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: planningNode === 'expand' ? JSON.stringify(planningProposal) : '{"verified":true}', annotations: [] }] };
     res.writeHead(200, { 'content-type': 'text/event-stream' });
@@ -55,11 +56,11 @@ try {
     const relative = `../../plugins/sol-advisor/control-plane/lib/execution/${path}.mjs`;
     report.source_hashes[relative] = digest(await readFile(fileURLToPath(new URL(relative, import.meta.url))));
   }
-  for (const name of ['workflow-service', 'workflow-executor', 'workflow-runtime', 'workflow-run-store', 'workflow-execution-envelope', 'workflow-state', 'workflow-validator', 'config']) {
+  for (const name of ['workflow-service', 'workflow-executor', 'workflow-runtime', 'workflow-run-store', 'workflow-execution-envelope', 'workflow-state', 'workflow-validator', 'workflow-pins', 'workflow-subworkflow', 'workflow-reference-schema', 'workflow-events', 'config']) {
     const relative = `../../plugins/sol-advisor/control-plane/lib/${name}.mjs`;
     report.source_hashes[relative] = digest(await readFile(fileURLToPath(new URL(relative, import.meta.url))));
   }
-  for (const name of ['codex-inventory', 'expansion-run', 'semantic-expander', 'metadata-reader', 'coarse-compiler', 'dependency-reader', 'review-import', 'skill-reader']) {
+  for (const name of ['codex-inventory', 'expansion-run', 'semantic-expander', 'metadata-reader', 'coarse-compiler', 'dependency-reader', 'review-import', 'skill-reader', 'inline-skill']) {
     const relative = `../../plugins/sol-advisor/control-plane/lib/skill-import/${name}.mjs`;
     report.source_hashes[relative] = digest(await readFile(fileURLToPath(new URL(relative, import.meta.url))));
   }
@@ -131,6 +132,54 @@ try {
   assert.equal(expanded.workflow.status, 'draft'); assert.equal(expanded.workflow.nodes.find(node => node.id === 'analyze').executor.provider_id, provider.id);
   assert(expanded.workflow.import_status.unresolved.some(issue => issue.code === 'AI_INFERENCES_REQUIRE_REVIEW'));
   report.cases.push({ name: 'selected-provider-read-only-expansion-applies-unreviewed-draft', passed: true, planner_provider: planner.id, execution_provider_preserved: provider.id });
+  planningNode = null;
+  const linkedRoot = join(fixture.root, 'linked-original'); await mkdir(linkedRoot); const linkedPath = join(linkedRoot, 'SKILL.md');
+  const linkedText = '---\nname: pinned-linked\ndescription: Linked Skill fixture\n---\nPINNED_LINKED_SOURCE. Read [reference](reference.txt) and report verification.';
+  await writeFile(linkedPath, linkedText); await writeFile(join(linkedRoot, 'reference.txt'), 'LINKED_REFERENCE_BYTES');
+  const linkedWorkflow = structuredClone(workflow); linkedWorkflow.id = 'linked-fixture';
+  const linkedNode = linkedWorkflow.nodes.find(node => node.id === 'instructions');
+  linkedNode.type = 'skill_ref'; linkedNode.access = 'read_only'; delete linkedNode.path_scope;
+  linkedNode.skill_ref = { path: linkedPath, name: 'pinned-linked', source_hash: digest(linkedText), allowed_nested_skills: [] };
+  await service.call('create', { workflow: linkedWorkflow, resources: await store.resources(workflow.id, ready.revision_hash) });
+  run = await service.call('start', { workflow_id: linkedWorkflow.id, workspace: fixture.cwd, main_actor: 'primary', access: 'read_only', inputs: { task: 'Apply the linked fixture only' } });
+  await rename(linkedRoot, linkedRoot + '-removed'); linkedResource = '__skill_pins__/' + digest(linkedPath) + '/reference.txt';
+  const linkedLease = await service.call('claim_node', { run_id: run.run_id, control_token: run.control_token, node_id: 'instructions', owner: 'worker', request_id: 'claim-linked' });
+  const linkedArgs = { run_id: run.run_id, control_token: run.control_token, node_id: 'instructions', attempt_id: linkedLease.attempt_id, lease_token: linkedLease.lease_token };
+  await service.call('dispatch', linkedArgs); const linkedEntry = manager.entries.get(run.run_id + '/' + linkedLease.attempt_id); await linkedEntry.job;
+  assert.equal(serverError, undefined); assert.equal(linkedEntry.error, null);
+  assert.equal((await service.call('get', linkedArgs)).nodes.instructions.status, 'succeeded');
+  await service.call('cancel', { run_id: run.run_id, control_token: run.control_token });
+  report.cases.push({ name: 'linked-skill-explicit-pinned-injection-after-original-removal', passed: true });
+  linkedResource = null; nestedPhase = 'child'; counts.clear();
+  const childWorkflow = structuredClone(workflow); childWorkflow.id = 'nested-child';
+  for (const node of childWorkflow.nodes.filter(node => node.type === 'agent')) { node.access = 'read_only'; delete node.path_scope; }
+  const childPack = await service.call('create', { workflow: childWorkflow, resources: await store.resources(workflow.id, ready.revision_hash) });
+  const parentWorkflow = structuredClone(childWorkflow); parentWorkflow.id = 'nested-parent';
+  const callNode = parentWorkflow.nodes.find(node => node.id === 'instructions');
+  Object.assign(callNode, { type: 'subworkflow', executor: { kind: 'subworkflow' }, input_bindings: { task: '/inputs/task' }, outputs_schema: {},
+    subworkflow: { workflow_id: childWorkflow.id, revision_pin: childPack.revision_hash, output_bindings: { result: '/output' } } });
+  await service.call('create', { workflow: parentWorkflow, resources: await store.resources(workflow.id, ready.revision_hash) });
+  const parentRun = await service.call('start', { workflow_id: parentWorkflow.id, workspace: fixture.cwd, main_actor: 'primary', access: 'read_only', inputs: { task: 'Verify a pinned nested Workflow' } });
+  await service.call('delete', { workflow_id: childWorkflow.id, expected_revision: childPack.revision_hash });
+  const parentLease = await service.call('claim_node', { run_id: parentRun.run_id, control_token: parentRun.control_token, node_id: 'instructions', owner: 'primary', request_id: 'claim-child' });
+  const parentArgs = { run_id: parentRun.run_id, control_token: parentRun.control_token, node_id: 'instructions', attempt_id: parentLease.attempt_id, lease_token: parentLease.lease_token };
+  run = (await service.call('dispatch', parentArgs)).child;
+  assert.equal((await service.call('dispatch', parentArgs)).child.run_id, run.run_id);
+  for (const node of ['instructions', 'final']) {
+    const lease = await service.call('claim_node', { run_id: run.run_id, control_token: run.control_token, node_id: node, owner: node === 'final' ? 'primary' : 'worker', request_id: 'claim-' + node });
+    const args = { run_id: run.run_id, control_token: run.control_token, node_id: node, attempt_id: lease.attempt_id, lease_token: lease.lease_token };
+    await service.call('dispatch', args); const entry = manager.entries.get(run.run_id + '/' + lease.attempt_id); await entry.job;
+    assert.equal(serverError, undefined); assert.equal(entry.error, null);
+    if (node === 'final') await service.call('collect_strict', { ...args, accepted: true });
+  }
+  const collected = await service.call('collect_subworkflow', parentArgs); assert.deepEqual(collected.nodes.instructions.output, { result: { verified: true } });
+  run = parentRun; nestedPhase = 'parent'; counts.clear();
+  const parentFinal = await service.call('claim_node', { run_id: run.run_id, control_token: run.control_token, node_id: 'final', owner: 'primary', request_id: 'claim-final' });
+  const finalArgs = { run_id: run.run_id, control_token: run.control_token, node_id: 'final', attempt_id: parentFinal.attempt_id, lease_token: parentFinal.lease_token };
+  await service.call('dispatch', finalArgs); const finalEntry = manager.entries.get(run.run_id + '/' + parentFinal.attempt_id); await finalEntry.job;
+  assert.equal(serverError, undefined); assert.equal(finalEntry.error, null);
+  assert.equal((await service.call('collect_strict', { ...finalArgs, accepted: true })).status, 'succeeded');
+  report.cases.push({ name: 'deleted-child-pack-strict-execution-and-parent-namespaced-acceptance', passed: true });
   assert.deepEqual(await readdir(manager.parent), []); report.profiles_retained = [];
 } catch (error) {
   report.errors.push({ code: error.code ?? null, message: error.message, ...(serverError ? { request_validation: serverError.message } : {}) }); process.exitCode = 1;

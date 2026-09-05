@@ -2,8 +2,10 @@ import { NODE_TYPES, validateWorkflowShape } from './workflow-schema.mjs';
 import { workflowId } from './workflow-paths.mjs';
 import { pathBoundaries, pointerParts, validateExpression } from './workflow-bindings.mjs';
 import { validateDataSchema } from './workflow-data-schema.mjs';
+import { validateSkillReference, effectiveSkillPolicy } from './workflow-reference-schema.mjs';
+import { skillPathKey } from './execution/codex-skill-policy.mjs';
 
-const EXECUTED = new Set(['agent', 'skill_ref', 'tool', 'human_gate']);
+const EXECUTED = new Set(['agent', 'skill_ref', 'tool', 'human_gate', 'subworkflow']);
 const SHA = /^[a-f0-9]{64}$/;
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -12,6 +14,7 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
   const issue = (code, message, location = {}, target = errors) => target.push({ code, message, workflow_id: workflow?.id ?? null, ...location });
   if (stack.length > 32) { issue('SUBWORKFLOW_DEPTH', 'SubWorkflow nesting limit exceeded'); return { valid: false, launch_ready: false, errors, blockers, order: [] }; }
   try { validateWorkflowShape(workflow); } catch (error) { issue(error.code ?? 'WORKFLOW_SCHEMA', error.message); return { valid: false, launch_ready: false, errors, blockers, order: [] }; }
+  try { effectiveSkillPolicy(workflow.skill_policy); } catch (error) { issue(error.code, error.message); return { valid: false, launch_ready: false, errors, blockers, order: [] }; }
   for (const key of ['inputs_schema', 'outputs_schema']) try { validateDataSchema(workflow[key] ?? {}); } catch (error) { issue(error.code, error.message, { field: key }); }
   const providers = new Map((context.providers ?? []).map(provider => [provider.id, provider]));
   const nodes = new Map(); const edges = new Map();
@@ -58,6 +61,7 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
   const toEnd = new Set(ends.flatMap(node => [...visit(node.id, incoming)]));
   for (const node of nodes.values()) {
     const location = { node_id: node.id };
+    if (node.skill_policy !== undefined) try { effectiveSkillPolicy(workflow.skill_policy, node.skill_policy); } catch (error) { issue(error.code, error.message, location); }
     if (!reachable.has(node.id)) issue('UNREACHABLE', 'Node is unreachable from start', location);
     if (!toEnd.has(node.id)) issue('NO_END_PATH', 'Node has no path to an end', location);
     if (node.type === 'start' && (incoming.get(node.id).length || out.get(node.id).length !== 1)) issue('START_EDGES', 'Start requires exactly one outgoing and no incoming edge', location);
@@ -68,7 +72,7 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
       if (successes.length !== 1 || failures.length > 1) issue('NODE_OUTCOMES', 'Use explicit condition/parallel nodes for branching', location);
     }
     if (EXECUTED.has(node.type)) {
-      const runBoundAccess = object(node.access) && node.access.binding === 'run.access' && Object.keys(node.access).length === 1 && node.executor?.kind === 'main';
+      const runBoundAccess = object(node.access) && node.access.binding === 'run.access' && Object.keys(node.access).length === 1 && ['main', 'subworkflow'].includes(node.executor?.kind);
       if (!['read_only', 'bounded_write'].includes(node.access) && !runBoundAccess) issue('NODE_ACCESS', 'Executed nodes need a fixed access mode or main-agent Run access binding', location);
       if (node.role === 'reviewer' && node.access !== 'read_only') issue('REVIEWER_ACCESS', 'Reviewers must be read-only', location);
       if (node.access === 'bounded_write' || runBoundAccess) {
@@ -82,7 +86,7 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
       if (!object(node.retry) || !Number.isInteger(node.retry.max_attempts) || node.retry.max_attempts < 1 || node.retry.max_attempts > 10) issue('NODE_RETRY', 'Retry limit must be between 1 and 10', location);
       const executor = node.executor;
       if (['agent', 'skill_ref'].includes(node.type) && (typeof node.role !== 'string' || !node.role.trim() || node.role.length > 64)) issue('NODE_ROLE', 'Agent role must be explicit', location);
-      if (!object(executor) || !['main', 'provider', 'tool', 'human'].includes(executor.kind)) issue('EXECUTOR', 'Executed node needs a known executor', location);
+      if (!object(executor) || !['main', 'provider', 'tool', 'human', 'subworkflow'].includes(executor.kind)) issue('EXECUTOR', 'Executed node needs a known executor', location);
       else if (executor.kind === 'provider') {
         const provider = providers.get(executor.provider_id);
         if (!provider) issue('PROVIDER_MISSING', 'Pinned Provider does not exist', location);
@@ -98,6 +102,7 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
         else if (!(context.tools ?? []).includes(executor.tool)) issue('TOOL_UNAVAILABLE', 'Named host tool is unavailable', location, blockers);
       }
       if (node.type === 'human_gate' && executor?.kind !== 'human') issue('HUMAN_EXECUTOR', 'Human gates require a human executor', location);
+      if ((node.type === 'subworkflow') !== (executor?.kind === 'subworkflow')) issue('SUBWORKFLOW_EXECUTOR', 'SubWorkflow nodes require their dedicated executor', location);
       if (['agent', 'skill_ref'].includes(node.type) && !['main', 'provider'].includes(executor?.kind)) issue('AGENT_EXECUTOR', 'Agent and SkillRef nodes require main or Provider execution', location);
       if (node.type === 'agent' && (typeof node.prompt_template !== 'string' || !node.prompt_template.trim())) issue('NODE_PROMPT', 'Agent requires instructions', location);
     }
@@ -125,12 +130,15 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
       if (outgoing.length !== labels.size || new Set(outgoing.map(edge => edge.label)).size !== labels.size || outgoing.some(edge => !labels.has(edge.label) || (edge.on ?? 'success') !== 'success')) issue('CONDITION_EDGES', 'Each condition label needs exactly one success edge', location);
     }
     if (node.type === 'skill_ref') {
+      if (workflow.skill_policy?.mode !== 'strict') issue('SKILL_REF_STRICT_REQUIRED', 'Linked SkillRef execution requires Strict isolation', location);
       const reference = node.skill_ref;
-      if (!object(reference) || typeof reference.path !== 'string' || !reference.name || !SHA.test(reference.source_hash) || !Array.isArray(reference.allowed_nested_skills)) issue('SKILL_REFERENCE', 'SkillRef needs path, name, source hash and allowed nested Skills', location);
-      else {
-        const skill = (context.skills ?? []).find(item => item.path === reference.path);
+      let validReference = true;
+      try { validateSkillReference(reference); } catch (error) { validReference = false; issue(error.code, error.message, location); }
+      if (validReference) for (const pin of [reference, ...reference.allowed_nested_skills]) {
+        if ([...workflow.skill_policy.shadowed_skill_paths, ...(node.skill_policy?.shadowed_skill_paths ?? [])].some(path => skillPathKey(path) === skillPathKey(pin.path))) issue('SKILL_POLICY_CONFLICT', 'SkillRef conflicts with a shadowed source', location);
+        const skill = (context.skills ?? []).find(item => skillPathKey(item.path) === skillPathKey(pin.path));
         if (!skill) issue('SKILL_MISSING', 'Referenced Skill does not exist', location);
-        else if (skill.source_hash !== reference.source_hash || (reference.expected_version !== undefined && skill.version !== reference.expected_version)) issue('SKILL_STALE', 'Skill content/version differs from the pin', location);
+        else if (skill.source_hash !== pin.source_hash || (skill.name !== undefined && skill.name !== pin.name) || (pin.expected_version !== undefined && skill.version !== pin.expected_version)) issue('SKILL_STALE', 'Skill name/content/version differs from the pin', location);
       }
     }
     if (node.type === 'subworkflow') {
@@ -143,6 +151,13 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
           const child = context.workflows?.[key];
           if (!child) issue('SUBWORKFLOW_MISSING', 'Pinned SubWorkflow revision does not exist', location);
           else {
+            try { effectiveSkillPolicy(effectiveSkillPolicy(workflow.skill_policy, node.skill_policy), child.skill_policy); } catch (error) { issue(error.code, error.message, location); }
+            if (!object(node.input_bindings)) issue('SUBWORKFLOW_INPUT_BINDINGS', 'Child inputs require an explicit binding map', location);
+            else for (const name of child.inputs_schema?.required ?? []) if (!Object.hasOwn(node.input_bindings, name)) issue('SUBWORKFLOW_INPUT_BINDINGS', 'A required child input is not bound', { ...location, binding: name });
+            if (!object(reference.output_bindings)) issue('SUBWORKFLOW_OUTPUT_BINDINGS', 'Child outputs require an explicit namespace binding map', location);
+            else for (const pointer of Object.values(reference.output_bindings)) {
+              try { if (pointerParts(pointer)[0] !== 'output') throw new Error('Child output bindings must start at /output'); } catch (error) { issue('SUBWORKFLOW_OUTPUT_BINDINGS', error.message, location); }
+            }
             const checked = validateWorkflowGraph(child, context, [...stack, workflow.id + '@current']);
             if (!checked.valid) issue('SUBWORKFLOW_INVALID', 'Pinned SubWorkflow is invalid', { ...location, child_errors: checked.errors });
             for (const blocker of checked.blockers) issue('SUBWORKFLOW_BLOCKED', blocker.message, { ...location, child: key }, blockers);
@@ -171,6 +186,8 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
   const finalizer = nodes.get(workflow.finalization?.node_id);
   for (const kind of ['nodes', 'edges']) for (const item of workflow[kind]) if (item?.origin?.kind === 'inferred' && item.origin.reviewed !== true)
     issue('AI_INFERENCE_UNREVIEWED', 'Inferred control flow requires explicit per-item review', { item_kind: kind, item_id: item.id }, blockers);
+  for (const node of workflow.nodes) if (node?.origin?.kind === 'inlined_skill' && node.origin.reviewed !== true)
+    issue('INLINE_SKILL_UNREVIEWED', 'Inline conversion requires review against its copied source', { node_id: node.id }, blockers);
   if (workflow.finalization?.required !== true || !finalizer || finalizer.type !== 'agent') issue('FINALIZER_MISSING', 'A final acceptance agent is required');
   else {
     if (finalizer.executor?.kind !== 'main') issue('FINALIZER_AUTHORITY', 'Final acceptance belongs to the main agent', { node_id: finalizer.id });

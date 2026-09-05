@@ -8,7 +8,8 @@ cancel/approve, dispatch intent/receipt, and metadata event cursors.
 
 - A Run owns a copy of its entire current pack and content-addressed resources.
   Preset edits/deletion do not change existing Runs. Every read verifies pins,
-  resource bytes and the event chain. Child/Skill pins remain the M9 executor gate.
+  resource bytes and the event chain. The transitive child/Skill closure is pinned
+  before publication and existing Runs never reread linked sources or library heads.
 - `events.jsonl` is authoritative. An fsynced state patch commits each transition;
   `run.json` is reconstructable. Cache failure returns `committed: true` and never
   releases another node through the failed call. Windows guarantees are limited
@@ -51,4 +52,38 @@ cancel/approve, dispatch intent/receipt, and metadata event cursors.
 
 Strict execution and parallel writes remain fail-closed unless a host-owned
 qualified executor provides the required capability. Public input flags cannot
-grant either capability. Provider/server/UI integration is the next milestone.
+grant either capability. Native Strict/Provider service integration exists; the
+editor, runtime UI and release gates remain.
+
+## SubWorkflow Runs
+
+SubWorkflow nodes declare `executor.kind: subworkflow`, explicit access/approval/
+retry, node `input_bindings`, and `subworkflow` containing `workflow_id`, exact
+`revision_pin`, and `output_bindings`. Output pointers start at `/output`; the
+mapped result belongs to `/nodes/<parent-node>/output`. Required child input names
+are checked structurally and actual bound values are validated before creation.
+
+`dispatch` records `child_intent` with a deterministic Run ID before creating the
+child from the parent Run's objects. `child_started` acknowledges that exact ID.
+An interrupted create is reopened under matching pins, inputs, permissions and
+authority; corruption is never replaced. The child controller capability is an
+HMAC of parent authority and exact parent attempt, returned only to the controller.
+The main actor is inherited. Repeated acknowledged dispatch does not create a Run.
+
+Paths intersect at every boundary, read-only cannot acquire writes, parent approval
+remains required inside the child, and Skill policy can only narrow. Explicit child
+SkillRef injections must fit the parent Skill allowance too. Unsupported nested
+executors/parallel writes fail during whole-closure preflight.
+
+Child claims/dispatches check all active parent attempts and Run states. Parent
+pause permits existing completions but blocks new child work; cancellation and
+failed/interrupted ancestors revoke authorization. Service cancellation journals
+known descendants and stops their local sessions, surfacing every failure. A
+previous nonterminal child blocks retry. Active remote reattachment after restart
+is still the M12 gate; it is not equivalent to reopening an intact child directory.
+
+`collect_subworkflow` accepts only the exact main-accepted child output. Direct
+`complete_node` cannot forge a child result. The parent completion includes the
+child journal sequence/hash, pins hash and aggregate changed/outside paths, checked
+again against the parent node scope. Failed/cancelled children propagate an explicit
+failure when collected; observations never automatically charge a retry.

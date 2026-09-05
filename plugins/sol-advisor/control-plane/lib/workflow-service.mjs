@@ -16,6 +16,9 @@ import { importReviewPacket, reviewImportedDraft } from './skill-import/review-i
 import { expansionRunPack } from './skill-import/expansion-run.mjs';
 import { SkillInventory } from './skill-import/inventory.mjs';
 import { discoverCodexSkills } from './skill-import/codex-inventory.mjs';
+import { resolveWorkflowPins } from './workflow-pins.mjs';
+import { canonicalJSON, digest } from './workflow-revisions.mjs';
+import { inlineSkillReference } from './skill-import/inline-skill.mjs';
 
 export class WorkflowService {
   constructor({ configPath, defaultConfigPath, env = process.env, fetchImpl = globalThis.fetch, registry, capabilities = {} }) {
@@ -25,6 +28,19 @@ export class WorkflowService {
     this.skillInventory = capabilities.skillInventory ?? new SkillInventory(async workspace => discoverCodexSkills(workspace, { config: await this.config(), env }));
   }
   async config() { return loadConfig({ configPath: this.configPath, defaultConfigPath: this.defaultConfigPath }); }
+  async validationContext(store, workflow, context) {
+    const initial = validateWorkflowGraph(workflow, context);
+    const deferred = new Set(['SKILL_MISSING', 'SKILL_STALE', 'SUBWORKFLOW_MISSING', 'SUBWORKFLOW_INVALID']);
+    if (initial.errors.some(error => !deferred.has(error.code))) return { context, validation: initial };
+    try {
+      const root = { workflow, resources: [], revision_hash: digest(canonicalJSON(workflow)) };
+      const closure = await resolveWorkflowPins(store, root, { rootResources: {} });
+      const resolved = { ...context, ...closure.context };
+      return { context: resolved, validation: validateWorkflowGraph(workflow, resolved) };
+    } catch (error) {
+      return { context, validation: { valid: false, launch_ready: false, errors: [{ code: error.code ?? 'DEPENDENCY_RESOLUTION_FAILED', message: error.message }], blockers: [], order: [] } };
+    }
+  }
   async open() {
     const config = await this.config();
     requireValue(config.version === 7, 'WORKFLOW_MIGRATION_REQUIRED', 'The user-owned configuration must migrate to v7 before Workflow execution');
@@ -37,7 +53,7 @@ export class WorkflowService {
     await noSymlinks(storeRoot); // A missing migrated generation is corruption, not an empty new library.
     const store = await new WorkflowStore(storeRoot, { validationContext: context }).initialize();
     const runtime = await new WorkflowRuntime({ workflowStore: store, runRoot: join(dirname(this.configPath), 'workflow-runs'), context,
-      strictCapability: this.capabilities.strictCapability ?? (async pack => { await this.strictManager.capability(pack, config.providers); return true; }),
+      strictCapability: this.capabilities.strictCapability ?? (async (pack, closure) => { await this.strictManager.capability(pack, config.providers, closure?.skills); return true; }),
       ...(this.capabilities.parallelWriteCapability ? { parallelWriteCapability: this.capabilities.parallelWriteCapability } : {}),
     }).initialize();
     const executor = new WorkflowExecutor({ runtime, getConfig: () => this.config(), registry: this.registry, strictManager: this.strictManager, env: this.env, fetchImpl: this.fetchImpl });
@@ -63,6 +79,7 @@ export class WorkflowService {
         return verifyCoarseRelocation(pack, await store.resources(args.workflow_id, pack.revision_hash));
       }
       case 'import_review': return importReviewPacket(await store.snapshot(args.workflow_id, args.revision_hash));
+      case 'inline_skill': return inlineSkillReference(store, args.workflow_id, args);
       case 'review_import': {
         requireValue(human, 'HUMAN_REVIEW_REQUIRED', 'Import and inference confirmation belongs to the human editor');
         return reviewImportedDraft(store, args.workflow_id, args);
@@ -98,11 +115,23 @@ export class WorkflowService {
         return applyExpansion(store, args.workflow_id, state.nodes.expand.output, { expected_revision: args.expected_revision, context });
       }
       case 'apply_expansion': return applyExpansion(store, args.workflow_id, args.proposal, { expected_revision: args.expected_revision, context });
-      case 'list': return Promise.all((await store.list()).map(async pack => ({ id: pack.workflow.id, name: pack.workflow.name, status: pack.workflow.status, enabled: pack.workflow.enabled, revision_hash: pack.revision_hash, description: pack.workflow.description, skill_policy: pack.workflow.skill_policy, validation: validateWorkflowGraph(pack.workflow, context) })));
+      case 'list': return Promise.all((await store.list()).map(async pack => ({ id: pack.workflow.id, name: pack.workflow.name, status: pack.workflow.status, enabled: pack.workflow.enabled, revision_hash: pack.revision_hash, description: pack.workflow.description, skill_policy: pack.workflow.skill_policy, validation: (await this.validationContext(store, pack.workflow, context)).validation })));
       case 'read': return store.snapshot(args.workflow_id, args.revision_hash);
-      case 'validate': return validateWorkflowGraph(args.workflow, context);
-      case 'create': return store.create(args.workflow, { resources: args.resources, provenance: args.provenance, import_report: args.import_report });
-      case 'save': return store.save(args.workflow_id, args.workflow, args);
+      case 'validate': return (await this.validationContext(store, args.workflow, context)).validation;
+      case 'create': {
+        if (args.workflow.status === 'ready') {
+          const checked = await this.validationContext(store, args.workflow, context);
+          requireValue(checked.validation.valid, 'WORKFLOW_NOT_READY', 'Workflow dependencies or structure are invalid', { validation: checked.validation }); store.validationContext = checked.context;
+        }
+        return store.create(args.workflow, { resources: args.resources, provenance: args.provenance, import_report: args.import_report });
+      }
+      case 'save': {
+        if (args.workflow.status === 'ready') {
+          const checked = await this.validationContext(store, args.workflow, context);
+          requireValue(checked.validation.valid, 'WORKFLOW_NOT_READY', 'Workflow dependencies or structure are invalid', { validation: checked.validation }); store.validationContext = checked.context;
+        }
+        return store.save(args.workflow_id, args.workflow, args);
+      }
       case 'duplicate': return store.duplicate(args.workflow_id, args.new_id, args.name, args.revision_hash);
       case 'rename': return store.rename(args.workflow_id, args.name, args.expected_revision);
       case 'delete': return store.delete(args.workflow_id, args.expected_revision);
@@ -126,8 +155,14 @@ export class WorkflowService {
       case 'pause': return runtime.pause(args.run_id, args);
       case 'resume': return runtime.resume(args.run_id, args);
       case 'cancel': {
-        await runtime.cancel(args.run_id, args); // Fence leases before waiting for local tools/processes.
-        await this.strictManager.stopRun(args.run_id);
+        let ids; const errors = [];
+        try { ids = await runtime.cancelTree(args.run_id, args); }
+        catch (error) { if (!error.fenced_run_ids) throw error; ids = error.fenced_run_ids; errors.push(error); }
+        // An unreadable child journal cannot prevent shutdown of its exact
+        // already-fenced owned session or the other independently known children.
+        const stopped = await Promise.allSettled(ids.map(id => this.strictManager.stopRun(id)));
+        errors.push(...stopped.filter(item => item.status === 'rejected').map(item => item.reason));
+        if (errors.length) throw new AggregateError(errors, 'Run tree was fenced but some local sessions did not stop');
         return runtime.get(args.run_id);
       }
       case 'events': return runtime.events(args.run_id, args);
@@ -142,6 +177,7 @@ export class WorkflowService {
       case 'dispatch_receipt': return runtime.recordDispatchReceipt(args.run_id, args);
       case 'reconcile_connector': return executor.reconcileConnector(args.run_id, args);
       case 'collect_connector': return executor.collectConnector(args.run_id, args);
+      case 'collect_subworkflow': return runtime.collectSubworkflow(args.run_id, args);
       default: throw Object.assign(new Error(`Unknown Workflow operation: ${operation}`), { code: 'WORKFLOW_OPERATION' });
     }
   }

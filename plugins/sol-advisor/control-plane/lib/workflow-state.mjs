@@ -70,8 +70,7 @@ export function advanceRun(state, pins) {
     const active = definition.type === 'start' || joinActive || incoming.some(edge => state.edges[edge.id] === 'selected');
     if (!active) { setOutcome(state, graph, id, 'skipped'); continue; }
     if (EXECUTOR_NODES.has(definition.type)) {
-      // SubWorkflow permission/approval inheritance is handled by its executor.
-      const approval = definition.type === 'subworkflow' ? { required: false } : approvalBinding(definition, state, pins);
+      const approval = approvalBinding(definition, state, pins);
       if (approval.required || definition.type === 'human_gate') {
         let request = node.approval_id && state.approvals[node.approval_id];
         if (!request) {

@@ -16,6 +16,8 @@ const files = [
   'workflow-validator.test.mjs',
   'workflow-migration.test.mjs',
   'workflow-runtime.test.mjs',
+  'workflow-pins.test.mjs',
+  'workflow-subworkflow.test.mjs',
   'workflow-service.test.mjs',
   'strict-execution.test.mjs',
   'codex-tool-broker.test.mjs',

@@ -12,6 +12,7 @@ import { DEFAULT_CONFIG_PATH } from '../server.mjs';
 import { randomUUID } from 'node:crypto';
 import { processIdentity } from '../lib/execution/codex-process-ownership.mjs';
 import { importCoarseSkill } from '../lib/skill-import/coarse-compiler.mjs';
+import { digest } from '../lib/workflow-revisions.mjs';
 
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 async function fixture(t, options = {}) {
@@ -65,6 +66,32 @@ test('Strict settings are opt-in, reject secrets/unknown fields and never turn a
   assert.throws(() => validateStrictConfig({ enabled: true }), { code: 'STRICT_CONFIG' });
   assert.throws(() => validateStrictConfig({ main_model: 'gpt-5.6-luna' }), { code: 'STRICT_CONFIG' });
   await assert.rejects(qualifiedStrictSettings({ strict_executor: { enabled: true, codex_binary: resolve('fake.exe'), binary_sha256: 'a'.repeat(64) } }), { code: 'STRICT_EXECUTOR_UNQUALIFIED' });
+});
+
+test('Strict child service dispatch reads its pinned Pack and collects only accepted output into its parent', async t => {
+  const f = await fixture(t); const childPack = await f.service.call('read', { workflow_id: 'strict-test' });
+  const parentWorkflow = structuredClone(childPack.workflow); parentWorkflow.id = 'strict-parent';
+  Object.assign(parentWorkflow.nodes[1], { type: 'subworkflow', executor: { kind: 'subworkflow' }, input_bindings: { task: '/inputs/task' },
+    subworkflow: { workflow_id: childPack.workflow.id, revision_pin: childPack.revision_hash, output_bindings: { child_result: '/output' } } });
+  await f.service.call('create', { workflow: parentWorkflow, resources: { 'pinned.txt': 'Immutable task instructions' } });
+  const parent = await f.service.call('start', { workflow_id: parentWorkflow.id, workspace: f.workspace, access: 'read_only', main_actor: 'root', inputs: { task: 'Nested synthetic task' } });
+  const claimFor = async (run, nodeId) => {
+    const lease = await f.service.call('claim_node', { run_id: run.run_id, control_token: run.control_token, node_id: nodeId, owner: nodeId === 'final' ? 'root' : 'worker', request_id: 'claim-' + nodeId });
+    return { run_id: run.run_id, control_token: run.control_token, node_id: nodeId, attempt_id: lease.attempt_id, lease_token: lease.lease_token };
+  };
+  const parentArgs = await claimFor(parent, 'work');
+  await f.service.call('delete', { workflow_id: childPack.workflow.id, expected_revision: childPack.revision_hash });
+  const child = (await f.service.call('dispatch', parentArgs)).child;
+  assert.equal(f.sessions.length, 0);
+  for (const nodeId of ['work', 'final']) {
+    const request = await claimFor(child, nodeId); await f.service.call('dispatch', request); await f.entry(request).job;
+    if (nodeId === 'final') await f.service.call('collect_strict', { ...request, accepted: true });
+  }
+  const collected = await f.service.call('collect_subworkflow', parentArgs);
+  assert.deepEqual(collected.nodes.work.output, { child_result: { text: 'Synthetic result' } }); assert.equal(f.sessions.length, 2);
+  assert(f.sessions.every(session => !session.prompt.includes(parent.control_token) && !session.prompt.includes(child.control_token)));
+  const finalArgs = await claimFor(parent, 'final'); await f.service.call('dispatch', finalArgs); await f.entry(finalArgs).job;
+  assert.equal((await f.service.call('collect_strict', { ...finalArgs, accepted: true })).status, 'succeeded');
 });
 
 test('Strict dispatch runs pinned resources exactly once and keeps final acceptance in the main controller', async t => {
@@ -189,4 +216,55 @@ test('selected-Provider expansion uses durable read-only execution and applies o
   assert.equal(expanded.workflow.status, 'draft'); assert.equal(expanded.workflow.nodes.find(node => node.id === 'analyze').executor.provider_id, providers[0].id);
   assert(expanded.workflow.import_status.unresolved.some(item => item.code === 'AI_INFERENCES_REQUIRE_REVIEW'));
   await assert.rejects(f.service.call('apply_expansion_result', apply), { code: 'REVISION_CONFLICT' }); assert.equal(f.sessions.length, 2);
+});
+
+test('SkillRef nodes materialize only their Run-pinned source and references after the linked original disappears', async t => {
+  let invoked;
+  const f = await fixture(t, { turn: async settings => {
+    invoked = settings; assert.equal(settings.allowedSkills.length, 1);
+    assert.equal(settings.allowedSkills[0].files['reference.txt'].toString(), 'Pinned reference');
+    const tools = settings.toolBroker.tools(); const resource = tools.find(tool => tool.name === 'read_workflow_resource').inputSchema.properties.path.enum.find(path => path.endsWith('/reference.txt'));
+    assert.equal(JSON.parse((await settings.toolBroker.call('read_workflow_resource', { path: resource }, 'read-reference')).contentItems[0].text).text, 'Pinned reference');
+    return { output: 'Skill complete', thread_id: 'skill-thread', turn_id: 'skill-turn', audit: {} };
+  } });
+  const source = join(f.root, 'linked-source'); await mkdir(source); const path = join(source, 'SKILL.md');
+  const text = '---\nname: linked\ndescription: Linked fixture\n---\nRead [the reference](reference.txt) and apply the user task.';
+  await writeFile(path, text); await writeFile(join(source, 'reference.txt'), 'Pinned reference');
+  const pack = await f.service.call('read', { workflow_id: 'strict-test' }); const workflow = structuredClone(pack.workflow);
+  const work = workflow.nodes.find(node => node.id === 'work'); work.type = 'skill_ref'; work.skill_ref = { path, name: 'linked', source_hash: digest(text), allowed_nested_skills: [] }; delete work.prompt_template;
+  const saved = await f.service.call('save', { workflow_id: workflow.id, workflow, expected_revision: pack.revision_hash });
+  const started = await f.service.call('start', { workflow_id: workflow.id, revision_hash: saved.revision_hash, workspace: f.workspace, main_actor: 'root', access: 'read_only', inputs: { task: 'Pinned Skill task' } });
+  await rm(source, { recursive: true });
+  const lease = await f.service.call('claim_node', { run_id: started.run_id, control_token: started.control_token, node_id: 'work', owner: 'worker', request_id: 'skill-claim' });
+  const args = { run_id: started.run_id, control_token: started.control_token, node_id: 'work', attempt_id: lease.attempt_id, lease_token: lease.lease_token };
+  await f.service.call('dispatch', args); await f.entry(args).job;
+  assert.equal((await f.service.call('get', args)).nodes.work.status, 'succeeded'); assert.equal(invoked.allowedSkills[0].source_path, path);
+  await assert.rejects(f.service.call('start', { workflow_id: workflow.id, workspace: f.workspace, main_actor: 'root', access: 'read_only' }), { code: 'ENOENT' });
+});
+
+test('Inline converts a linked node to an independently runnable Draft without changing its Provider or paths', async t => {
+  const f = await fixture(t, { turn: async settings => {
+    assert.deepEqual(settings.allowedSkills, []);
+    const resource = await settings.toolBroker.call('read_workflow_resource', { path: 'inline/work/root/reference.txt' }, 'inlined-reference');
+    assert.equal(JSON.parse(resource.contentItems[0].text).text, 'Independent reference');
+    return { output: 'Inlined result', thread_id: 'inline-thread', turn_id: 'inline-turn', audit: {} };
+  } });
+  const source = join(f.root, 'inline-source'); await mkdir(source); const path = join(source, 'SKILL.md');
+  const text = '---\nname: inline-me\ndescription: Inline fixture\n---\nRead [reference](reference.txt) and apply the task.';
+  await writeFile(path, text); await writeFile(join(source, 'reference.txt'), 'Independent reference');
+  const pack = await f.service.call('read', { workflow_id: 'strict-test' }); const workflow = structuredClone(pack.workflow); const work = workflow.nodes.find(node => node.id === 'work');
+  work.type = 'skill_ref'; work.skill_ref = { path, name: 'inline-me', source_hash: digest(text), allowed_nested_skills: [] };
+  const linked = await f.service.call('save', { workflow_id: workflow.id, workflow, expected_revision: pack.revision_hash });
+  const inlined = await f.service.call('inline_skill', { workflow_id: workflow.id, node_id: 'work', expected_revision: linked.revision_hash });
+  assert.equal(inlined.workflow.status, 'draft'); assert.equal(inlined.workflow.nodes.find(node => node.id === 'work').skill_ref, undefined);
+  assert.deepEqual(inlined.workflow.nodes.find(node => node.id === 'work').executor, work.executor);
+  await rm(source, { recursive: true });
+  const review = await f.service.call('import_review', { workflow_id: workflow.id });
+  const reviewed = await f.service.call('review_import', { workflow_id: workflow.id, expected_revision: inlined.revision_hash,
+    decisions: review.issues.map(issue => ({ issue_id: issue.id, resolution: 'resolved', note: 'Verified the copied instruction and reference mapping' })) }, { human: true });
+  await f.service.call('save', { workflow_id: workflow.id, workflow: { ...reviewed.workflow, status: 'ready' }, expected_revision: reviewed.revision_hash });
+  const started = await f.service.call('start', { workflow_id: workflow.id, workspace: f.workspace, access: 'read_only', main_actor: 'root', inputs: { task: 'Run the inlined fixture' } });
+  const lease = await f.service.call('claim_node', { run_id: started.run_id, control_token: started.control_token, node_id: 'work', owner: 'worker', request_id: 'inline-claim' });
+  const args = { run_id: started.run_id, control_token: started.control_token, node_id: 'work', attempt_id: lease.attempt_id, lease_token: lease.lease_token };
+  await f.service.call('dispatch', args); await f.entry(args).job; assert.equal((await f.service.call('get', args)).nodes.work.status, 'succeeded');
 });

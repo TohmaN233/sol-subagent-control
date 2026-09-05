@@ -87,6 +87,7 @@ test('disabled Provider is structurally valid but launch blocked; binding and ca
 
 test('Skill references detect missing and stale sources', () => {
   const workflow = withWork(); const worker = workflow.nodes.find(n => n.id === 'work');
+  workflow.skill_policy.mode = 'strict'; workflow.skill_policy.implicit = 'deny';
   worker.type = 'skill_ref'; worker.skill_ref = { path: '/synthetic/SKILL.md', name: 'synthetic', source_hash: 'a'.repeat(64), expected_version: '1', allowed_nested_skills: [] };
   const context = { skills: [{ path: worker.skill_ref.path, source_hash: worker.skill_ref.source_hash, version: '1' }] };
   valid(workflow, context); invalid(workflow, 'SKILL_MISSING');
@@ -95,7 +96,7 @@ test('Skill references detect missing and stale sources', () => {
 
 test('SubWorkflow references require pinned existence and reject recursive paths', () => {
   const workflow = withWork(); const worker = workflow.nodes.find(n => n.id === 'work');
-  worker.type = 'subworkflow'; worker.subworkflow = { workflow_id: 'child', revision_pin: 'a'.repeat(64) };
+  worker.type = 'subworkflow'; worker.executor = { kind: 'subworkflow' }; worker.subworkflow = { workflow_id: 'child', revision_pin: 'a'.repeat(64), output_bindings: { result: '/output' } };
   const child = readyWorkflow('child');
   const context = { workflows: { ['child@' + 'a'.repeat(64)]: child } };
   valid(workflow, context); invalid(workflow, 'SUBWORKFLOW_MISSING');

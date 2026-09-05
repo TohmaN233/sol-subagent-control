@@ -3,6 +3,8 @@ import { createHmac } from 'node:crypto';
 import { requireValue } from './workflow-paths.mjs';
 import { intersectBoundaries, pathBoundaries, resolveBindings } from './workflow-bindings.mjs';
 import { digest, canonicalJSON } from './workflow-revisions.mjs';
+import { skillPathKey } from './execution/codex-skill-policy.mjs';
+import { effectiveSkillPolicy } from './workflow-reference-schema.mjs';
 
 export function runPermissions({ workspace, access, allowed_paths = [] }) {
   requireValue(typeof workspace === 'string' && isAbsolute(workspace), 'RUN_WORKSPACE', 'Run workspace must be absolute');
@@ -32,7 +34,7 @@ export function approvalBinding(node, state, pins) {
   const permissions = nodePermissions(node, state);
   return {
     required: Boolean(node.approval.required || provider?.requires_user_approval || state.require_approval),
-    hash: digest(canonicalJSON({ revision: state.workflow_revision, node_id: node.id, attempt: state.nodes[node.id].attempts.length + 1, provider, permissions, skill_policy: pins.root.workflow.skill_policy })),
+    hash: digest(canonicalJSON({ revision: state.workflow_revision, node_id: node.id, attempt: state.nodes[node.id].attempts.length + 1, provider, permissions, skill_policy: effectiveSkillPolicy(pins.inherited_policy ?? pins.root.workflow.skill_policy, node.skill_policy), subworkflow: node.subworkflow ?? null })),
   };
 }
 
@@ -47,6 +49,13 @@ export function executionEnvelope(node, state, pins, attempt, token, resourcesRo
     const target = queue.pop();
     for (const edge of pins.root.workflow.edges.filter(edge => edge.target === target)) if (!ancestors.has(edge.source)) { ancestors.add(edge.source); queue.push(edge.source); }
   }
+  const skillPolicy = effectiveSkillPolicy(pins.inherited_policy ?? pins.root.workflow.skill_policy, node.skill_policy);
+  const skillPaths = [...skillPolicy.ambient_allow, ...(node.skill_ref ? [node.skill_ref.path, ...node.skill_ref.allowed_nested_skills.map(item => item.path)] : [])];
+  const allowedSkills = [...new Set(skillPaths.map(skillPathKey))].map(path => {
+    requireValue(!skillPolicy.shadowed_skill_paths.some(shadow => skillPathKey(shadow) === path), 'SKILL_POLICY_CONFLICT', 'Explicit or ambient Skill allowance conflicts with a shadowed source');
+    const pin = (pins.skills ?? []).find(skill => skillPathKey(skill.path) === path);
+    requireValue(pin, 'SKILL_ALLOW_UNPINNED', 'Node allowance has no immutable Run snapshot'); return structuredClone(pin);
+  });
   return {
     run_id: state.run_id, workflow_id: state.workflow_id, workflow_revision: state.workflow_revision,
     node_id: node.id, attempt_id: attempt.id, lease_token: token, executor: structuredClone(node.executor),
@@ -54,9 +63,11 @@ export function executionEnvelope(node, state, pins, attempt, token, resourcesRo
     role: node.role ?? null, access: permissions.access, workspace: state.permissions.workspace,
     inputs: resolveBindings(node.input_bindings ?? {}, bindingContext(state)), workflow_inputs: structuredClone(state.inputs),
     upstream_results: Object.fromEntries([...ancestors].sort().filter(id => ['succeeded', 'failed'].includes(state.nodes[id].status)).map(id => [id, { status: state.nodes[id].status, output: structuredClone(state.nodes[id].output), error: structuredClone(state.nodes[id].error) }])),
-    constraints: structuredClone(state.constraints), prompt_template: node.prompt_template ?? null,
+    constraints: structuredClone(state.constraints), prompt_template: node.prompt_template ?? (node.type === 'skill_ref' ? 'Apply the explicitly pinned Skill to {{task}}. Read its references only from the mapped pinned resources.' : null),
     resources: structuredClone(node.resources ?? []), outputs_schema: structuredClone(node.outputs_schema ?? {}),
-    skill_policy: structuredClone(pins.root.workflow.skill_policy), skill_ref: structuredClone(node.skill_ref ?? null),
+    skill_policy: skillPolicy, skill_ref: structuredClone(node.skill_ref ?? null),
+    subworkflow: structuredClone(node.subworkflow ?? null),
+    allowed_skills: allowedSkills,
     effective_allowed_paths: permissions.allowed_paths, resources_root: resourcesRoot,
   };
 }

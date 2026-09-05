@@ -83,7 +83,7 @@ review controls and selected-Provider expansion dispatch. M9-M13 remain. No real
 user config was migrated/enabled, no installed plugin changed, and no push/release
 has occurred. Do not treat this checkpoint as the completed upgrade.
 
-## M8 service integration (2026-09-05, active)
+## M8 service integration (2026-09-05, committed 21c6781)
 
 - Parsed declared openai.yaml/Skill frontmatter/SKILL.json dependencies into exact
   tool/MCP/executable/environment requirements; commands and optional malformed or
@@ -112,6 +112,48 @@ has occurred. Do not treat this checkpoint as the completed upgrade.
   Full144 regression passed, zero failures, 55.6 seconds; session62946 completed.
   Neither run uses live credentials or migrates real user config.
 - Remaining: UI integration/source editing/publication, M9-M13. No release or push.
+
+## M9 integration checkpoint (2026-09-05)
+
+- New Runs resolve whole transitive child Packs/resources, Provider identities and
+  Skill snapshots before publication. Source name/hash/version, complete resource
+  bytes and every ancestry context are checked. Reused children cannot hide a
+  recursive Workflow identity through another revision. Three pin tests passed.
+- Linked SkillRef dispatch materializes only this node's Run-pinned allowances.
+  The qualified session independently gates explicit Skill input and exposes exact
+  pinned references through its broker. Removing the original after Run start does
+  not change execution; a new Run with a missing or stale source fails.
+- Inline converts a selected SkillRef and explicit nested Skills to an editable
+  agent node with copied resources and a resource map. It preserves Provider,
+  access, scope and approval; source paths are shadowed. The result is Draft and
+  has an independent per-node review blocker, even if its summary is removed.
+  Review never claims functional portability or clears executor requirements.
+- SubWorkflow has a dedicated executor and deterministic child Run identity.
+  Parent intent precedes child creation; a crash after child publication reopens
+  that exact journal. Children use only parent Run objects, including after library
+  deletion. Main authority is derived privately and never appears in model prompts.
+- Child paths intersect the parent node's permissions; inherited approval cannot
+  be removed. Skill ceilings also cover explicit linked injections. Every depth
+  is preflighted, including unsupported parallel writes inside children. Output
+  bindings read only the child's output namespace. Collection requires its main-
+  accepted successful Run and commits child journal/hash and scope evidence.
+- Parent pause blocks child claims/dispatch while active completion is retained.
+  Ancestor checks fence child authorization after cancellation/interruption/failure.
+  Service cancellation journals the tree before stopping exact local sessions;
+  unreadable child journals produce errors while other known sessions still stop.
+- Full regression passed155 tests (49.9 seconds, session18555 completed). The final
+  idempotence/cancellation/policy refinements passed25 targeted tests afterward.
+  A final three-generation cancellation/corruption test brings the registered
+  count to156; the six SubWorkflow tests passed after that addition.
+- Actual App Server report `baselines/v7-strict-2026-09-04/skillref-subworkflow-integration.json`
+  passed6 cases/17 serialized local-provider requests, including deleted linked
+  source execution, deleted child Pack execution and parent namespaced acceptance.
+  Shared configuration hashes match and temporary profiles are removed. The report
+  preserves the source hashes observed before the final metadata/error refinements;
+  it does not claim a live-model semantic or cross-platform release qualification.
+- Remaining: M10 worktrees/integration, M11 editor, M12 runtime UI and exact remote
+  reattachment without retry charge, M13 end-to-end/release. The application broker
+  is not an OS filesystem isolation boundary. No real user configuration changed.
 
 ## M7 engine checkpoint (243208c; historical)
 
@@ -249,7 +291,7 @@ service still rejects Strict and never reads this candidate as a capability gran
 
 ## Remaining work
 
-M7 human authentication/capability UI, M8 import/expansion integration, M9 SkillRef/SubWorkflow execution and narrowing,
+M7 human authentication/capability UI, M8/M9 import/reference/expansion editor integration,
 M10 parallel worktree isolation, M11 graph editor, M12 runtime UI, M13 E2E/release.
 The bundled config and current graphless console remain v6; the loader now also
 accepts migrated v7. Installed plugin remains 0.7.11; no

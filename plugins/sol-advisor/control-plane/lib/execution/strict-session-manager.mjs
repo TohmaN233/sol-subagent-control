@@ -10,6 +10,7 @@ import { validateData } from '../workflow-data-schema.mjs';
 import { isEnvironmentDisabled } from '../config.mjs';
 import { inspectOrphanProfiles, stopVerifiedOrphan } from './codex-process-ownership.mjs';
 import { cleanupCodexProfile } from './codex-profile-builder.mjs';
+import { skillPathKey } from './codex-skill-policy.mjs';
 
 const managers = new Map();
 const key = (runId, attemptId) => runId + '/' + attemptId;
@@ -35,20 +36,22 @@ export class StrictSessionManager {
     this.sessionFactory = sessionFactory; this.qualify = qualify; this.entries = new Map();
     this.parent = join(dirname(this.configPath), 'strict-profiles');
   }
-  async capability(pack, providers) {
+  async capability(pack, providers, skills = []) {
     const settings = await this.qualify(await this.getConfig(), this.env);
-    requireValue(pack.workflow.skill_policy.mode === 'strict' && !pack.workflow.skill_policy.ambient_allow.length, 'STRICT_SKILL_PIN_UNAVAILABLE', 'Ambient Skill allowances need immutable executor pins');
+    const pinned = new Set(skills.map(skill => skillPathKey(skill.path)));
+    requireValue(pack.workflow.skill_policy.mode === 'strict' && pack.workflow.skill_policy.ambient_allow.every(path => pinned.has(skillPathKey(path))), 'STRICT_SKILL_PIN_UNAVAILABLE', 'Ambient Skill allowances need immutable executor pins');
     for (const node of pack.workflow.nodes) {
-      if (!['start', 'end', 'condition', 'parallel', 'join', 'human_gate'].includes(node.type)) {
-        requireValue(node.type === 'agent' && (node.executor?.kind === 'main' || node.executor?.kind === 'provider' && providers.find(provider => provider.id === node.executor.provider_id)?.kind === 'native_agent'), 'STRICT_NODE_UNSUPPORTED', 'Strict execution currently requires native agent nodes or main finalization');
+      if (!['start', 'end', 'condition', 'parallel', 'join', 'human_gate', 'subworkflow'].includes(node.type)) {
+        requireValue(['agent', 'skill_ref'].includes(node.type) && (node.executor?.kind === 'main' || node.executor?.kind === 'provider' && providers.find(provider => provider.id === node.executor.provider_id)?.kind === 'native_agent'), 'STRICT_NODE_UNSUPPORTED', 'Strict execution currently requires native agent/SkillRef nodes or main finalization');
       }
+      if (node.type === 'skill_ref') requireValue([node.skill_ref.path, ...node.skill_ref.allowed_nested_skills.map(item => item.path)].every(path => pinned.has(skillPathKey(path))), 'STRICT_SKILL_PIN_UNAVAILABLE', 'SkillRef allowance is missing from immutable Run pins');
       requireValue((node.resources ?? []).every(path => pack.resources.some(resource => resource.path === path && resource.bytes <= 1024 * 1024)), 'STRICT_RESOURCE_UNAVAILABLE', 'Node resource is missing or exceeds the qualified text broker limit');
     }
     return settings;
   }
   async prepare(runtime, runId, args, envelope) {
     const { pins } = await runtime.runs.read(runId);
-    const settings = await this.capability(pins.root, pins.providers);
+    const settings = await this.capability(pins.root, pins.providers, pins.skills);
     const main = envelope.executor.kind === 'main';
     return { execution: 'strict_codex', model: main ? settings.main_model : envelope.provider.config.model,
       effort: main ? settings.main_reasoning_effort : envelope.provider.config.reasoning_effort,
@@ -88,13 +91,24 @@ export class StrictSessionManager {
         requireValue(pin, 'STRICT_RESOURCE_UNAVAILABLE', 'Node resource is not pinned');
         return { path, sha256: pin.sha256, bytes: await readFile(join(envelope.resources_root, pin.sha256)) };
       }));
+      const allowedSkills = []; const skillResources = [];
+      for (const pin of envelope.allowed_skills ?? []) {
+        const files = Object.create(null); const prefix = '__skill_pins__/' + digest(pin.path) + '/';
+        for (const resource of pin.resources) {
+          const bytes = await readFile(join(envelope.resources_root, resource.sha256)); files[resource.path] = bytes;
+          resources.push({ path: prefix + resource.path, sha256: resource.sha256, bytes });
+        }
+        allowedSkills.push({ source_path: pin.path, source_hash: pin.source_hash, name: pin.name, files });
+        skillResources.push({ skill: pin.name, source_path: pin.path, resource_prefix: prefix });
+      }
+      entry.skillResources = skillResources;
       entry.broker = await createCodexToolBroker({ workspace: envelope.workspace, access: envelope.access, allowedPaths: envelope.effective_allowed_paths,
         deniedPaths: [this.configPath, runtime.workflows.root, runtime.runs.root, join(dirname(this.configPath), 'workflow-expansion-jobs'), this.parent], resources, authorize: entry.authorize,
         onOperation: async metadata => { await event('tool_operation', metadata); if (metadata.tool === 'write_workspace' && metadata.phase === 'committed') entry.writes.add(metadata.path); },
       });
       entry.session = await this.sessionFactory({ parent: this.parent, owner: { run_id: runId, node_id: args.node_id, attempt_id: args.attempt_id },
         binary: settings.codex_binary, expectedBinaryHash: settings.binary_sha256, model: adapter.model, effort: adapter.effort,
-        cwd: envelope.workspace, env: this.env, skillPolicy: envelope.skill_policy, toolBroker: entry.broker, authorize: entry.authorize,
+        cwd: envelope.workspace, env: this.env, skillPolicy: envelope.skill_policy, allowedSkills, toolBroker: entry.broker, authorize: entry.authorize,
         onProfilePrepared: profile => event('profile_owned', { home: profile.home, executable_sha256: profile.binary_sha256 }),
         onEvent: metadata => trackedEvents.has(metadata.method) ? event('codex_event', metadata) : undefined,
         onToolRead: metadata => event('skill_read', metadata),
@@ -132,8 +146,9 @@ export class StrictSessionManager {
     await entry.authorize(); await entry.event('session_state', { status: 'running' });
     const schema = entry.envelope.outputs_schema;
     const structured = Object.keys(schema).length > 0;
-    const prompt = entry.prompt + (structured ? '\nReturn only a JSON value matching this output schema: ' + canonicalJSON(schema) : '');
-    const result = await entry.session.turn(prompt, { timeout_ms: 600000 });
+    const prompt = entry.prompt + (entry.skillResources.length ? '\nPinned Skill reference files are available with read_workflow_resource using these exact prefixes (never the original source paths):\n' + canonicalJSON(entry.skillResources) : '') +
+      (structured ? '\nReturn only a JSON value matching this output schema: ' + canonicalJSON(schema) : '');
+    const result = await entry.session.turn(prompt, { timeout_ms: 600000, explicit_sources: entry.envelope.skill_ref ? [entry.envelope.skill_ref.path] : [] });
     let output;
     if (structured) {
       try { output = JSON.parse(result.output); } catch { throw Object.assign(new Error('Model result is not the required JSON value'), { code: 'STRICT_OUTPUT_JSON' }); }

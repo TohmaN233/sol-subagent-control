@@ -22,6 +22,11 @@ export async function reviewImportedDraft(store, workflowId, { expected_revision
     const issue = packet.issues.find(issue => issue.id === decision.issue_id);
     requireValue(issue && !reviewedIssues.has(issue.id) && issue.code !== 'AI_INFERENCES_REQUIRE_REVIEW' && ['resolved', 'not_required'].includes(decision.resolution), 'IMPORT_REVIEW_ISSUE', 'Select an unresolved observation exactly once; AI inferences require per-item review');
     reviewedIssues.add(issue.id); records.push({ issue_id: issue.id, observation: issue, resolution: decision.resolution, note: note(decision.note) });
+    if (issue.code === 'INLINE_SKILL_REQUIRES_REVIEW') {
+      const node = workflow.nodes.find(node => node.id === issue.node_id);
+      requireValue(node?.origin?.kind === 'inlined_skill' && decision.resolution === 'resolved', 'IMPORT_REVIEW_ITEM', 'Inline conversion requires review of its exact converted node');
+      node.origin.reviewed = true; node.origin.review = { actor: 'user', revision: pack.revision_hash, note: note(decision.note) };
+    }
   }
   for (const inference of inferences) {
     requireValue(['nodes', 'edges'].includes(inference.kind), 'IMPORT_REVIEW_ITEM', 'Select a node or edge inference');

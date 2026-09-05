@@ -69,10 +69,26 @@ blockers. Review creates another Draft, retains requirements and full review his
 and never automatically publishes Ready or claims functional independence.
 
 Remaining integration: graph UI, source/requirement editing and publication, plus
-M9 pinned SkillRef/SubWorkflow execution and broader executor capabilities. Tests
+broader executor capabilities. Tests
 prove deterministic snapshots, resource relocation, observed dependency blockers,
 no script execution, source preservation, stale-selection refusal and expansion
 authority/CAS behavior. Actual App Server/local-provider integration additionally
 verifies a source-removed synthetic import and selected-Provider expansion. This is
 not proof of arbitrary Skill portability or live-model semantic graph quality;
 M13 UI/end-to-end and cross-platform release gates remain.
+
+Linked SkillRef nodes now require Strict mode and explicit path/name/source hash,
+optional expected version and a flat `allowed_nested_skills` descriptor array.
+Run creation snapshots all linked bytes and verifies the entire closure before
+publication. Dispatch materializes only per-node allowed snapshots; normal resource
+reads never return to the original source. The new Run checks still detect stale,
+missing, partial, shadowed or unresolved linked sources.
+
+`inline_skill` saves a new Draft under source revision CAS. It copies root/nested
+Skill bytes into `inline/<node>/`, supplies a pinned resource map and converts the
+node to editable instructions without changing Provider/access/approval/scope.
+An original-source shadow prevents accidental ambient reuse. Requirements and
+dependency observations remain visible. The human-only `review_import` operation
+must confirm the exact conversion; a separate per-node blocker prevents blanket
+summary removal from bypassing review. Functional independence still needs actual
+execution evidence. SubWorkflow authority and output rules are in V7_RUN_CONTRACT.

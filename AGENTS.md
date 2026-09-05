@@ -52,6 +52,15 @@ still protected by the cross-process writer lock. Human login/capability UI and
 release review remain pending, so do not describe the upgrade as shipped. Preserve
 every failure and the limited scope of actual/local/live evidence in the work log.
 
+M9 linked SkillRef/Inline and SubWorkflow execution are integrated in the development
+service. Run start pins the entire dependency closure and checks every ancestry,
+permission and executor context. Child Runs derive exact private authority, retain
+main acceptance and consume only parent-pinned bytes. Do not bypass inheritance
+with a library restart or direct child completion. See V7_RUN_CONTRACT and
+V7_SKILL_IMPORT_CONTRACT. Inline remains Draft until exact human review. M10-M13
+and all editor/authentication/release gates remain; full155 regression and actual
+App Server6-case/17-request evidence are recorded in the work log.
+
 Relevant checks:
 
 ```text
