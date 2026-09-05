@@ -9,5 +9,9 @@
   },
   "scripts": {
     "test": "node test/run-tests.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "yaml": "2.9.0"
   }
 }

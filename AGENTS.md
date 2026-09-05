@@ -30,8 +30,14 @@ graph UI. Do not claim Strict from a caller flag or activate the old current-thr
 adapter for imported workflows. M7 candidate modules under `lib/execution` have
 actual App Server request and lifecycle evidence, but production integration and
 capability qualification remain gated. See `docs/V7_WORK_LOG.md` for current evidence
-and pending live qualification. Catalog controls include the independent native
+and completed synthetic live qualification. Catalog controls include the independent native
 orchestrator Skills namespace; feature flags alone do not suppress it.
+
+M8's import/compiler foundation is documented in `docs/V7_SKILL_IMPORT_CONTRACT.md`.
+Actual host discovery and selected-Provider expansion dispatch are still integration
+work. The bundled ISC YAML parser needs no npm at runtime; build it using pinned
+development dependencies and preserve its license/source manifest. Never execute
+imported scripts during analysis or label resource relocation as functional proof.
 
 Relevant checks:
 

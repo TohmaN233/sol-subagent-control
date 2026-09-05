@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, rename, readFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, rename, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { loadConfig, saveConfig, configRevision, resolveAuditPath } from '../lib/config.mjs';
 import { WorkflowService } from '../lib/workflow-service.mjs';
 import { ConnectorTaskStore } from '../connectors/task-store.mjs';
 import { DEFAULT_CONFIG_PATH, handleRpc, startConsole, stopConsole } from '../server.mjs';
+import { SkillInventory } from '../lib/skill-import/inventory.mjs';
 
 async function fixture(t, options = {}) {
   const root = await mkdtemp(join(tmpdir(), 'workflow-service-')); const workspace = join(root, 'workspace'); await mkdir(workspace);
@@ -23,6 +24,23 @@ const control = run => ({ run_id: run.run_id, control_token: run.control_token }
 const claim = (f, run, node = 'implementation') => f.service.call('claim_node', { ...control(run), node_id: node, owner: node === 'final-acceptance' ? 'root' : 'worker', request_id: 'claim-' + node });
 const leaseArgs = (run, lease) => ({ ...control(run), node_id: lease.node_id, attempt_id: lease.attempt_id, lease_token: lease.lease_token });
 const completion = output => ({ status: 'succeeded', summary: 'Synthetic verification', structured_output: output, artifacts: [], evidence: [{ check: 'fixture', passed: true }], changed_paths: [], outside_paths: [] });
+
+test('service imports only a fresh actual inventory selection and prepares expansion without invoking a Provider', async t => {
+  let source;
+  const inventory = new SkillInventory(async () => ({ skills: [{ path: source, scope: 'user', enabled: true }], errors: [], discovered_by: 'synthetic-host-adapter' }));
+  const f = await fixture(t, { capabilities: { skillInventory: inventory, context: { tools: ['read_workflow_resource'] } } }); await f.migrate();
+  source = join(f.workspace, 'SKILL.md'); await writeFile(source, '---\nname: Import fixture\ndescription: Synthetic Skill\n---\nSummarize the user request.');
+  const selected = (await f.service.call('skill_inventory', { workspace: f.workspace })).entries[0];
+  const provider = (await f.service.config()).providers.find(item => item.enabled && item.kind === 'native_agent');
+  const pack = await f.service.call('import_skill', { workspace: f.workspace, skill_id: selected.id, workflow_id: 'from-skill', provider_id: provider.id });
+  assert.equal(pack.workflow.status, 'draft'); assert.equal(pack.workflow.skill_policy.mode, 'strict');
+  assert.equal(pack.workflow.nodes.find(node => node.id === 'instructions').executor.provider_id, provider.id);
+  const packet = await f.service.call('prepare_expansion', { workflow_id: pack.workflow.id, revision_hash: pack.revision_hash, provider_id: provider.id });
+  assert.equal(packet.invoked, false); assert.equal(packet.handoff_required, true); assert.equal(packet.access, 'read_only');
+  assert.equal((await f.service.call('verify_relocation', { workflow_id: pack.workflow.id, revision_hash: pack.revision_hash })).functional_execution_proven, false);
+  await writeFile(source, (await readFile(source, 'utf8')) + '\nChanged');
+  await assert.rejects(f.service.call('import_skill', { workspace: f.workspace, skill_id: selected.id, workflow_id: 'stale' }), { code: 'SKILL_SELECTION_STALE' });
+});
 
 test('service migration is human-owned; MCP executes a native handoff and main finalization with upstream results', async t => {
   const f = await fixture(t);

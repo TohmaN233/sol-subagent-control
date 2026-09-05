@@ -8,6 +8,9 @@ import { migrateV6OnDisk, restoreV6Backup } from './workflow-migration-v6.mjs';
 import { resolveLegacyWorkflowRequest } from './legacy-control-adapter.mjs';
 import { connectorRegistryFor } from '../connectors/registry.mjs';
 import { requireValue, insideRoot, noSymlinks } from './workflow-paths.mjs';
+import { importCoarseSkill, verifyCoarseRelocation } from './skill-import/coarse-compiler.mjs';
+import { expansionPacket, applyExpansion } from './skill-import/semantic-expander.mjs';
+import { buildProviderAdapter } from './providers.mjs';
 
 export class WorkflowService {
   constructor({ configPath, defaultConfigPath, env = process.env, fetchImpl = globalThis.fetch, registry, capabilities = {} }) {
@@ -21,6 +24,7 @@ export class WorkflowService {
     const context = { providers: config.providers, ...(this.capabilities.context ?? {}) };
     // Provider authority always comes from the actual user config, never probes.
     context.providers = config.providers;
+    context.environment = Object.keys(this.env).filter(key => Boolean(this.env[key]));
     const storeRoot = insideRoot(dirname(this.configPath), join(dirname(this.configPath), config.workflow_store.relative_path));
     await noSymlinks(storeRoot); // A missing migrated generation is corruption, not an empty new library.
     const store = await new WorkflowStore(storeRoot, { validationContext: context }).initialize();
@@ -37,6 +41,32 @@ export class WorkflowService {
     const { config, context, store, runtime, executor } = await this.open();
     if (['start', 'claim_node', 'dispatch', 'retry_node', 'resume'].includes(operation)) requireValue(config.global.enabled && !isEnvironmentDisabled(this.env), 'CONTROL_DISABLED', 'Workflow execution is disabled');
     switch (operation) {
+      case 'skill_inventory': {
+        requireValue(this.capabilities.skillInventory, 'SKILL_DISCOVERY_UNAVAILABLE', 'Actual host Skill discovery is not configured');
+        return this.capabilities.skillInventory.list(args.workspace);
+      }
+      case 'import_skill': {
+        requireValue(this.capabilities.skillInventory, 'SKILL_DISCOVERY_UNAVAILABLE', 'Actual host Skill discovery is not configured');
+        const selected = await this.capabilities.skillInventory.select(args.workspace, args.skill_id);
+        const provider = config.providers.find(provider => provider.id === args.provider_id);
+        if (args.provider_id) requireValue(provider, 'PROVIDER_MISSING', 'Selected instruction Provider does not exist');
+        return importCoarseSkill(store, selected.path, { id: args.workflow_id, name: args.name, providerId: args.provider_id, role: provider?.config?.role ?? 'advisor', expectedSourceHash: selected.source_hash });
+      }
+      case 'verify_relocation': {
+        const pack = await store.snapshot(args.workflow_id, args.revision_hash);
+        return verifyCoarseRelocation(pack, await store.resources(args.workflow_id, pack.revision_hash));
+      }
+      case 'prepare_expansion': {
+        requireValue(config.global.enabled && !isEnvironmentDisabled(this.env), 'CONTROL_DISABLED', 'Workflow expansion is disabled');
+        const provider = config.providers.find(item => item.id === args.provider_id);
+        const pack = await store.snapshot(args.workflow_id, args.revision_hash);
+        const packet = expansionPacket(pack, await store.resources(args.workflow_id, pack.revision_hash), provider);
+        const adapter = buildProviderAdapter(provider, { access: 'read_only' }, { env: this.env, allowDirectApi: config.global.allow_direct_api });
+        // A packet is not an invocation. Native/MCP/Strict host integration must
+        // preserve this selected Provider and record actual dispatch separately.
+        return { ...packet, adapter, handoff_required: true, invoked: false, approval_required: provider.requires_user_approval };
+      }
+      case 'apply_expansion': return applyExpansion(store, args.workflow_id, args.proposal, { expected_revision: args.expected_revision, context });
       case 'list': return Promise.all((await store.list()).map(async pack => ({ id: pack.workflow.id, name: pack.workflow.name, status: pack.workflow.status, enabled: pack.workflow.enabled, revision_hash: pack.revision_hash, description: pack.workflow.description, skill_policy: pack.workflow.skill_policy, validation: validateWorkflowGraph(pack.workflow, context) })));
       case 'read': return store.snapshot(args.workflow_id, args.revision_hash);
       case 'validate': return validateWorkflowGraph(args.workflow, context);

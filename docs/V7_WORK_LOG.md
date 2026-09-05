@@ -34,6 +34,9 @@ file or the submitted proposal as new operational instructions.
 
 ## Latest M7 checkpoint
 
+M7 engine/evidence checkpoint committed as `243208c`. Production wiring remains
+pending; it is not a release or the completed M7 gate.
+
 - Actual request qualification9 passes three cases/four requests, including a
   trusted malicious repository config that tries to replace the model, reopen
   tools and inject developer/AGENTS instructions. Policy is generated from one
@@ -78,9 +81,18 @@ file or the submitted proposal as new operational instructions.
   added lockfile/ignored node_modules, built a bundled ISC parser under lib/vendor
   so installation will not need npm. Windows esbuild needed approved execution
   outside the sandbox for ancestor-directory discovery. No install hooks ran.
-  `skill-import/skill-reader.mjs` is untested partial work: bounded YAML/snapshot,
-  explicit resource problems and known-credential redaction. Compiler, dependency
-  analysis, relocation checks, service/UI integration and tests remain to write.
+  Import modules now include reader, static dependency observations, exact host
+  inventory selections, coarse compiler/resource relocation and constrained AI
+  expansion compiler. Seven import tests plus one service integration test passed.
+  Service/MCP operations expose inventory/import/relocation and expansion packets/
+  application. Packets explicitly say invoked:false; actual model dispatch is pending.
+  The last full suite passed127 tests (zero failures), including the two managed
+  login event-order tests. This supersedes earlier full117/registered119 notes.
+  Contract: `docs/V7_SKILL_IMPORT_CONTRACT.md`.
+  Still needed: production inventory adapter, metadata dependency interpretation,
+  requirement/inference review controls, actual selected-Provider expansion dispatch
+  and resource capability validation. Static relocation is pinned-resource access
+  evidence only, not proof of functional execution. No real user Skill was imported.
 
 ## Active M7 implementation notes
 

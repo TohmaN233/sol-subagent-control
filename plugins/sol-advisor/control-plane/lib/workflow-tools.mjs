@@ -9,10 +9,16 @@ const properties = {
   constraints: {}, main_actor: string, require_approval: { type: 'boolean' }, completion: object, error: object,
   reconciliation: object, after_restart: { type: 'boolean' }, reason: string, approval_id: string, decision: { type: 'boolean' },
   after_sequence: { type: 'integer', minimum: 0 }, receipt: object,
+  skill_id: string, provider_id: string, name: string, proposal: object,
 };
 const lease = ['run_id', 'node_id', 'attempt_id', 'lease_token'];
 const main = ['run_id', 'control_token'];
 const specs = [
+  ['skill_inventory', 'Read actual host Skill metadata and per-path discovery errors. Never treats a filesystem guess as complete discovery.', ['workspace'], []],
+  ['import_skill', 'Coarse-import a user-selected current Skill inventory entry into an immutable Strict Draft. Executes no scripts or model calls.', ['workspace', 'skill_id', 'workflow_id'], ['name', 'provider_id']],
+  ['verify_relocation', 'Verify pinned imported resource availability without reading the original Skill. Does not prove functional execution.', ['workflow_id', 'revision_hash'], []],
+  ['prepare_expansion', 'Prepare a read-only expansion packet for the user-selected Provider. This does not invoke that Provider or grant approval.', ['workflow_id', 'revision_hash', 'provider_id'], []],
+  ['apply_expansion', 'Validate an inferred graph against its exact coarse revision and save another Draft. Never changes Provider/write/finalizer authority.', ['workflow_id', 'expected_revision', 'proposal'], []],
   ['list', 'List Workflow metadata and structural/environment readiness, without prompt bodies.', [], []],
   ['read', 'Read one explicit immutable Workflow revision for inspection or editing.', ['workflow_id'], ['revision_hash']],
   ['validate', 'Validate a graph, pinned bindings and current launch blockers.', ['workflow'], []],

@@ -184,7 +184,7 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
   }
   if (!object(workflow.skill_policy) || !['strict', 'cooperative'].includes(workflow.skill_policy.mode) || (workflow.skill_policy.mode === 'strict' && workflow.skill_policy.implicit !== 'deny')) issue('SKILL_POLICY', 'Workflow must declare a valid Skill policy');
   if (!object(workflow.requirements)) issue('REQUIREMENTS_SCHEMA', 'Requirements must be an object');
-  else for (const kind of ['providers', 'tools', 'mcp_servers', 'executables']) {
+  else for (const kind of ['providers', 'tools', 'mcp_servers', 'executables', ...(workflow.requirements.environment !== undefined ? ['environment'] : [])]) {
     const required = workflow.requirements[kind];
     if (!Array.isArray(required) || required.some(id => typeof id !== 'string' || !id)) { issue('REQUIREMENTS_SCHEMA', `Requirements ${kind} must be a string array`); continue; }
     for (const id of required) {
@@ -193,6 +193,11 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
         else if (!providers.get(id).enabled) issue('PROVIDER_DISABLED', `Required Provider is disabled: ${id}`, {}, blockers);
       } else if (!(context[kind] ?? []).includes(id)) issue('REQUIREMENT_UNAVAILABLE', `Required ${kind} entry is unavailable: ${id}`, { requirement: id }, blockers);
     }
+  }
+  if (workflow.import_status !== undefined) {
+    const imported = workflow.import_status;
+    if (!object(imported) || !['coarse', 'ai_expanded'].includes(imported.mode) || !Array.isArray(imported.unresolved)) issue('IMPORT_STATUS', 'Imported Workflow needs explicit dependency observations');
+    else if (imported.unresolved.length) issue('IMPORT_UNRESOLVED', 'Imported Workflow has unresolved resource, dependency or credential observations', { unresolved: imported.unresolved }, blockers);
   }
   if (!workflow.enabled) issue('WORKFLOW_DISABLED', 'Workflow is disabled', {}, blockers);
   if (workflow.status !== 'ready') issue('WORKFLOW_DRAFT', 'Draft Workflow cannot start', {}, blockers);
