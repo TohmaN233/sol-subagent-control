@@ -46,6 +46,9 @@ Join requires exact patch review, acceptance and target CAS. Never clean an
 unaccepted or changed worktree. Git helper uncertainty persists and blocks all
 further integration/cleanup until reconciled. See V7_PARALLEL_CONTRACT and
 V7_RECOVERY_CONTRACT for controller/lease rotation, exact reattachment and cancellation.
+Cursor runtime scope violations persist evidence before Stop and share manual
+cancel's exact-identity confirmation. A Stop click alone is not terminal evidence;
+identity loss keeps the task unconfirmed and blocks acceptance.
 
 The React/TypeScript/React Flow editor is in web-src; committed web/workflows.*
 assets are built with pinned esbuild and include all bundled licenses. No runtime

@@ -398,3 +398,19 @@ static catalog fixtures; actual unsupported macOS ownership is asserted to refus
 profile startup and retain orphan state. No Strict qualification was extended.
 Focused broker/Git/runtime17 and Strict manager/catalog18 passed locally.
 
+Second PR CI33953652173 passed Windows/Linux core, web and all isolation jobs.
+macOS exposed two Cursor runtime scope-stop failures. A deterministic late-write
+fixture reproduced the same TIMEOUT_UNCONFIRMED locally: the watcher clicked Stop
+and persisted cancelling, but no code confirmed its terminal state. Manual and
+runtime cancellation now share exact-identity, two-observation confirmation;
+pre-binding watcher events wait for durable identity, and late events can verify
+an already completed reply. Lost identity retains needs_attention and scope evidence.
+The new reproduction failed before the fix and passed after it; the negative
+identity-loss case also passed. Fifteen focused Cursor scenarios passed locally.
+
+After the physical path fix, actual Windows Codex manager6/17 and parallel2/14
+qualification probes passed again with zero errors, empty retained-profile lists
+and unchanged shared config hashes. Reports release-path-manager.json and
+release-path-parallel.json record exact source and executable hashes. These use
+local synthetic model responses and do not repeat the three official-login cases.
+

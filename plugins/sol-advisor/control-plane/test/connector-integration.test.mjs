@@ -407,6 +407,28 @@ test('Cursor runtime monitor catches ignored outside writes before Sol acceptanc
   assert.equal(await readFile(join(fx.workspace, 'ignored-secret.txt'), 'utf8'), 'cursor ignored outside\n');
 });
 
+test('Cursor runtime scope stop confirms the exact agent instead of timing out in cancelling', async (t) => {
+  const fx = await fixture(t);
+  const started = await startScenario(fx, 'cursor-bounded-change', 'CURSOR_LATE_OUTSIDE', { allowedPaths: ['allowed/'] });
+  const done = await fx.registry.status(started.task_id, 6000);
+  assert.equal(done.state, 'scope_violation', JSON.stringify({ state: done.state, error: done.error, scope: done.scope }));
+  assert.equal(done.terminal_evidence.kind, 'exact_cursor_stop');
+  assert.equal(done.terminal_evidence.agent_id, started.remote_identity.agent_id);
+  assert.deepEqual(done.scope.outside_paths, ['outside.txt']);
+  assert.equal(done.result, null);
+});
+
+test('Cursor scope stop preserves uncertainty when the exact identity disappears', async (t) => {
+  const fx = await fixture(t, { envOverrides: { FAKE_CURSOR_LOSE_IDENTITY_ON_STOP: '1' } });
+  const started = await startScenario(fx, 'cursor-bounded-change', 'CURSOR_LATE_OUTSIDE', { allowedPaths: ['allowed/'] });
+  const done = await fx.registry.status(started.task_id, 6000);
+  assert.equal(done.state, 'needs_attention');
+  assert.equal(done.error.code, 'REMOTE_IDENTITY_LOST');
+  assert.equal(done.terminal_evidence, null);
+  assert.ok(done.scope.prevented_attempts.some(attempt => attempt.path === 'outside.txt'));
+  assert.equal(done.result, null);
+});
+
 test('Cursor cancellation requires the exact returned agent identity', async (t) => {
   const fx = await fixture(t);
   const started = await startScenario(fx, 'cursor-readonly-advice', 'CURSOR_WAIT_CANCEL');

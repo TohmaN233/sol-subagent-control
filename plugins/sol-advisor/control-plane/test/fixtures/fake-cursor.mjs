@@ -87,6 +87,10 @@ async function startTask() {
     return;
   }
   if (state.prompt.includes('CURSOR_HANG') || state.prompt.includes('CURSOR_WAIT_CANCEL')) return;
+  if (state.prompt.includes('CURSOR_LATE_OUTSIDE')) {
+    setTimeout(() => { void writeFile(join(workspace, 'outside.txt'), 'cursor late outside\n'); }, 600);
+    return; // Only the exact Stop action can finish this running fixture.
+  }
   if (state.prompt.includes('CURSOR_WRITE_ALLOWED')) {
     await mkdir(join(workspace, 'allowed'), { recursive: true });
     await writeFile(join(workspace, 'allowed', 'cursor.txt'), 'cursor allowed\n');
@@ -194,7 +198,7 @@ async function evaluate(expression) {
       reply_hash: hash,
       stop: state.stop,
       input_length: state.sent ? 0 : state.prompt.length,
-      identity_match: true,
+      identity_match: state.identityLost !== true,
       visible_composer_count: state.agentId ? 1 : 0,
     });
   }
@@ -209,6 +213,7 @@ async function evaluate(expression) {
   if (expression.includes('/*sol:stop*/')) {
     if (state.agentState !== 'running') return JSON.stringify({ clicked: false, state: 'not_generating' });
     await finish('cursor cancelled fixture result', 'cancelled');
+    if (process.env.FAKE_CURSOR_LOSE_IDENTITY_ON_STOP === '1') state.identityLost = true;
     return JSON.stringify({ clicked: true, state: 'clicked' });
   }
   return null;

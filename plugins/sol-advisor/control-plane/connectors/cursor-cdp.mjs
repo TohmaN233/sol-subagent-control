@@ -427,6 +427,8 @@ export class CursorCdpConnector {
       });
       this.#signal(task.task_id);
       active.timeout = setTimeout(() => this.#timeout(active), provider.config.task_timeout_ms);
+      active.monitorReady = true;
+      if (scopeMonitor.violations.length) await this.#runtimeScopeViolation(active, scopeMonitor.violations[0]);
       void this.#monitor(active, baselineMessageCount);
       return this.publicTask(await this.store.get(task.task_id));
     } catch (error) {
@@ -533,46 +535,17 @@ export class CursorCdpConnector {
       if (!expected) throw connectorError('IDENTITY_REQUIRED', 'cancel requires expected_agent_id');
       if (expected !== agentId) throw connectorError('IDENTITY_MISMATCH', 'expected_agent_id does not match');
       if (!active) throw connectorError('CANCEL_UNCONFIRMED', 'No live exact Cursor connection is attached');
-      const click = JSON.parse(await active.client.evaluate(cursorStopExpression(agentId)) || '{}');
-      if (!click.clicked) {
-        throw connectorError('CANCEL_UNCONFIRMED', `Exact Cursor stop could not be invoked: ${click.state || 'unknown'}`);
-      }
+      clearTimeout(active.timeout);
       await this.store.update(taskId, { state: 'cancelling' });
-      for (let attempt = 0; attempt < 30; attempt += 1) {
-        const snapshot = JSON.parse(await active.client.evaluate(cursorSnapshotExpression(active.agentId)) || '{}');
-        if (Number(snapshot.stop || 0) === 0) {
-          await sleep(250);
-          const second = JSON.parse(await active.client.evaluate(cursorSnapshotExpression(active.agentId)) || '{}');
-          if (Number(second.stop || 0) === 0) {
-            const scope = await verifyWorkspaceScope(active.workspace, active.baseline, {
-              readOnly: active.readOnly,
-              allowedPaths: active.allowedPaths,
-              runtimeAttempts: active.scopeMonitor?.violations || [],
-            });
-            const state = scope.compliant ? 'cancelled' : 'scope_violation';
-            await this.store.update(taskId, {
-              state,
-              scope,
-              terminal_evidence: { kind: 'exact_cursor_stop', observed_at: new Date().toISOString() },
-              error: state === 'scope_violation'
-                ? publicConnectorError(connectorError('SCOPE_VIOLATION',
-                  'Cursor changed paths outside the declared connector scope.', { details: scope }))
-                : null,
-            });
-            await this.#cleanup(active);
-            this.#signal(taskId);
-            return this.publicTask(await this.store.get(taskId));
-          }
-        }
-        await sleep(200);
+      try {
+        const click = JSON.parse(await active.client.evaluate(cursorStopExpression(agentId)) || '{}');
+        if (!click.clicked) throw connectorError('CANCEL_UNCONFIRMED', `Exact Cursor stop could not be invoked: ${click.state || 'unknown'}`);
+      } catch (error) {
+        await this.store.update(taskId, { state: 'needs_attention', error: publicConnectorError(error) });
+        this.#signal(taskId);
+        throw error;
       }
-      await this.store.update(taskId, {
-        state: 'needs_attention',
-        error: publicConnectorError(connectorError('CANCEL_UNCONFIRMED',
-          'Cursor Stop was clicked for the exact Agent, but a stable terminal state was not observed.')),
-      });
-      this.#signal(taskId);
-      return this.publicTask(await this.store.get(taskId));
+      return this.#confirmExactStop(active);
     }
     if (action === 'disconnect') {
       if (args.confirm !== true) throw connectorError('CONFIRMATION_REQUIRED', 'disconnect requires confirm=true');
@@ -761,7 +734,7 @@ export class CursorCdpConnector {
       while (this.active.has(active.taskId)) {
         await sleep(500);
         const current = await this.store.get(active.taskId);
-        if (!current || TERMINAL.has(current.state) || current.state === 'cancelling') return;
+        if (!current || TERMINAL.has(current.state) || current.state === 'cancelling' || active.scopeViolationTriggered) return;
         const snapshot = JSON.parse(await active.client.evaluate(cursorSnapshotExpression(active.agentId)) || '{}');
         if (snapshot.identity_match === false) {
           await this.store.update(active.taskId, {
@@ -810,6 +783,7 @@ export class CursorCdpConnector {
       allowedPaths: active.allowedPaths,
       runtimeAttempts: active.scopeMonitor?.violations || [],
     });
+    if (active.scopeViolationTriggered) return;
     const state = scope.compliant ? 'completed' : 'scope_violation';
     await this.store.update(active.taskId, {
       state,
@@ -829,20 +803,58 @@ export class CursorCdpConnector {
     await this.#cleanup(active);
   }
 
-  async #runtimeScopeViolation(active, attempt) {
-    if (!active || active.intentionalCleanup || active.scopeViolationTriggered) return;
-    active.scopeViolationTriggered = true;
-    const current = await this.store.get(active.taskId).catch(() => null);
-    if (!current || TERMINAL.has(current.state)) return;
-    let stopClicked = false;
-    if (active.agentId) {
-      try {
-        const stopped = JSON.parse(await active.client.evaluate(cursorStopExpression(active.agentId)) || '{}');
-        stopClicked = stopped.clicked === true;
-      } catch {}
+  async #confirmExactStop(active, { stopClicked = true } = {}) {
+    const taskId = active.taskId;
+    try {
+      // A missing Stop control is only terminal evidence alongside a visible
+      // completed reply. Missing/mismatched identity is never proof of a stop.
+      const stopped = snapshot => snapshot.identity_match === true && snapshot.stop === 0
+        && (stopClicked || (snapshot.reply_length > 0 && snapshot.message_count >= 2));
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        const snapshot = JSON.parse(await active.client.evaluate(cursorSnapshotExpression(active.agentId)) || '{}');
+        if (snapshot.identity_match !== true) throw connectorError('REMOTE_IDENTITY_LOST', 'Exact Cursor identity was lost while confirming Stop');
+        if (stopped(snapshot)) {
+          await sleep(250);
+          const second = JSON.parse(await active.client.evaluate(cursorSnapshotExpression(active.agentId)) || '{}');
+          if (second.identity_match !== true) throw connectorError('REMOTE_IDENTITY_LOST', 'Exact Cursor identity was lost while confirming Stop');
+          if (stopped(second)) {
+            const scope = await verifyWorkspaceScope(active.workspace, active.baseline, {
+              readOnly: active.readOnly, allowedPaths: active.allowedPaths,
+              runtimeAttempts: active.scopeMonitor?.violations || [],
+            });
+            const current = await this.store.get(taskId);
+            if (!current || TERMINAL.has(current.state) || active.intentionalCleanup) return this.publicTask(current);
+            const state = scope.compliant ? 'cancelled' : 'scope_violation';
+            await this.store.update(taskId, {
+              state, scope, result: null,
+              terminal_evidence: { kind: stopClicked ? 'exact_cursor_stop' : 'stable_cursor_reply', agent_id: active.agentId, observed_at: new Date().toISOString() },
+              error: state === 'scope_violation' ? publicConnectorError(connectorError('SCOPE_VIOLATION',
+                'Cursor changed paths outside the declared connector scope.', { details: scope })) : null,
+            });
+            await this.#cleanup(active);
+            this.#signal(taskId);
+            return this.publicTask(await this.store.get(taskId));
+          }
+        }
+        await sleep(200);
+      }
+      throw connectorError('CANCEL_UNCONFIRMED', 'The exact Cursor Agent did not expose a stable terminal state after Stop');
+    } catch (error) {
+      // Persistence failures poison the store and propagate through this write.
+      await this.store.update(taskId, { state: 'needs_attention', error: publicConnectorError(error) });
+      this.#signal(taskId);
+      return this.publicTask(await this.store.get(taskId));
     }
+  }
+
+  async #runtimeScopeViolation(active, attempt) {
+    if (!active?.monitorReady || active.intentionalCleanup || active.scopeViolationTriggered) return;
+    active.scopeViolationTriggered = true;
+    const current = await this.store.get(active.taskId);
+    if (!current || TERMINAL.has(current.state)) return;
+    clearTimeout(active.timeout);
     await this.store.update(active.taskId, {
-      state: stopClicked ? 'cancelling' : 'needs_attention',
+      state: 'cancelling',
       scope: {
         read_only: active.readOnly,
         allowed_paths: [...active.allowedPaths],
@@ -859,8 +871,18 @@ export class CursorCdpConnector {
           details: { prevented_attempts: [attempt] },
           actionRequired: 'The connector is stopping the exact Agent; inspect scope evidence before accepting any result.',
         })),
-    }).catch(() => {});
+    });
     this.#signal(active.taskId);
+    try {
+      const stopped = JSON.parse(await active.client.evaluate(cursorStopExpression(active.agentId)) || '{}');
+      if (stopped.clicked !== true && stopped.state !== 'not_generating') {
+        throw connectorError('CANCEL_UNCONFIRMED', `Exact Cursor stop could not be invoked: ${stopped.state || 'unknown'}`);
+      }
+      await this.#confirmExactStop(active, { stopClicked: stopped.clicked === true });
+    } catch (error) {
+      await this.store.update(active.taskId, { state: 'needs_attention', error: publicConnectorError(error) });
+      this.#signal(active.taskId);
+    }
   }
 
   async #timeout(active) {
@@ -1047,6 +1069,8 @@ export class CursorCdpConnector {
         state: 'running',
         error: null,
       });
+      active.monitorReady = true;
+      if (scopeMonitor.violations.length) await this.#runtimeScopeViolation(active, scopeMonitor.violations[0]);
       void this.#monitor(active, 0);
     } else {
       await this.store.update(task.task_id, {
