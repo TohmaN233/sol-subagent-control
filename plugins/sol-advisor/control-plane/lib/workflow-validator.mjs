@@ -1,6 +1,7 @@
 import { NODE_TYPES, validateWorkflowShape } from './workflow-schema.mjs';
 import { workflowId } from './workflow-paths.mjs';
 import { pathBoundaries, pointerParts, validateExpression } from './workflow-bindings.mjs';
+import { validateDataSchema } from './workflow-data-schema.mjs';
 
 const EXECUTED = new Set(['agent', 'skill_ref', 'tool', 'human_gate']);
 const SHA = /^[a-f0-9]{64}$/;
@@ -11,6 +12,7 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
   const issue = (code, message, location = {}, target = errors) => target.push({ code, message, workflow_id: workflow?.id ?? null, ...location });
   if (stack.length > 32) { issue('SUBWORKFLOW_DEPTH', 'SubWorkflow nesting limit exceeded'); return { valid: false, launch_ready: false, errors, blockers, order: [] }; }
   try { validateWorkflowShape(workflow); } catch (error) { issue(error.code ?? 'WORKFLOW_SCHEMA', error.message); return { valid: false, launch_ready: false, errors, blockers, order: [] }; }
+  for (const key of ['inputs_schema', 'outputs_schema']) try { validateDataSchema(workflow[key] ?? {}); } catch (error) { issue(error.code, error.message, { field: key }); }
   const providers = new Map((context.providers ?? []).map(provider => [provider.id, provider]));
   const nodes = new Map(); const edges = new Map();
   for (const node of workflow.nodes) {
@@ -19,6 +21,7 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
     if (nodes.has(node.id)) issue('NODE_DUPLICATE', 'Duplicate node ID', { node_id: node.id });
     else nodes.set(node.id, node);
     if (!NODE_TYPES.has(node.type)) issue('NODE_TYPE', 'Unsupported node type', { node_id: node.id });
+    if (node.outputs_schema !== undefined) try { validateDataSchema(node.outputs_schema); } catch (error) { issue(error.code, error.message, { node_id: node.id }); }
   }
   const out = new Map([...nodes.keys()].map(id => [id, []]));
   const incoming = new Map([...nodes.keys()].map(id => [id, []]));
@@ -146,6 +149,7 @@ export function validateWorkflowGraph(workflow, context = {}, stack = []) {
   }
   for (const parallel of [...nodes.values()].filter(node => node.type === 'parallel')) {
     const location = { node_id: parallel.id };
+    if (parallel.failure_policy !== undefined && !['fail_fast', 'collect'].includes(parallel.failure_policy)) issue('PARALLEL_FAILURE_POLICY', 'Parallel failure policy must be fail_fast or collect', location);
     const join = nodes.get(parallel.join_id);
     if (join?.type !== 'join' || join.parallel_id !== parallel.id) { issue('PARALLEL_JOIN', 'Parallel requires a matching Join', location); continue; }
     const branches = out.get(parallel.id);

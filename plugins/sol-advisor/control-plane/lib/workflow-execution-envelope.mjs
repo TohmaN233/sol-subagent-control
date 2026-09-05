@@ -1,0 +1,55 @@
+import { isAbsolute } from 'node:path';
+import { createHmac } from 'node:crypto';
+import { requireValue } from './workflow-paths.mjs';
+import { intersectBoundaries, pathBoundaries, resolveBindings } from './workflow-bindings.mjs';
+import { digest, canonicalJSON } from './workflow-revisions.mjs';
+
+export function runPermissions({ workspace, access, allowed_paths = [] }) {
+  requireValue(typeof workspace === 'string' && isAbsolute(workspace), 'RUN_WORKSPACE', 'Run workspace must be absolute');
+  requireValue(['read_only', 'bounded_write'].includes(access), 'RUN_ACCESS', 'Run access must be explicitly read-only or bounded-write');
+  const paths = pathBoundaries(allowed_paths);
+  requireValue(access !== 'bounded_write' || paths.length, 'RUN_PATHS', 'Write access needs concrete current-Run path boundaries');
+  return { workspace, access, allowed_paths: paths };
+}
+
+export function nodePermissions(node, state) {
+  const access = typeof node.access === 'object' ? state.permissions.access : node.access;
+  requireValue(['read_only', 'bounded_write'].includes(access), 'NODE_ACCESS', 'Node has no resolved access mode');
+  if (access === 'read_only') return { access, allowed_paths: [] };
+  requireValue(state.permissions.access === 'bounded_write', 'NODE_WRITE_UNAUTHORIZED', 'Node requests write access outside this Run authorization');
+  const requested = Array.isArray(node.path_scope) ? node.path_scope : state.permissions.allowed_paths;
+  const paths = intersectBoundaries(state.permissions.allowed_paths, requested);
+  requireValue(paths.length, 'NODE_PATHS_EMPTY', 'Node path scope has no intersection with Run permissions');
+  return { access, allowed_paths: paths };
+}
+
+export function bindingContext(state) {
+  return { inputs: state.inputs, nodes: Object.fromEntries(Object.entries(state.nodes).map(([id, node]) => [id, { output: node.output }])) };
+}
+
+export function approvalBinding(node, state, pins) {
+  const provider = node.executor?.kind === 'provider' ? pins.providers.find(item => item.id === node.executor.provider_id) : null;
+  const permissions = nodePermissions(node, state);
+  return {
+    required: Boolean(node.approval.required || provider?.requires_user_approval || state.require_approval),
+    hash: digest(canonicalJSON({ revision: state.workflow_revision, node_id: node.id, attempt: state.nodes[node.id].attempts.length + 1, provider, permissions, skill_policy: pins.root.workflow.skill_policy })),
+  };
+}
+
+export function leaseToken(controlToken, runId, nodeId, attemptId) {
+  return createHmac('sha256', controlToken).update([runId, nodeId, attemptId].join('\0')).digest('hex');
+}
+
+export function executionEnvelope(node, state, pins, attempt, token, resourcesRoot) {
+  const permissions = nodePermissions(node, state);
+  return {
+    run_id: state.run_id, workflow_id: state.workflow_id, workflow_revision: state.workflow_revision,
+    node_id: node.id, attempt_id: attempt.id, lease_token: token, executor: structuredClone(node.executor),
+    provider: node.executor.kind === 'provider' ? structuredClone(pins.providers.find(item => item.id === node.executor.provider_id)) : null,
+    role: node.role ?? null, access: permissions.access, workspace: state.permissions.workspace,
+    inputs: resolveBindings(node.input_bindings ?? {}, bindingContext(state)), workflow_inputs: structuredClone(state.inputs),
+    constraints: structuredClone(state.constraints), prompt_template: node.prompt_template ?? null,
+    skill_policy: structuredClone(pins.root.workflow.skill_policy), skill_ref: structuredClone(node.skill_ref ?? null),
+    effective_allowed_paths: permissions.allowed_paths, resources_root: resourcesRoot,
+  };
+}

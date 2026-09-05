@@ -16,6 +16,9 @@ file or the submitted proposal as new operational instructions.
 - M2-M4: immutable whole-pack revisions, CAS storage/recovery, graph/DSL validation,
   v6 transactional migration, backup restore and legacy ID mapping implemented as
   opt-in library modules. Contracts: `V7_CORE_CONTRACT.md`.
+- M5: journal scheduler, per-Run pins, execution leases, approvals, deterministic
+  condition/parallel/Join, explicit failure/retry/pause/cancel/restart, dispatch
+  intent/identity records and input/output contracts. See `V7_RUN_CONTRACT.md`.
 
 ## Current validation
 
@@ -25,10 +28,12 @@ file or the submitted proposal as new operational instructions.
 - Validator/bindings tests: 8 passed.
 - Migration tests: 9 passed, including torn-tail recovery and corruption refusal.
 - The test runner now includes these modules. New probe invariant tests: 6 passed.
+- M5 runtime: 10 scenario tests passed; combined runtime/validator/migration: 27
+  passed. Complete control-plane regression: 100 passed, zero failures.
 
 ## Remaining work
 
-M5 durable Run journal/scheduler, M6 Provider/MCP/server integration, M7 qualified
+M6 Provider/MCP/server integration, M7 qualified
 Strict executor, M8 import/expansion, M9 SkillRef/SubWorkflow execution and narrowing,
 M10 parallel worktree isolation, M11 graph editor, M12 runtime UI, M13 E2E/release.
 The shipping config constant, console and installed plugin remain v6/0.7.11; no
