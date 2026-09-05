@@ -1,6 +1,7 @@
 const fragment = new URLSearchParams(location.hash.slice(1));
 const token = fragment.get('token') || '';
 history.replaceState(null, '', location.pathname);
+document.querySelector('#workflow-workspace').href = '/workflows#token=' + encodeURIComponent(token);
 
 const state = { config: null, bundledDefaults: null, revision: '', storage: null, dirty: false };
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -434,7 +435,9 @@ function render() {
   $('#allow-direct-api').checked = config.global.allow_direct_api;
   $('#console-title').value = config.global.console_title;
   $('#providers').replaceChildren(...config.providers.map(providerCard));
-  $('#task-types').replaceChildren(...config.task_types.map(taskTypeCard));
+  $('#task-types').closest('section').hidden = config.version === 7;
+  $('#load-defaults').hidden = config.version === 7;
+  $('#task-types').replaceChildren(...(config.task_types ?? []).map(taskTypeCard));
   renderPresetOptions();
   refreshProviderOptions();
   state.dirty = false;
@@ -470,7 +473,7 @@ function collect() {
   });
   const taskTypes = $$('.task-type-card').map(taskTypeFromCard);
   return {
-    version: state.config.version,
+    ...structuredClone(state.config),
     global: {
       ...state.config.global,
       enabled: $('#global-enabled').checked,
@@ -478,7 +481,7 @@ function collect() {
       console_title: $('#console-title').value.trim(),
     },
     providers,
-    task_types: taskTypes,
+    ...(state.config.version === 7 ? {} : { task_types: taskTypes }),
   };
 }
 

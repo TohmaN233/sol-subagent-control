@@ -1,0 +1,10 @@
+import { mkdir } from 'node:fs/promises';
+import { resolve, join } from 'node:path';
+import { startConsole, stopConsole, DEFAULT_CONFIG_PATH } from '../../plugins/sol-advisor/control-plane/server.mjs';
+import { WorkflowService } from '../../plugins/sol-advisor/control-plane/lib/workflow-service.mjs';
+const root = resolve(process.argv[2]); await mkdir(root, { recursive: true }); const configPath = join(root, 'control-plane.json');
+const service = new WorkflowService({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: {} });
+if ((await service.config()).version === 6) await service.call('migrate_v6', {}, { human: true });
+const state = await startConsole({ configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, open: false, port: 0, env: {} });
+console.log(JSON.stringify({ url: `http://127.0.0.1:${state.port}/workflows#token=${state.token}`, fixture: root }));
+process.on('SIGINT', async () => { await stopConsole(); process.exit(0); });

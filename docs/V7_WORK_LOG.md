@@ -332,6 +332,19 @@ service still rejects Strict and never reads this candidate as a capability gran
 
 ## Remaining work
 
+M11 checkpoint (2026-09-05): React19.2.8/TypeScript5.9.3/React Flow12.11.6
+editor source and bundled static assets added. Build uses esbuild0.28.2 and emits
+all bundled package licenses; CI compares exact generated assets without runtime
+npm. Windows sandbox blocked esbuild ancestor-directory reads; the same bounded
+build passed with the reviewed escalation. Type checking passed. Full control-plane
+regression passed171 tests (58.55s, session63128). Three editor tests cover CAS
+resource history/binary retention/dangling publication, opaque graph metadata and
+static HTTP/CSP boundaries. An independent synthetic configuration in work/editor-fixture
+passed browser new-Draft/save/layout/Ready/invalid-JSON checks. The original config
+and three completed official-login tests were untouched. No release or installation.
+Run controls, exact reattachment/controller recovery, fuller browser verification,
+cross-platform qualification and release remain M12/M13 work.
+
 M7 human authentication/capability UI, M8/M9 import/reference/expansion editor integration,
 M10 parallel worktree isolation, M11 graph editor, M12 runtime UI, M13 E2E/release.
 The bundled config and current graphless console remain v6; the loader now also

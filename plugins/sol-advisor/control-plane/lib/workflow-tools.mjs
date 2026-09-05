@@ -11,10 +11,12 @@ const properties = {
   after_sequence: { type: 'integer', minimum: 0 }, receipt: object,
   skill_id: string, provider_id: string, name: string, proposal: object, accepted: { type: 'boolean' },
   region_id: string, patch_sha256: string,
+  resource_path: string, text: string, remove: { type: 'boolean' },
 };
 const lease = ['run_id', 'node_id', 'attempt_id', 'lease_token'];
 const main = ['run_id', 'control_token'];
 const specs = [
+  ['capabilities', 'Read current Strict qualification and declared host capabilities without starting a session or exposing credentials.', [], []],
   ['skill_inventory', 'Read actual host Skill metadata and per-path discovery errors. Never treats a filesystem guess as complete discovery.', ['workspace'], []],
   ['import_skill', 'Coarse-import a user-selected current Skill inventory entry into an immutable Strict Draft. Executes no scripts or model calls.', ['workspace', 'skill_id', 'workflow_id'], ['name', 'provider_id']],
   ['verify_relocation', 'Verify pinned imported resource availability without reading the original Skill. Does not prove functional execution.', ['workflow_id', 'revision_hash'], []],
@@ -26,12 +28,16 @@ const specs = [
   ['apply_expansion_result', 'Apply a main-accepted planning Run to its exact source revision as an unreviewed Draft. Never dispatches or retries a model.', [...main, 'workflow_id', 'expected_revision'], []],
   ['list', 'List Workflow metadata and structural/environment readiness, without prompt bodies.', [], []],
   ['read', 'Read one explicit immutable Workflow revision for inspection or editing.', ['workflow_id'], ['revision_hash']],
+  ['revisions', 'Read immutable revision history metadata. Opening a revision verifies its resource content separately.', ['workflow_id'], []],
+  ['read_resource', 'Read an exact pinned Pack resource for inspection. Binary or large content is not editable as text.', ['workflow_id', 'resource_path'], ['revision_hash']],
+  ['write_resource', 'Save one user-requested bounded resource edit as a Draft under revision CAS. Imported resource changes require review and never touch the original source.', ['workflow_id', 'expected_revision', 'resource_path'], ['text', 'remove']],
   ['validate', 'Validate a graph, pinned bindings and current launch blockers.', ['workflow'], []],
   ['create', 'Create a user-requested Workflow Pack. Imported Skill drafts remain Strict.', ['workflow'], ['resources']],
   ['save', 'Save one complete Workflow definition using the previously read revision hash.', ['workflow_id', 'workflow', 'expected_revision'], ['resources']],
   ['start', 'Start one Ready Workflow with explicit workspace permissions. Preserve control_token only in the main controller. No implicit Provider fallback or Strict downgrade.', ['workflow_id', 'workspace', 'access', 'main_actor'], ['revision_hash', 'run_id', 'inputs', 'allowed_paths', 'constraints', 'require_approval']],
   ['runs', 'List persisted Run metadata.', [], []],
   ['get', 'Read the current state reconstructed from the authoritative Run journal.', ['run_id'], []],
+  ['run_definition', 'Read the Run-pinned Workflow definition even after its library revision is edited or deleted.', ['run_id'], []],
   ['next', 'Read ready node IDs and pending approvals. This does not claim or dispatch work.', ['run_id'], []],
   ['claim_node', 'Atomically claim one ready node and return its narrow execution lease. Main nodes require the exact main actor.', [...main, 'node_id', 'owner', 'request_id'], ['expected_sequence']],
   ['complete_node', 'Commit successful node output plus artifacts, evidence, changed_paths and outside_paths. Final acceptance requires main authority.', [...lease, 'completion'], []],

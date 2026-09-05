@@ -107,6 +107,7 @@ export class WorkflowStore {
     if (workflow.status === 'ready') {
       const result = validateWorkflowGraph(workflow, this.validationContext);
       requireValue(result.valid, 'WORKFLOW_NOT_READY', 'Workflow failed structural validation', { validation: result });
+      requireValue(!result.blockers.some(item => ['IMPORT_UNRESOLVED', 'AI_INFERENCE_UNREVIEWED', 'INLINE_SKILL_UNREVIEWED'].includes(item.code)), 'WORKFLOW_REVIEW_REQUIRED', 'Imported observations and inferred instructions require review before Ready', { validation: result });
     }
   }
 
@@ -139,6 +140,20 @@ export class WorkflowStore {
       resources[item.path] = bytes;
     }
     return resources;
+  }
+
+  async revisions(id) {
+    const directory = join(packDirectory(this.root, id), 'revisions'); await noSymlinks(directory);
+    const entries = await readdir(directory, { withFileTypes: true }); requireValue(entries.length <= 10000, 'REVISION_HISTORY_LIMIT', 'Revision history exceeds its bounded listing limit');
+    const history = [];
+    for (const entry of entries) {
+      requireValue(entry.isFile() && !entry.isSymbolicLink() && /^[a-f0-9]{64}\.json$/.test(entry.name), 'REVISION_HISTORY_ENTRY', 'Unexpected revision history entry');
+      const hash = entry.name.slice(0, -5); const snapshot = JSON.parse(await readBounded(join(directory, entry.name), LIMITS.definition * 2));
+      requireValue(revisionHash(snapshot) === hash && snapshot.workflow.id === id, 'REVISION_CORRUPT', 'Revision history identity differs');
+      validateWorkflowShape(snapshot.workflow);
+      history.push({ revision_hash: hash, revision: snapshot.workflow.revision, name: snapshot.workflow.name, status: snapshot.workflow.status, resources: snapshot.resources.length });
+    }
+    return history.sort((a, b) => b.revision - a.revision || a.revision_hash.localeCompare(b.revision_hash));
   }
 
   async list() {

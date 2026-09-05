@@ -33,7 +33,7 @@ const DEFAULT_CONFIG_PATH = join(CONTROL_DIR, 'default-config.json');
 const WEB_DIR = join(CONTROL_DIR, 'web');
 const SERVER_VERSION = '0.4.5';
 const DEFAULT_CONSOLE_PORT = 58712;
-const MAX_HTTP_BODY = 512 * 1024;
+const MAX_HTTP_BODY = 8 * 1024 * 1024;
 
 let consoleState = null;
 
@@ -60,6 +60,7 @@ function errorToolPayload(error) {
     ...(error?.retryable === true ? { retryable: true } : {}),
     ...(error?.actionRequired ? { action_required: error.actionRequired } : {}),
     ...(error?.details && typeof error.details === 'object' ? { details: error.details } : {}),
+    ...(error?.validation && typeof error.validation === 'object' ? { validation: error.validation } : {}),
     ...(error?.committed === true ? { committed: true, sequence: error.sequence } : {}),
   };
 }
@@ -83,7 +84,7 @@ function staticResponse(res, body, contentType) {
     'content-length': data.length,
     'cache-control': 'no-store',
     'x-content-type-options': 'nosniff',
-    'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+    'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
     'referrer-policy': 'no-referrer',
   });
   res.end(data);
@@ -183,6 +184,9 @@ export async function startConsole({
     '/index.html': ['index.html', 'text/html; charset=utf-8'],
     '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
     '/styles.css': ['styles.css', 'text/css; charset=utf-8'],
+    '/workflows': ['workflows.html', 'text/html; charset=utf-8'],
+    '/workflows.js': ['workflows.js', 'text/javascript; charset=utf-8'],
+    '/workflows.css': ['workflows.css', 'text/css; charset=utf-8'],
   };
 
   const server = createServer(async (req, res) => {

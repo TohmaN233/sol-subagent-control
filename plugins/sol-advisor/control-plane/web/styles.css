@@ -53,6 +53,7 @@ textarea { min-height: 130px; resize: vertical; font-family: ui-monospace, SFMon
 input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
 button { border: 0; border-radius: 9px; background: var(--accent); color: var(--accent-text); padding: 10px 14px; cursor: pointer; font-weight: 800; }
 button:hover { filter: brightness(1.06); }
+.workspace-link { color: var(--accent); font-size: .85rem; font-weight: 700; white-space: nowrap; }
 button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
 button.danger { background: transparent; color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 50%, var(--line)); }
 button.small { padding: 7px 10px; font-size: .78rem; }

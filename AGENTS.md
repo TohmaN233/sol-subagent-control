@@ -71,6 +71,15 @@ M11-M13 remain before shipping or migration of real user configuration.
 
 Relevant checks:
 
+M11 adds the React/TypeScript/React Flow editor at `/workflows`, committed static
+assets and exact build/license verification. Runtime needs no npm installation.
+Provider UI preserves the v7 store and Strict settings; migration remains an
+explicit human action. Resource edits create CAS Draft revisions and import-review
+blockers. Publication reviews the exact saved revision. Graph layout is an explicit
+edit; transient React Flow state never enters the IR. Full171 and first browser
+save/publication/invalid-JSON checks passed. M12 recovery controls are still being
+integrated; do not ship the editor before recovery and complete E2E gates pass.
+
 ```text
 node plugins/sol-advisor/control-plane/test/run-tests.mjs
 node --test plugins/sol-advisor/scripts/test/native-role-tools.test.mjs

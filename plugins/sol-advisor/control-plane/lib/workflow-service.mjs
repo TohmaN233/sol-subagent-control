@@ -20,6 +20,8 @@ import { resolveWorkflowPins } from './workflow-pins.mjs';
 import { canonicalJSON, digest } from './workflow-revisions.mjs';
 import { inlineSkillReference } from './skill-import/inline-skill.mjs';
 import { parallelManagerFor } from './parallel/worktree-manager.mjs';
+import { readEditorResource, writeEditorResource, publishEditorWorkflow } from './workflow-editor.mjs';
+import { QUALIFIED_CODEX, qualifiedStrictSettings } from './execution/strict-config.mjs';
 
 export class WorkflowService {
   constructor({ configPath, defaultConfigPath, env = process.env, fetchImpl = globalThis.fetch, registry, capabilities = {} }) {
@@ -68,6 +70,13 @@ export class WorkflowService {
     const { config, context, store, runtime, executor } = await this.open();
     if (['start', 'claim_node', 'dispatch', 'retry_node', 'resume', 'prepare_integration', 'integrate_parallel'].includes(operation)) requireValue(config.global.enabled && !isEnvironmentDisabled(this.env), 'CONTROL_DISABLED', 'Workflow execution is disabled');
     switch (operation) {
+      case 'capabilities': {
+        let strict;
+        try { await qualifiedStrictSettings(config, this.env); strict = { available: true }; }
+        catch (error) { strict = { available: false, code: error.code ?? 'STRICT_UNAVAILABLE', message: error.message }; }
+        return { strict: { ...strict, qualification: QUALIFIED_CODEX, authentication: config.strict_executor.authentication.mode },
+          tools: context.tools, mcp_servers: context.mcp_servers ?? [], executables: context.executables ?? [], parallel_write: 'qualified Strict broker with Git worktrees', boundary: 'application catalog, explicit Skill input and broker; not an OS ACL' };
+      }
       case 'skill_inventory': {
         return this.skillInventory.list(args.workspace);
       }
@@ -120,6 +129,16 @@ export class WorkflowService {
       case 'apply_expansion': return applyExpansion(store, args.workflow_id, args.proposal, { expected_revision: args.expected_revision, context });
       case 'list': return Promise.all((await store.list()).map(async pack => ({ id: pack.workflow.id, name: pack.workflow.name, status: pack.workflow.status, enabled: pack.workflow.enabled, revision_hash: pack.revision_hash, description: pack.workflow.description, skill_policy: pack.workflow.skill_policy, validation: (await this.validationContext(store, pack.workflow, context)).validation })));
       case 'read': return store.snapshot(args.workflow_id, args.revision_hash);
+      case 'revisions': return store.revisions(args.workflow_id);
+      case 'read_resource': return readEditorResource(store, args);
+      case 'write_resource': return writeEditorResource(store, args);
+      case 'publish': {
+        requireValue(human, 'HUMAN_PUBLICATION_REQUIRED', 'Ready publication belongs to the authenticated human editor');
+        const pack = await store.snapshot(args.workflow_id, args.expected_revision);
+        const checked = await this.validationContext(store, { ...pack.workflow, status: 'ready' }, context);
+        requireValue(checked.validation.valid, 'WORKFLOW_NOT_READY', 'Workflow structure or dependencies are invalid', { validation: checked.validation }); store.validationContext = checked.context;
+        return publishEditorWorkflow(store, args);
+      }
       case 'validate': return (await this.validationContext(store, args.workflow, context)).validation;
       case 'create': {
         if (args.workflow.status === 'ready') {
@@ -149,6 +168,7 @@ export class WorkflowService {
       }
       case 'runs': return runtime.runs.list();
       case 'get': return runtime.get(args.run_id);
+      case 'run_definition': return (await runtime.runs.read(args.run_id)).pins.root;
       case 'next': return runtime.next(args.run_id);
       case 'claim_node': return runtime.claimNode(args.run_id, args);
       case 'complete_node': return runtime.completeNode(args.run_id, args);

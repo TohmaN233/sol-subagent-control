@@ -8,6 +8,19 @@ permissions:
   contents: read
 
 jobs:
+  workflow-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install pinned development dependencies
+        working-directory: plugins/sol-advisor/control-plane
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Type-check and compare committed web assets and licenses
+        working-directory: plugins/sol-advisor/control-plane
+        run: npm run check:web
   isolation-probe-invariants:
     name: isolation-probe-invariants-${{ matrix.os }}
     strategy:

@@ -13,6 +13,7 @@ const files = [
   'open-console.test.mjs',
   'providers.test.mjs',
   'workflow-store.test.mjs',
+  'workflow-editor.test.mjs',
   'workflow-validator.test.mjs',
   'workflow-migration.test.mjs',
   'workflow-runtime.test.mjs',
