@@ -22,6 +22,11 @@ import { inlineSkillReference } from './skill-import/inline-skill.mjs';
 import { parallelManagerFor } from './parallel/worktree-manager.mjs';
 import { readEditorResource, writeEditorResource, publishEditorWorkflow } from './workflow-editor.mjs';
 import { QUALIFIED_CODEX, qualifiedStrictSettings } from './execution/strict-config.mjs';
+import { adoptRunTree, controllerAttempt, reattachAttempt } from './workflow-recovery.mjs';
+import { childIdentity } from './workflow-subworkflow.mjs';
+import { nodePermissions } from './workflow-execution-envelope.mjs';
+import { effectiveSkillPolicy } from './workflow-reference-schema.mjs';
+import { nodeWorkspace } from './parallel/workspace.mjs';
 
 export class WorkflowService {
   constructor({ configPath, defaultConfigPath, env = process.env, fetchImpl = globalThis.fetch, registry, capabilities = {} }) {
@@ -68,7 +73,7 @@ export class WorkflowService {
     if (operation === 'migrate_v6') { requireValue(human, 'HUMAN_CONFIGURATION_REQUIRED', 'Migration is a user-owned console action'); await this.config(); return migrateV6OnDisk({ configPath: this.configPath }); }
     if (operation === 'restore_v6') { requireValue(human, 'HUMAN_CONFIGURATION_REQUIRED', 'Backup restoration is a user-owned console action'); return restoreV6Backup({ configPath: this.configPath, expected_current_sha256: args.expected_current_sha256 }); }
     const { config, context, store, runtime, executor } = await this.open();
-    if (['start', 'claim_node', 'dispatch', 'retry_node', 'resume', 'prepare_integration', 'integrate_parallel'].includes(operation)) requireValue(config.global.enabled && !isEnvironmentDisabled(this.env), 'CONTROL_DISABLED', 'Workflow execution is disabled');
+    if (['start', 'claim_node', 'dispatch', 'retry_node', 'resume', 'recover_claim', 'recover_strict_result', 'reattach_connector', 'reattach_subworkflow', 'prepare_integration', 'integrate_parallel'].includes(operation)) requireValue(config.global.enabled && !isEnvironmentDisabled(this.env), 'CONTROL_DISABLED', 'Workflow execution is disabled');
     switch (operation) {
       case 'capabilities': {
         let strict;
@@ -169,6 +174,56 @@ export class WorkflowService {
       case 'runs': return runtime.runs.list();
       case 'get': return runtime.get(args.run_id);
       case 'run_definition': return (await runtime.runs.read(args.run_id)).pins.root;
+      case 'node_details': {
+        const { state, pins } = await runtime.runs.read(args.run_id); const node = pins.root.workflow.nodes.find(item => item.id === args.node_id);
+        requireValue(node, 'NODE_MISSING', 'The selected node is not in this Run');
+        return { node: structuredClone(node), provider: pins.providers.find(item => item.id === node.executor?.provider_id) ?? null,
+          ...(node.executor ? { permissions: nodePermissions(node, state), workspace: nodeWorkspace(node.id, state, pins) } : {}),
+          skill_policy: effectiveSkillPolicy(pins.inherited_policy ?? pins.root.workflow.skill_policy, node.skill_policy), pins_hash: state.pins_hash };
+      }
+      case 'adopt_run': {
+        requireValue(human, 'HUMAN_CONTROL_RECOVERY_REQUIRED', 'Only the authenticated local human console can replace a lost main controller');
+        const recovered = await adoptRunTree(runtime, args.run_id, args); const errors = [...recovered.errors];
+        const stopped = await Promise.allSettled([...recovered.authorities].map(async ([id, authority]) => { await this.strictManager.stopRecovered(id, authority); return id; }));
+        stopped.forEach((result, index) => { if (result.status === 'rejected') errors.push({ run_id: [...recovered.authorities.keys()][index], code: result.reason.code ?? 'RECOVERY_CLEANUP_FAILED', message: result.reason.message }); });
+        await runtime.runs.mutate(args.run_id, 'control_recovery', state => { requireValue(state.control_hash === digest(recovered.run.control_token), 'RUN_AUTHORITY', 'Another human recovery replaced this controller during cleanup'); state.control_recovery.errors = errors; });
+        return { ...await runtime.get(args.run_id), control_token: recovered.run.control_token, recovery_errors: errors,
+          stopped_run_ids: stopped.filter(result => result.status === 'fulfilled').map(result => result.value) };
+      }
+      case 'recover_claim': {
+        const record = await executor.recoveryPreparation(args.run_id, args);
+        requireValue(!record.attempt.dispatch, 'DISPATCH_UNCERTAIN', 'This attempt has dispatch intent; inspect its exact executor instead');
+        return reattachAttempt(runtime, args.run_id, args, { kind: 'unsubmitted_claim' });
+      }
+      case 'reattach_connector': return executor.reattachConnector(args.run_id, args);
+      case 'reattach_handoff': {
+        const record = await executor.recoveryPreparation(args.run_id, args); const observation = args.reconciliation;
+        requireValue(record.pins.root.workflow.skill_policy.mode === 'cooperative' && (record.definition.executor.kind === 'main' || ['native_agent','external_mcp','mcp_tool'].includes(record.provider?.kind)), 'HANDOFF_RECOVERY_UNSUPPORTED', 'This executor requires its dedicated recovery adapter');
+        requireValue(record.attempt.dispatch?.receipt && observation && ['active','completed'].includes(observation.outcome) && Array.isArray(observation.evidence) && observation.evidence.length && canonicalJSON(observation.receipt) === canonicalJSON(record.attempt.dispatch.receipt), 'HANDOFF_RECONCILIATION_REQUIRED', 'The main host must inspect the exact original task and attest its unchanged receipt with evidence');
+        return reattachAttempt(runtime, args.run_id, args, { kind: 'host_identity_attestation', attempt_id: args.attempt_id, dispatch_request_id: record.attempt.dispatch.request_id,
+          receipt: observation.receipt, evidence: observation.evidence, outcome: observation.outcome, independently_verified: false });
+      }
+      case 'control_connector': return executor.controlConnector(args.run_id, args);
+      case 'recover_strict_result': {
+        const record = await executor.recoveryPreparation(args.run_id, args);
+        requireValue(record.pins.root.workflow.skill_policy.mode === 'strict' && record.attempt.result_proposal && record.attempt.dispatch?.receipt?.executor === 'codex-app-server', 'STRICT_RESULT_PENDING', 'No exact durable Strict proposal exists; an interrupted model turn cannot be resubmitted by recovery');
+        const result = await runtime.runs.readExecutorResult(args.run_id, args.attempt_id, record.attempt.result_proposal.sha256);
+        requireValue(result.status === 'succeeded' && record.attempt.executor_events?.some(event => event.kind === 'session_state' && event.metadata.status === 'closed'), 'STRICT_SHUTDOWN_UNCONFIRMED', 'Durable proposal needs recorded session shutdown');
+        return reattachAttempt(runtime, args.run_id, args, { kind: 'strict_durable_result', attempt_id: args.attempt_id, dispatch_request_id: record.attempt.dispatch.request_id, result_sha256: record.attempt.result_proposal.sha256 });
+      }
+      case 'reattach_subworkflow':
+      case 'child_control': {
+        const record = await controllerAttempt(runtime, args.run_id, args);
+        requireValue(record.definition.executor?.kind === 'subworkflow', 'SUBWORKFLOW_NODE_REQUIRED', 'This attempt is not a SubWorkflow');
+        const identity = childIdentity(args.run_id, args.node_id, args.attempt_id, args.control_token);
+        requireValue(record.attempt.child_run_id === identity.run_id, 'CHILD_DISPATCH_REQUIRED', 'No exact child dispatch exists');
+        const child = await runtime.runs.read(identity.run_id);
+        requireValue(child.pins.parent?.run_id === args.run_id && child.pins.parent.node_id === args.node_id && child.pins.parent.attempt_id === args.attempt_id && child.state.control_hash === digest(identity.control_token), 'CHILD_RUN_CONFLICT', 'Child identity or recovered authority differs');
+        if (operation === 'child_control') return { ...await runtime.get(identity.run_id), control_token: identity.control_token };
+        const attached = await reattachAttempt(runtime, args.run_id, args, { kind: 'subworkflow_exact_identity', attempt_id: args.attempt_id, dispatch_request_id: record.attempt.dispatch.request_id,
+          receipt: { task_id: identity.run_id, child_run_id: identity.run_id }, child_sequence: child.sequence, child_event_hash: child.events.at(-1).hash });
+        return { ...attached, child: { ...await runtime.get(identity.run_id), control_token: identity.control_token } };
+      }
       case 'next': return runtime.next(args.run_id);
       case 'claim_node': return runtime.claimNode(args.run_id, args);
       case 'complete_node': return runtime.completeNode(args.run_id, args);
@@ -178,14 +233,14 @@ export class WorkflowService {
       case 'pause': return runtime.pause(args.run_id, args);
       case 'resume': return runtime.resume(args.run_id, args);
       case 'cancel': {
-        let ids; const errors = [];
-        try { ids = await runtime.cancelTree(args.run_id, args); }
+        let ids; const errors = []; const authorities = new Map();
+        try { ids = await runtime.cancelTree(args.run_id, args, (id, token) => authorities.set(id, token)); }
         catch (error) { if (!error.fenced_run_ids) throw error; ids = error.fenced_run_ids; errors.push(error); }
         // An unreadable child journal cannot prevent shutdown of its exact
         // already-fenced owned session or the other independently known children.
-        const stopped = await Promise.allSettled(ids.map(id => this.strictManager.stopRun(id)));
+        const stopped = await Promise.allSettled([...ids.map(id => this.strictManager.stopRun(id)), ...[...authorities].map(([id, token]) => executor.cancelPendingConnectors(id, token))]);
         errors.push(...stopped.filter(item => item.status === 'rejected').map(item => item.reason));
-        if (errors.length) throw new AggregateError(errors, 'Run tree was fenced but some local sessions did not stop');
+        if (errors.length) throw Object.assign(new AggregateError(errors, 'Run tree was fenced but some executors have unconfirmed cancellation'), { code: 'RUN_CANCEL_INCOMPLETE', details: { failures: errors.map(error => ({ code: error.code ?? 'EXECUTOR_STOP_FAILED', message: error.message })) } });
         return runtime.get(args.run_id);
       }
       case 'events': return runtime.events(args.run_id, args);

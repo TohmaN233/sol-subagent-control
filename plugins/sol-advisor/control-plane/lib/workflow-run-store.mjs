@@ -166,7 +166,7 @@ export class WorkflowRunStore {
       await authorizeRecovery(replayEvents(committed.events));
       const repaired = await recoverEventTail(join(root, 'events.jsonl'));
       const current = await this.read(id); const next = structuredClone(current.state);
-      await repairState(next, current.pins);
+      await repairState(next, current.pins, current);
       const patch = statePatch(current.state, next);
       let event = current.events.at(-1);
       if (repaired.recovered || Object.values(patch).some(value => Object.keys(value).length)) {

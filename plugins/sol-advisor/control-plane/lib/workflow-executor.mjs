@@ -3,6 +3,8 @@ import { renderTemplate } from './templates.mjs';
 import { requireValue } from './workflow-paths.mjs';
 import { canonicalJSON, digest } from './workflow-revisions.mjs';
 import { isEnvironmentDisabled } from './config.mjs';
+import { controllerAttempt, reattachAttempt } from './workflow-recovery.mjs';
+import { leaseToken } from './workflow-execution-envelope.mjs';
 
 function compilePrompt(envelope, max) {
   const input = envelope.workflow_inputs;
@@ -124,9 +126,18 @@ export class WorkflowExecutor {
     // The preallocated attempt UUID is the connector task key even if a crash
     // occurred before its receipt reached the Run journal. Never select latest.
     const task = await this.registry.status(attempt.id, 0);
-    requireValue(task.task_id === attempt.id, 'CONNECTOR_IDENTITY', 'Connector returned a different task');
+    requireValue(task.task_id === attempt.id && task.provider_id === provider.id && task.stage_id === args.node_id && task.task_type_id === state.workflow_id,
+      'CONNECTOR_IDENTITY', 'Connector returned a different pinned task');
     const receipt = attempt.dispatch.receipt ?? receiptIdentity(task);
+    requireValue(canonicalJSON(receiptIdentity(task)) === canonicalJSON(receipt), 'CONNECTOR_IDENTITY', 'Connector remote identity differs from the committed receipt');
     await this.runtime.recordDispatchReceipt(runId, { ...args, request_id: attempt.dispatch.request_id, receipt });
+    if (attempt.dispatch.cancellation_pending && ['completed','cancelled'].includes(task.state)) {
+      await this.runtime.runs.mutate(runId, 'connector_control', state => {
+        requireValue(state.control_hash === digest(args.control_token), 'RUN_AUTHORITY', 'Controller changed while observing cancellation');
+        const current = state.nodes[args.node_id].attempts.find(item => item.id === args.attempt_id);
+        current.dispatch.cancellation_pending = false; current.connector_control = { action: 'observe', phase: 'observed', state: task.state, at: new Date().toISOString() };
+      });
+    }
     return { task, receipt, requires_explicit_retry: ['interrupted', 'failed'].includes(node.status) };
   }
 
@@ -142,5 +153,99 @@ export class WorkflowExecutor {
     }
     if (['failed', 'cancelled', 'scope_violation', 'abandoned'].includes(task.state)) return this.runtime.failNode(runId, { ...args, error: { code: task.error?.code ?? 'CONNECTOR_FAILED', message: task.error?.message ?? `Connector reached ${task.state}` } });
     return { pending: true, task, receipt };
+  }
+
+  async recoveryPreparation(runId, args) {
+    const record = await controllerAttempt(this.runtime, runId, args);
+    requireValue(record.node.status === 'interrupted', 'RECOVERY_ATTEMPT_STATE', 'Fence the old attempt before recovery');
+    const config = await this.getConfig();
+    requireValue(config.global.enabled && !isEnvironmentDisabled(this.env), 'CONTROL_DISABLED', 'Workflow execution is disabled');
+    const provider = record.pins.providers.find(item => item.id === record.definition.executor?.provider_id);
+    if (provider) {
+      const current = config.providers.find(item => item.id === provider.id);
+      requireValue(current?.enabled && current.capabilities.read && (record.definition.access !== 'bounded_write' || current.capabilities.write), 'PROVIDER_DISABLED', 'Pinned Provider permission was revoked');
+      requireValue(!current.requires_user_approval || provider.requires_user_approval, 'PROVIDER_POLICY_CHANGED', 'Provider approval requirements changed');
+    }
+    return { ...record, provider };
+  }
+  async controlConnector(runId, args) {
+    const envelope = await this.runtime.execution(runId, args, { allowInactive: true });
+    requireValue(envelope.provider?.kind === 'builtin_connector', 'CONNECTOR_REQUIRED', 'This node is not a connector');
+    const control = args.control;
+    requireValue(control && ['respond_permission','respond_input','cancel','disconnect','abandon','reconcile'].includes(control.action) && Buffer.byteLength(canonicalJSON(control)) <= 32000, 'CONNECTOR_CONTROL_SCHEMA', 'Select a bounded exact connector action');
+    const record = await controllerAttempt(this.runtime, runId, args);
+    if (['respond_permission','respond_input'].includes(control.action)) {
+      await this.runtime.execution(runId, args);
+      const config = await this.getConfig(); const provider = config.providers.find(item => item.id === envelope.provider.id);
+      requireValue(config.global.enabled && !isEnvironmentDisabled(this.env) && provider?.enabled, 'PROVIDER_DISABLED', 'A disabled executor cannot receive new permission or input');
+    }
+    const task = await this.registry.status(args.attempt_id, 0);
+    const receipt = receiptIdentity(task);
+    requireValue(task.task_id === args.attempt_id && task.provider_id === envelope.provider.id && task.stage_id === args.node_id && task.task_type_id === envelope.workflow_id && record.attempt.dispatch?.receipt && canonicalJSON(receipt) === canonicalJSON(record.attempt.dispatch.receipt), 'CONNECTOR_IDENTITY', 'Control target differs from the persisted exact connector');
+    await this.runtime.runs.mutate(runId, 'connector_control', state => {
+      requireValue(state.control_hash === record.state.control_hash, 'RUN_AUTHORITY', 'Controller changed before connector control');
+      state.nodes[args.node_id].attempts.find(item => item.id === args.attempt_id).connector_control = { action: control.action, phase: 'intent', at: new Date().toISOString() };
+    }, { expected_sequence: record.sequence });
+    let result;
+    try { result = await this.registry.control(args.attempt_id, control); }
+    catch (error) {
+      try { await this.runtime.runs.mutate(runId, 'connector_control', state => { state.nodes[args.node_id].attempts.find(item => item.id === args.attempt_id).connector_control = { action: control.action, phase: 'failed', code: error.code ?? 'CONNECTOR_CONTROL_FAILED' }; }); }
+      catch (audit) { throw new AggregateError([error, audit], 'Connector control and audit persistence failed'); }
+      throw error;
+    }
+    requireValue(canonicalJSON(receiptIdentity(result)) === canonicalJSON(receipt), 'CONNECTOR_IDENTITY', 'Connector control returned another remote identity');
+    await this.runtime.runs.mutate(runId, 'connector_control', state => {
+      const attempt = state.nodes[args.node_id].attempts.find(item => item.id === args.attempt_id);
+      attempt.connector_control = { action: control.action, phase: 'observed', state: result.state, at: new Date().toISOString() };
+      if (result.state === 'cancelled') attempt.dispatch.cancellation_pending = false;
+    });
+    return { task: result, remote_cancel_confirmed: result.state === 'cancelled' };
+  }
+  async cancelPendingConnectors(runId, controlToken) {
+    await this.runtime.authorizeController(runId, { control_token: controlToken });
+    const record = await this.runtime.runs.read(runId); const errors = [];
+    for (const [nodeId, node] of Object.entries(record.state.nodes)) for (const attempt of node.attempts) if (attempt.dispatch?.cancellation_pending) {
+      const definition = record.pins.root.workflow.nodes.find(item => item.id === nodeId);
+      const provider = record.pins.providers.find(item => item.id === definition.executor?.provider_id);
+      if (provider?.kind !== 'builtin_connector') continue;
+      try {
+        const task = await this.registry.status(attempt.id, 0); const receipt = receiptIdentity(task);
+        requireValue(task.task_id === attempt.id && task.provider_id === provider.id && task.stage_id === nodeId && task.task_type_id === record.state.workflow_id && attempt.dispatch.receipt && canonicalJSON(receipt) === canonicalJSON(attempt.dispatch.receipt), 'CONNECTOR_IDENTITY', 'Cancellation target differs from the recorded task');
+        if (['completed','cancelled'].includes(task.state)) {
+          await this.runtime.runs.mutate(runId, 'connector_control', state => { const current = state.nodes[nodeId].attempts.find(item => item.id === attempt.id); current.dispatch.cancellation_pending = false; current.connector_control = { action: 'cancel', phase: 'observed', state: task.state, already_terminal: true }; });
+          continue;
+        }
+        const identity = task.remote_identity ?? {};
+        await this.controlConnector(runId, { run_id: runId, control_token: controlToken, node_id: nodeId, attempt_id: attempt.id,
+          lease_token: leaseToken(controlToken, runId, nodeId, attempt.id, attempt.lease_generation ?? 0), control: { action: 'cancel', confirm: true,
+            ...(identity.agent_id ? { expected_agent_id: identity.agent_id } : {}),
+            ...(identity.session_id ? { expected_session_id: identity.session_id } : {}), ...(identity.run_id ? { expected_run_id: identity.run_id } : {}) } });
+      } catch (error) { errors.push(error); }
+    }
+    if (errors.length) throw Object.assign(new AggregateError(errors, 'Some exact remote tasks have unconfirmed cancellation'), { code: 'CONNECTOR_CANCEL_INCOMPLETE' });
+  }
+  async reattachConnector(runId, args) {
+    const record = await this.recoveryPreparation(runId, args);
+    requireValue(record.provider?.kind === 'builtin_connector' && record.attempt.dispatch, 'CONNECTOR_REQUIRED', 'Reattachment requires an existing pinned connector dispatch');
+    function verify(task) {
+      requireValue(task.task_id === args.attempt_id && task.provider_id === record.provider.id && task.stage_id === args.node_id && task.task_type_id === record.state.workflow_id,
+        'CONNECTOR_IDENTITY', 'Observed task belongs to another Run node or Provider');
+      requireValue(task.remote_identity && Object.keys(task.remote_identity).length > 0, 'CONNECTOR_IDENTITY', 'Reattachment requires observed exact remote identity');
+      const receipt = receiptIdentity(task);
+      requireValue(!record.attempt.dispatch.receipt || canonicalJSON(record.attempt.dispatch.receipt) === canonicalJSON(receipt), 'DISPATCH_CONFLICT', 'Remote identity differs from the recorded dispatch');
+      return receipt;
+    }
+    let task = await this.registry.status(args.attempt_id, 0); let receipt = verify(task);
+    if (['unknown_after_restart','needs_attention'].includes(task.state)) {
+      await this.runtime.runs.mutate(runId, 'reattach', state => {
+        requireValue(state.control_hash === record.state.control_hash && state.nodes[args.node_id].status === 'interrupted', 'RECOVERY_ATTEMPT_CHANGED', 'Run authority changed before transport reconciliation');
+        state.nodes[args.node_id].attempts.find(item => item.id === args.attempt_id).reconciliation = { kind: 'connector_transport_intent', receipt, resubmitted: false, at: new Date().toISOString() };
+      }, { expected_sequence: record.sequence });
+      // This adapter operation attaches the saved remote ID; it never starts a task.
+      task = await this.registry.control(args.attempt_id, { action: 'reconcile' }); receipt = verify(task);
+    }
+    requireValue(['running','completed','needs_permission','needs_input'].includes(task.state), 'CONNECTOR_RECOVERY_UNCONFIRMED', 'The exact connector task is not confirmed active or completed', { remote_state: task.state });
+    const attached = await reattachAttempt(this.runtime, runId, args, { kind: 'connector_exact_identity', attempt_id: args.attempt_id, dispatch_request_id: record.attempt.dispatch.request_id, receipt, remote_state: task.state });
+    return { ...attached, task };
   }
 }

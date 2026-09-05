@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { GitWorktrees, statusPaths } from '../lib/parallel/git-worktrees.mjs';
+import { spawn } from 'node:child_process';
 
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'parallel-git-')); const workspace = join(root, 'repository'); await mkdir(workspace);
@@ -30,6 +31,16 @@ test('actual detached worktrees isolate disjoint edits and merge a proposal with
   assert.equal((await f.git.create(f.base, 'branch-a')).workspace, a.workspace);
   await f.git.remove(a); await f.git.remove(b);
   await assert.rejects(readFile(join(a.workspace, '.git')), { code: 'ENOENT' });
+});
+
+test('an interrupted Git subprocess durably blocks later integration and cleanup across manager restart', async t => {
+  const f = await fixture(t); let child;
+  const interrupted = new GitWorktrees(f.git.root, { timeoutMs: 80, spawnImpl: (_binary, _args, options) => { child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], options); return child; } });
+  await assert.rejects(interrupted.git(f.workspace, ['status']), { code: 'PARALLEL_GIT_TIMEOUT' });
+  const report = JSON.parse(await readFile(join(f.git.root, 'git-operation-uncertain.json'), 'utf8')); assert.equal(report.child_pid, child.pid); assert.equal(report.helper_termination_confirmed, false);
+  const restarted = await new GitWorktrees(f.git.root).initialize();
+  await assert.rejects(restarted.status(f.workspace), { code: 'PARALLEL_GIT_UNCERTAIN' });
+  assert.equal(await readFile(join(f.workspace, 'src', 'a.txt'), 'utf8'), 'Base A\n');
 });
 
 test('merge conflicts retain both branch edits and outside or ignored writes remain visible', async t => {

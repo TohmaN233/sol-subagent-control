@@ -68,6 +68,30 @@ test('Strict settings are opt-in, reject secrets/unknown fields and never turn a
   await assert.rejects(qualifiedStrictSettings({ strict_executor: { enabled: true, codex_binary: resolve('fake.exe'), binary_sha256: 'a'.repeat(64) } }), { code: 'STRICT_EXECUTOR_UNQUALIFIED' });
 });
 
+test('human recovery fences and closes a waiting Strict session with rotated audit authority', async t => {
+  const f = await fixture(t, { authenticated: false }); await f.service.call('dispatch', f.args);
+  const state = await f.service.call('get', { run_id: f.run.run_id });
+  const adopted = await f.service.call('adopt_run', { run_id: f.run.run_id, expected_sequence: state.sequence, reason: 'Synthetic lost console', main_actor: 'human-console' }, { human: true });
+  assert.deepEqual(adopted.recovery_errors, []); assert.equal(adopted.nodes.work.status, 'interrupted'); assert(f.sessions[0].closed);
+  assert.equal(f.entry(f.args).status, 'stopped');
+  await assert.rejects(f.service.call('strict_login', f.args, { human: true }), { code: 'RUN_AUTHORITY' });
+  await assert.rejects(f.service.call('recover_strict_result', { run_id: adopted.run_id, control_token: adopted.control_token, node_id: 'work', attempt_id: f.args.attempt_id }), { code: 'STRICT_RESULT_PENDING' });
+  assert.equal(f.sessions[0].calls, 0);
+});
+
+test('a durable final Strict proposal survives controller loss and reattaches without another model call', async t => {
+  const f = await fixture(t); await f.service.call('dispatch', f.args); await f.entry(f.args).job;
+  const final = await f.claim('final'); await f.service.call('dispatch', final); await f.entry(final).job;
+  const before = await f.service.call('get', { run_id: f.run.run_id });
+  const adopted = await f.service.call('adopt_run', { run_id: f.run.run_id, expected_sequence: before.sequence, reason: 'Synthetic final review recovery', main_actor: 'human-console' }, { human: true }); assert.deepEqual(adopted.recovery_errors, []);
+  const restored = await f.service.call('recover_strict_result', { run_id: adopted.run_id, control_token: adopted.control_token, node_id: 'final', attempt_id: final.attempt_id });
+  await f.service.call('resume', { run_id: adopted.run_id, control_token: adopted.control_token });
+  const args = { ...restored.envelope, control_token: adopted.control_token };
+  assert.equal((await f.service.call('collect_strict', args)).final_acceptance_required, true);
+  const completed = await f.service.call('collect_strict', { ...args, accepted: true }); assert.equal(completed.status, 'succeeded');
+  assert.equal(f.sessions.reduce((sum, session) => sum + session.calls, 0), 2); assert.equal(completed.nodes.final.attempts.length, 1);
+});
+
 test('Strict child service dispatch reads its pinned Pack and collects only accepted output into its parent', async t => {
   const f = await fixture(t); const childPack = await f.service.call('read', { workflow_id: 'strict-test' });
   const parentWorkflow = structuredClone(childPack.workflow); parentWorkflow.id = 'strict-parent';
@@ -94,6 +118,25 @@ test('Strict child service dispatch reads its pinned Pack and collects only acce
   assert.equal((await f.service.call('collect_strict', { ...finalArgs, accepted: true })).status, 'succeeded');
 });
 
+test('streamed output is a bounded unverified preview and only progress metadata enters the durable journal', async t => {
+  const ready = deferred(); const release = deferred(); const marker = 'PREVIEW_ONLY_DO_NOT_JOURNAL_';
+  t.after(() => release.resolve());
+  const f = await fixture(t, { async turn(settings) {
+    await settings.onOutput({ delta: marker + 'x'.repeat(40000) });
+    await settings.onOutput({ delta: 'TAIL' }); ready.resolve(); await release.promise;
+    return { output: 'Accepted durable result', thread_id: 'fixture-thread', turn_id: 'fixture-turn', audit: { fixture: true } };
+  } });
+  await f.service.call('dispatch', f.args);
+  await Promise.race([ready.promise, f.entry(f.args).job.then(() => { throw new Error(JSON.stringify(f.entry(f.args).error ?? 'Turn ended before preview')); })]);
+  const live = await f.service.call('strict_status', f.args);
+  assert.equal(live.output_preview.text.length, 32768); assert(live.output_preview.text.endsWith('TAIL'));
+  assert.equal(live.output_preview.characters, marker.length + 40004); assert.equal(live.output_preview.truncated, true);
+  assert.equal(live.output_preview.verified, false); assert.equal(live.output_preview.durable, false);
+  const { runtime } = await f.service.open(); const events = JSON.stringify((await runtime.runs.read(f.run.run_id)).events);
+  assert(events.includes('output_progress')); assert(!events.includes(marker)); assert(!events.includes('TAIL'));
+  release.resolve(); await f.entry(f.args).job;
+  assert.deepEqual((await f.service.call('get', f.args)).nodes.work.output, { text: 'Accepted durable result' });
+});
 test('Strict dispatch runs pinned resources exactly once and keeps final acceptance in the main controller', async t => {
   const f = await fixture(t); const dispatched = await f.service.call('dispatch', f.args);
   assert.equal(dispatched.dispatched, true); await f.entry(f.args).job;

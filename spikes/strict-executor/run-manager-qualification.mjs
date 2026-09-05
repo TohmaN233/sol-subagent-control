@@ -46,7 +46,9 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     const emit = (type, fields) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...fields })}\n\n`);
     emit('response.created', { response: { id: 'manager-response', status: 'in_progress', output: [] } });
-    emit('response.output_item.added', { output_index: 0, item }); emit('response.output_item.done', { output_index: 0, item });
+    emit('response.output_item.added', { output_index: 0, item });
+    if (item.type === 'message') emit('response.output_text.delta', { output_index: 0, content_index: 0, item_id: item.id, delta: item.content[0].text });
+    emit('response.output_item.done', { output_index: 0, item });
     emit('response.completed', { response: { id: 'manager-response', status: 'completed', output: [item], usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 } } }); res.end();
   } catch (error) { serverError = error; res.writeHead(500).end(); }
 });
@@ -104,6 +106,8 @@ try {
     const dispatched = await service.call('dispatch', args); assert.equal(dispatched.dispatched, true);
     const entry = manager.entries.get(run.run_id + '/' + lease.attempt_id); await entry.job;
     assert.equal(serverError, undefined); assert.equal(entry.error, null);
+    const preview = (await service.call('strict_status', args)).output_preview;
+    assert.equal(preview.text, '{"verified":true}'); assert.equal(preview.verified, false); assert.equal(preview.durable, false);
     assert.equal((await service.call('dispatch', args)).idempotent, true);
     if (node === 'final') {
       assert.equal((await service.call('collect_strict', args)).final_acceptance_required, true);
@@ -111,7 +115,7 @@ try {
       assert.equal((await service.call('collect_strict', { ...args, accepted: true })).status, 'succeeded');
     }
     report.cases.push({ name: node === 'instructions' ? 'removed-source-pinned-read-and-bounded-write' : 'isolated-main-proposal-explicit-acceptance', passed: true,
-      result_proposal: (await service.call('get', args)).nodes[node].attempts[0].result_proposal });
+      streaming_preview_verified: true, result_proposal: (await service.call('get', args)).nodes[node].attempts[0].result_proposal });
   }
   assert.equal(await readFile(join(fixture.cwd, 'result.txt'), 'utf8'), 'MANAGER_VERIFIED');
   const planner = config.providers.find(item => item.enabled && item.kind === 'native_agent' && item.config.model === 'gpt-5.6-sol'); assert(planner);

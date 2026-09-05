@@ -1,6 +1,21 @@
 // Domain objects remain authoritative. React Flow's measurements and selection
 // state never become workflow fields. Layout changes are explicit user edits.
+export function canvasIssues(workflow) {
+  const issues = []; const nodes = new Set(); const edges = new Set();
+  if (!Array.isArray(workflow?.nodes) || !Array.isArray(workflow?.edges)) return ['nodes 和 edges 必须是数组'];
+  for (const [index, node] of workflow.nodes.entries()) {
+    if (!node || typeof node.id !== 'string' || !node.id || typeof node.type !== 'string' || nodes.has(node.id)) { issues.push(`nodes[${index}] 缺少唯一 ID 或类型`); continue; }
+    nodes.add(node.id);
+    if (node.ui?.position && (!Number.isFinite(node.ui.position.x) || !Number.isFinite(node.ui.position.y))) issues.push(`nodes[${index}] 的坐标必须是有限数字`);
+  }
+  for (const [index, edge] of workflow.edges.entries()) {
+    if (!edge || typeof edge.id !== 'string' || !edge.id || edges.has(edge.id) || !nodes.has(edge.source) || !nodes.has(edge.target)) { issues.push(`edges[${index}] 缺少唯一 ID 或有效端点`); continue; }
+    edges.add(edge.id);
+  }
+  return issues;
+}
 export function toCanvas(workflow, runtime = {}) {
+  const issues = canvasIssues(workflow); if (issues.length) throw new Error(issues.join('\n'));
   const displayLayout = layoutGraph(workflow);
   return {
     nodes: workflow.nodes.map((node, index) => ({ id: node.id, type: 'workflow',

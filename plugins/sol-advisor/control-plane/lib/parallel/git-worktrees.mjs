@@ -6,6 +6,7 @@ import { ensureDirectory, insideRoot, noSymlinks, requireValue, workflowId, reso
 import { pathBoundaries } from '../workflow-bindings.mjs';
 import { canonicalJSON, digest } from '../workflow-revisions.mjs';
 import { syncDirectory } from '../workflow-store.mjs';
+import { writeDurableJSON } from '../workflow-events.mjs';
 
 const oid = value => typeof value === 'string' && /^[a-f0-9]{40,64}$/.test(value);
 const key = value => process.platform === 'win32' ? resolve(value).toLowerCase() : resolve(value);
@@ -26,9 +27,10 @@ export function statusPaths(bytes) {
 }
 
 export class GitWorktrees {
-  constructor(root, { binary = 'git', env = process.env } = {}) {
+  constructor(root, { binary = 'git', env = process.env, spawnImpl = spawn, timeoutMs = 30000 } = {}) {
     requireValue(isAbsolute(root), 'PARALLEL_ROOT', 'Worktree ownership root must be absolute');
     this.root = resolve(root); this.binary = binary; this.env = env;
+    this.spawnImpl = spawnImpl; this.timeoutMs = timeoutMs; this.uncertain = null;
   }
   async initialize() {
     await ensureDirectory(this.root); await ensureDirectory(join(this.root, 'hooks'));
@@ -38,6 +40,8 @@ export class GitWorktrees {
     return this;
   }
   async git(workspace, args, { input, allowed = [0], index } = {}) {
+    const uncertainty = join(this.root, 'git-operation-uncertain.json');
+    requireValue(!this.uncertain && await missing(uncertainty), 'PARALLEL_GIT_UNCERTAIN', 'A prior Git command has unconfirmed helper termination; retain all worktrees and inspect git-operation-uncertain.json before any further Git action');
     await noSymlinks(workspace);
     await noSymlinks(join(this.root, 'hooks'));
     requireValue((await readdir(join(this.root, 'hooks'))).length === 0, 'PARALLEL_HOOKS_CHANGED', 'Owned Git hook suppression directory must remain empty');
@@ -50,15 +54,31 @@ export class GitWorktrees {
     const fixed = ['--no-pager', '-c', 'core.hooksPath=' + join(this.root, 'hooks'), '-c', 'core.fsmonitor=false', '-c', 'core.untrackedCache=false',
       '-c', 'core.quotePath=false', '-c', 'diff.external=', '-c', 'submodule.recurse=false', '-c', 'protocol.file.allow=never', '-c', 'commit.gpgSign=false'];
     return new Promise((resolveResult, reject) => {
-      const child = spawn(this.binary, [...fixed, ...args], { cwd: workspace, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      const child = this.spawnImpl(this.binary, [...fixed, ...args], { cwd: workspace, env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
       const output = []; const diagnostic = []; let size = 0; let error;
-      const timer = setTimeout(() => { error = Object.assign(new Error('Git operation exceeded its bounded deadline'), { code: 'PARALLEL_GIT_TIMEOUT', operation: args[0] }); child.kill(); }, 30000);
+      let audit = Promise.resolve(null); let stopTimer; let stopped = false;
+      const uncertain = cause => {
+        if (stopped) return; stopped = true;
+        error = cause; this.uncertain = { code: cause.code, operation: args[0], workspace, parent_pid: process.pid, child_pid: child.pid ?? null, at: new Date().toISOString(), helper_termination_confirmed: false };
+        // Parent termination does not establish descendant termination. Persist
+        // that uncertainty and refuse subsequent apply/cleanup across restarts.
+        audit = writeDurableJSON(uncertainty, this.uncertain).then(() => null, failure => failure);
+        child.kill();
+        stopTimer = setTimeout(async () => {
+          const failure = await audit;
+          child.stdin.destroy(); child.stdout.destroy(); child.stderr.destroy(); child.unref();
+          reject(failure ? new AggregateError([error, failure], 'Git interruption and uncertainty audit persistence failed') : Object.assign(new Error('Git helper shutdown is unconfirmed; all worktrees remain retained'), { code: 'PARALLEL_GIT_STOP_UNCONFIRMED', cause: error }));
+        }, 5000);
+      };
+      const timer = setTimeout(() => uncertain(Object.assign(new Error('Git operation exceeded its bounded deadline; worktrees retained'), { code: 'PARALLEL_GIT_TIMEOUT', operation: args[0] })), this.timeoutMs);
       child.on('error', cause => { error = Object.assign(new Error('Git process could not start'), { code: 'PARALLEL_GIT_START', cause }); });
-      child.stdout.on('data', bytes => { size += bytes.length; if (size <= MAX_OUTPUT) output.push(bytes); else { error = Object.assign(new Error('Git output exceeded its limit'), { code: 'PARALLEL_GIT_LIMIT' }); child.kill(); } });
-      child.stderr.on('data', bytes => { size += bytes.length; if (size <= MAX_OUTPUT) diagnostic.push(bytes); else { error = Object.assign(new Error('Git diagnostic exceeded its limit'), { code: 'PARALLEL_GIT_LIMIT' }); child.kill(); } });
+      child.stdout.on('data', bytes => { size += bytes.length; if (size <= MAX_OUTPUT) output.push(bytes); else uncertain(Object.assign(new Error('Git output exceeded its limit'), { code: 'PARALLEL_GIT_LIMIT' })); });
+      child.stderr.on('data', bytes => { size += bytes.length; if (size <= MAX_OUTPUT) diagnostic.push(bytes); else uncertain(Object.assign(new Error('Git diagnostic exceeded its limit'), { code: 'PARALLEL_GIT_LIMIT' })); });
       child.stdin.on('error', cause => { if (cause.code !== 'EPIPE') error = cause; });
-      child.on('close', (code, signal) => {
-        clearTimeout(timer);
+      child.on('close', async (code, signal) => {
+        clearTimeout(timer); clearTimeout(stopTimer);
+        const auditFailure = await audit;
+        if (auditFailure) return reject(new AggregateError([error, auditFailure], 'Git interruption and uncertainty audit persistence failed'));
         if (error) return reject(error);
         if (!allowed.includes(code)) return reject(Object.assign(new Error('Git operation failed'), { code: 'PARALLEL_GIT_FAILED', operation: args[0], exit_code: code, signal, diagnostic: Buffer.concat(diagnostic).toString('utf8').slice(-4000) }));
         resolveResult({ code, stdout: Buffer.concat(output), stderr: Buffer.concat(diagnostic).toString('utf8') });

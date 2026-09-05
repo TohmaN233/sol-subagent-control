@@ -182,8 +182,9 @@ export class WorkflowRuntime {
       changed_paths: [...new Set(completions.flatMap(item => item.changed_paths))], outside_paths: [...new Set(completions.flatMap(item => item.outside_paths))] } }, CHILD_COMPLETION);
   }
 
-  async cancelTree(runId, args) {
+  async cancelTree(runId, args, onFenced = () => {}) {
     const state = await this.cancel(runId, args); const ids = [runId]; const errors = [];
+    onFenced(runId, args.control_token);
     for (const [nodeId, node] of Object.entries(state.nodes)) for (const attempt of node.attempts) if (attempt.child_run_id) {
       try {
         const identity = childIdentity(runId, nodeId, attempt.id, args.control_token);
@@ -191,7 +192,7 @@ export class WorkflowRuntime {
         let child;
         try { await noSymlinks(this.runs.directory(identity.run_id)); child = await this.get(identity.run_id); }
         catch (error) { if (error.code !== 'ENOENT' || error.path !== this.runs.directory(identity.run_id)) throw error; continue; }
-        if (child.status !== 'succeeded') ids.push(...await this.cancelTree(identity.run_id, identity));
+        if (child.status !== 'succeeded') ids.push(...await this.cancelTree(identity.run_id, identity, onFenced));
       } catch (error) { ids.push(...(error.fenced_run_ids ?? [])); errors.push(error); }
     }
     const fenced = [...new Set(ids)];
@@ -209,6 +210,7 @@ export class WorkflowRuntime {
       session_state: ['status', 'code'],
       result_proposed: ['artifact', 'sha256', 'final_acceptance_required'],
       skill_read: ['call_id', 'path'],
+      output_progress: ['characters', 'retained_characters', 'truncated'],
     };
     requireValue(event && Object.hasOwn(fields, event.kind) && event.metadata && Object.keys(event.metadata).every(key => fields[event.kind].includes(key)) &&
       Object.values(event.metadata).every(value => value === null || typeof value === 'boolean' || typeof value === 'string' && value.length <= 4096 || Number.isSafeInteger(value)) &&
@@ -263,7 +265,7 @@ export class WorkflowRuntime {
       const existing = node.attempts.find(attempt => attempt.claim_request_id === request_id);
       if (existing) {
         requireValue(existing.owner === owner && node.active_attempt_id === existing.id && ['claimed', 'running'].includes(existing.status), 'CLAIM_CONFLICT', 'Claim request refers to a different or closed executor');
-        return executionEnvelope(definition, state, pins, existing, leaseToken(control_token, runId, node_id, existing.id), join(this.runs.directory(runId), 'objects'));
+        return executionEnvelope(definition, state, pins, existing, leaseToken(control_token, runId, node_id, existing.id, existing.lease_generation ?? 0), join(this.runs.directory(runId), 'objects'));
       }
       requireValue(state.status === 'running' && node.status === 'ready', 'NODE_NOT_READY', 'Only a ready node in an active Run may be claimed');
       const approval = approvalBinding(definition, state, pins);
@@ -388,6 +390,7 @@ export class WorkflowRuntime {
     const result = await this.transition(runId, 'resume', (state, pins) => {
       authorize(state, control_token);
       requireValue(['paused', 'blocked', 'interrupted'].includes(state.status), 'RUN_RESUME_STATE', 'Run is not paused, blocked or interrupted');
+      requireValue(!state.control_recovery?.errors?.length, 'CONTROL_RECOVERY_INCOMPLETE', 'Resolve the recorded recovery/cleanup errors before resuming');
       requireValue(!Object.values(state.nodes).some(node => node.status === 'interrupted'), 'INTERRUPTED_NODES', 'Interrupted nodes require explicit reconciliation/retry');
       state.status = 'running'; state.pause_reason = null; advanceRun(state, pins); touch(state);
     });

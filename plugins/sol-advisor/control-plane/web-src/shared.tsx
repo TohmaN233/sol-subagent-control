@@ -20,9 +20,11 @@ export function download(name: string, value: unknown) {
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = name; anchor.click(); URL.revokeObjectURL(url);
 }
 export const InvalidContext = createContext<(id: string, invalid: boolean) => void>(() => {});
+export const FormValidContext = createContext(true);
 export function JsonField({ label, value, onChange, rows = 5 }: { label: string, value: any, onChange: (value: any) => void, rows?: number }) {
   const id = useId(); const invalid = useContext(InvalidContext); const [text, setText] = useState(pretty(value)); const [error, setError] = useState('');
-  useEffect(() => { setText(pretty(value)); setError(''); invalid(id, false); }, [value]);
+  const serialized = pretty(value);
+  useEffect(() => { setText(serialized); setError(''); invalid(id, false); }, [serialized]);
   useEffect(() => () => invalid(id, false), []);
   return <label className="field">{label}<textarea rows={rows} value={text} spellCheck={false} aria-invalid={!!error} onChange={event => {
     const next = event.target.value; setText(next);

@@ -11,6 +11,7 @@ import { isEnvironmentDisabled } from '../config.mjs';
 import { inspectOrphanProfiles, stopVerifiedOrphan } from './codex-process-ownership.mjs';
 import { cleanupCodexProfile } from './codex-profile-builder.mjs';
 import { skillPathKey } from './codex-skill-policy.mjs';
+import { leaseToken } from '../workflow-execution-envelope.mjs';
 
 const managers = new Map();
 const key = (runId, attemptId) => runId + '/' + attemptId;
@@ -63,10 +64,11 @@ export class StrictSessionManager {
     requireValue(!this.entries.has(id), 'STRICT_SESSION_EXISTS', 'An exact local execution already owns this attempt');
     const entry = { runtime, runId, args: { ...args }, envelope, adapter, prompt, status: 'preparing', session: null, error: null, job: null,
       writes: new Set(), stopping: false, journal: Promise.resolve(), timer: null };
+    entry.preview = { text: '', characters: 0, truncated: false, verified: false, durable: false }; entry.progressAt = 0;
     let preparationSettled; entry.preparation = new Promise(resolve => { preparationSettled = resolve; });
     this.entries.set(id, entry);
     const event = (kind, metadata) => {
-      const next = entry.journal.then(() => runtime.recordExecutorEvent(runId, { ...args, event: { kind, metadata } }));
+      const next = entry.journal.then(() => runtime.recordExecutorEvent(runId, { ...entry.args, event: { kind, metadata } }));
       entry.journal = next; return next;
     };
     entry.event = event;
@@ -111,6 +113,13 @@ export class StrictSessionManager {
         cwd: envelope.workspace, env: this.env, skillPolicy: envelope.skill_policy, allowedSkills, toolBroker: entry.broker, authorize: entry.authorize,
         onProfilePrepared: profile => event('profile_owned', { home: profile.home, executable_sha256: profile.binary_sha256 }),
         onEvent: metadata => trackedEvents.has(metadata.method) ? event('codex_event', metadata) : undefined,
+        onOutput: async ({ delta }) => {
+          entry.preview.characters += delta.length; entry.preview.text = (entry.preview.text + delta).slice(-32768);
+          entry.preview.truncated = entry.preview.characters > entry.preview.text.length;
+          if (Date.now() - entry.progressAt >= 2000) {
+            await event('output_progress', { characters: entry.preview.characters, retained_characters: entry.preview.text.length, truncated: entry.preview.truncated }); entry.progressAt = Date.now();
+          }
+        },
         onToolRead: metadata => event('skill_read', metadata),
       });
       await entry.authorize();
@@ -130,7 +139,7 @@ export class StrictSessionManager {
       await this.fail(entry, error); throw entry.failure;
     } finally { preparationSettled(); }
   }
-  view(entry) { return { status: entry.status, error: entry.error, run_id: entry.runId, node_id: entry.args.node_id, attempt_id: entry.args.attempt_id, final_acceptance_required: entry.adapter.final_acceptance_required }; }
+  view(entry) { return { status: entry.status, error: entry.error, run_id: entry.runId, node_id: entry.args.node_id, attempt_id: entry.args.attempt_id, final_acceptance_required: entry.adapter.final_acceptance_required, output_preview: structuredClone(entry.preview) }; }
   async find(runtime, runId, args) {
     await runtime.execution(runId, args, { allowInactive: true });
     const entry = this.entries.get(key(runId, args.attempt_id));
@@ -237,7 +246,18 @@ export class StrictSessionManager {
     const failures = results.filter(result => result.status === 'rejected').map(result => result.reason);
     if (failures.length) throw new AggregateError(failures, 'Some Strict sessions did not shut down cleanly');
   }
+  async stopRecovered(runId, authority) {
+    for (const entry of this.entries.values()) if (entry.runId === runId) {
+      entry.stopping = true; entry.broker?.revoke();
+      const attempt = authority.state.nodes[entry.args.node_id]?.attempts.find(item => item.id === entry.args.attempt_id);
+      requireValue(attempt, 'STRICT_RECOVERY_IDENTITY', 'Owned session does not match a recovered attempt');
+      entry.args = { ...entry.args, control_token: authority.control_token,
+        lease_token: leaseToken(authority.control_token, runId, entry.args.node_id, attempt.id, attempt.lease_generation ?? 0) };
+    }
+    await this.stopRun(runId);
+  }
   async stop(entry) {
+    if (entry.status === 'stopped') return;
     entry.stopping = true; clearTimeout(entry.timer); entry.broker?.revoke();
     let timer;
     try {

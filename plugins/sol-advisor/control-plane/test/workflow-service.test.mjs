@@ -25,6 +25,76 @@ const claim = (f, run, node = 'implementation') => f.service.call('claim_node', 
 const leaseArgs = (run, lease) => ({ ...control(run), node_id: lease.node_id, attempt_id: lease.attempt_id, lease_token: lease.lease_token });
 const completion = output => ({ status: 'succeeded', summary: 'Synthetic verification', structured_output: output, artifacts: [], evidence: [{ check: 'fixture', passed: true }], changed_paths: [], outside_paths: [] });
 
+test('human adoption rotates lost authority and resumes an unsubmitted max-one claim without charging a retry', async t => {
+  const f = await fixture(t); await f.migrate(); const run = await f.start(); const old = await claim(f, run); const state = await f.service.call('get', control(run));
+  const recovery = { run_id: run.run_id, expected_sequence: state.sequence, reason: 'Synthetic browser loss', main_actor: 'human-console' };
+  await assert.rejects(f.service.call('adopt_run', recovery), { code: 'HUMAN_CONTROL_RECOVERY_REQUIRED' });
+  await assert.rejects(f.service.call('adopt_run', { ...recovery, expected_sequence: 1 }, { human: true }), { code: 'RUN_SEQUENCE_CONFLICT' });
+  const adopted = await f.service.call('adopt_run', recovery, { human: true }); assert.equal(adopted.status, 'paused'); assert.deepEqual(adopted.recovery_errors, []);
+  await assert.rejects(f.service.call('pause', control(run)), { code: 'RUN_AUTHORITY' });
+  await assert.rejects(f.service.call('complete_node', { ...leaseArgs(run, old), completion: completion({}) }), { code: 'LEASE_INVALID' });
+  const restored = await f.service.call('recover_claim', { ...control(adopted), node_id: old.node_id, attempt_id: old.attempt_id });
+  assert.notEqual(restored.envelope.lease_token, old.lease_token); assert.equal(restored.envelope.attempt_id, old.attempt_id); assert.equal(restored.retry_charged, false);
+  assert.equal(restored.state.nodes[old.node_id].attempts.length, 1);
+  await f.service.call('resume', control(adopted));
+  assert.equal((await f.service.call('get', control(adopted))).nodes[old.node_id].status, 'claimed');
+});
+
+test('native handoff recovery preserves exact host attestation and rejects a replacement task identity', async t => {
+  const f = await fixture(t); await f.migrate(); const run = await f.start(); const work = await claim(f, run); const args = leaseArgs(run, work);
+  const dispatched = await f.service.call('dispatch', args); const receipt = { agent_id: 'original-native-task' };
+  await f.service.call('dispatch_receipt', { ...args, request_id: dispatched.request_id, receipt }); await f.service.call('resume', { ...control(run), after_restart: true });
+  await assert.rejects(f.service.call('reattach_handoff', { ...args, reconciliation: { outcome: 'completed', receipt: { agent_id: 'another-task' }, evidence: [{}] } }), { code: 'HANDOFF_RECONCILIATION_REQUIRED' });
+  const restored = await f.service.call('reattach_handoff', { ...args, reconciliation: { outcome: 'completed', receipt, evidence: [{ host_tool: 'read exact task', observed: 'completed' }] } });
+  assert.equal(restored.state.nodes.implementation.attempts[0].reconciliation.independently_verified, false); assert.equal(restored.state.nodes.implementation.attempts.length, 1);
+  await f.service.call('resume', control(run)); await f.service.call('complete_node', { ...leaseArgs(run, restored.envelope), completion: completion({ verified: true }) });
+});
+
+test('Run cancel fences first, forwards only exact connector identity and records confirmed remote cancellation', async t => {
+  let params; let controls = 0; let state = 'running'; let service; let authority;
+  const task = () => ({ task_id: params.taskId, provider_id: params.provider.id, stage_id: params.stageId, task_type_id: params.taskTypeId,
+    connector: 'grok_acp', remote_identity: { session_id: 'session-original', run_id: 'remote-original' }, state });
+  const registry = { async start(value) { params = value; return task(); }, async status() { return task(); }, async control(id, args) {
+    controls++; assert.equal((await service.call('get', authority)).status, 'cancelled'); assert.equal(id, params.taskId); assert.equal(args.expected_session_id, 'session-original'); assert.equal(args.expected_run_id, 'remote-original'); state = 'cancelled'; return task();
+  } };
+  const f = await fixture(t, { registry, configure(config) { config.providers.find(p => p.id === 'grok-local').enabled = true; config.task_types.find(w => w.id === 'brainstorm').stages[0].provider_id = 'grok-local'; } }); service = f.service;
+  await f.migrate(); const run = await f.start(); authority = control(run); const lease = await claim(f, run); await service.call('dispatch', leaseArgs(run, lease));
+  const cancelled = await service.call('cancel', authority); assert.equal(controls, 1); assert.equal(cancelled.nodes.implementation.attempts[0].dispatch.cancellation_pending, false);
+  assert.equal(cancelled.nodes.implementation.attempts[0].connector_control.state, 'cancelled');
+});
+
+test('unconfirmed cancellation remains fenced until the original remote identity is observed terminal', async t => {
+  let params; let remote = 'original'; let phase = 'running';
+  const task = () => ({ task_id: params.taskId, provider_id: params.provider.id, stage_id: params.stageId, task_type_id: params.taskTypeId,
+    connector: 'grok_acp', remote_identity: { session_id: 'session', run_id: remote }, state: phase });
+  const registry = { async start(value) { params = value; return task(); }, async status() { return task(); }, async control() { throw new Error('Synthetic remote transport lost'); } };
+  const f = await fixture(t, { registry, configure(config) { config.providers.find(p => p.id === 'grok-local').enabled = true; config.task_types.find(w => w.id === 'brainstorm').stages[0].provider_id = 'grok-local'; } });
+  await f.migrate(); const run = await f.start(); const lease = await claim(f, run); const args = leaseArgs(run, lease); await f.service.call('dispatch', args);
+  await assert.rejects(f.service.call('cancel', control(run)), { code: 'RUN_CANCEL_INCOMPLETE' });
+  const pending = () => f.service.call('get', control(run)); assert.equal((await pending()).status, 'cancelled');
+  remote = 'replacement'; phase = 'completed';
+  await assert.rejects(f.service.call('reconcile_connector', args), { code: 'CONNECTOR_IDENTITY' });
+  assert.equal((await pending()).nodes.implementation.attempts[0].dispatch.cancellation_pending, true);
+  remote = 'original'; await f.service.call('reconcile_connector', args);
+  assert.equal((await pending()).nodes.implementation.attempts[0].dispatch.cancellation_pending, false);
+});
+test('restart reattachment verifies the exact connector and rotates its lease without resubmission or retry budget', async t => {
+  let starts = 0; let reconciles = 0; let params; let phase = 'running'; let changedIdentity = false;
+  const task = () => ({ task_id: params.taskId, provider_id: params.provider.id, stage_id: params.stageId, task_type_id: params.taskTypeId,
+    connector: 'grok_acp', remote_identity: { session_id: changedIdentity ? 'different' : 'same', run_id: 'original-remote-run' }, state: phase,
+    result: { value: 42 }, terminal_evidence: { kind: 'fixture_result' }, scope: { compliant: true, changed_paths: [], outside_paths: [] } });
+  const registry = { async start(value) { starts++; params = value; return task(); }, async status(id) { assert.equal(id, params.taskId); return task(); }, async control(id, args) { assert.equal(id, params.taskId); assert.equal(args.action, 'reconcile'); reconciles++; phase = 'running'; return task(); } };
+  const f = await fixture(t, { registry, configure(config) { const provider = config.providers.find(p => p.id === 'grok-local'); provider.enabled = true; config.task_types.find(w => w.id === 'brainstorm').stages[0].provider_id = provider.id; } });
+  await f.migrate(); const run = await f.start(); const work = await claim(f, run); await f.service.call('dispatch', leaseArgs(run, work));
+  await f.service.call('resume', { ...control(run), after_restart: true }); phase = 'unknown_after_restart';
+  const args = { ...control(run), node_id: work.node_id, attempt_id: work.attempt_id };
+  changedIdentity = true; await assert.rejects(f.service.call('reattach_connector', args), { code: 'DISPATCH_CONFLICT' }); assert.equal(reconciles, 0);
+  changedIdentity = false; const restored = await f.service.call('reattach_connector', args); assert.equal(starts, 1); assert.equal(reconciles, 1); assert.equal(restored.state.nodes[work.node_id].attempts.length, 1);
+  await assert.rejects(f.service.call('complete_node', { ...leaseArgs(run, work), completion: completion({}) }), { code: 'LEASE_INVALID' });
+  await f.service.call('resume', control(run)); phase = 'completed';
+  const completed = await f.service.call('collect_connector', leaseArgs(run, restored.envelope)); assert.equal(completed.nodes[work.node_id].output.value, 42); assert.equal(starts, 1);
+});
+
 test('service imports only a fresh actual inventory selection and prepares expansion without invoking a Provider', async t => {
   let source;
   const inventory = new SkillInventory(async () => ({ skills: [{ path: source, scope: 'user', enabled: true }], errors: [], discovered_by: 'synthetic-host-adapter' }));
@@ -87,7 +157,7 @@ test('API dispatch is advisory, records identity/output, and duplicate calls can
 
 test('connector task identity is allocated before start and recovered exactly after receipt loss', async t => {
   let calls = 0; let saved;
-  const registry = { async start(params) { calls++; saved = params; throw new Error('Simulated transport loss after task creation'); }, async status(taskId) { assert.equal(taskId, saved.taskId); return { task_id: taskId, connector: 'grok_acp', remote_identity: { session_id: 'session-1', run_id: 'remote-1' }, state: 'unknown_after_restart' }; } };
+  const registry = { async start(params) { calls++; saved = params; throw new Error('Simulated transport loss after task creation'); }, async status(taskId) { assert.equal(taskId, saved.taskId); return { task_id: taskId, provider_id: saved.provider.id, stage_id: saved.stageId, task_type_id: saved.taskTypeId, connector: 'grok_acp', remote_identity: { session_id: 'session-1', run_id: 'remote-1' }, state: 'unknown_after_restart' }; } };
   const f = await fixture(t, { registry, configure(config) { const p = config.providers.find(p => p.id === 'grok-local'); p.enabled = true; config.task_types.find(w => w.id === 'brainstorm').stages[0].provider_id = p.id; } });
   await f.migrate(); const run = await f.start(); const work = await claim(f, run); const args = leaseArgs(run, work);
   await assert.rejects(f.service.call('dispatch', args), /Simulated transport loss/); assert.equal(saved.taskId, work.attempt_id); assert.deepEqual(saved.allowedPaths, []);

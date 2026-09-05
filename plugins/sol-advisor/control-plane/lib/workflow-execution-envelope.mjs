@@ -30,17 +30,17 @@ export function bindingContext(state) {
   return { inputs: state.inputs, nodes: Object.fromEntries(Object.entries(state.nodes).map(([id, node]) => [id, { output: node.output }])) };
 }
 
-export function approvalBinding(node, state, pins) {
+export function approvalBinding(node, state, pins, attemptNumber = state.nodes[node.id].attempts.length + 1) {
   const provider = node.executor?.kind === 'provider' ? pins.providers.find(item => item.id === node.executor.provider_id) : null;
   const permissions = nodePermissions(node, state);
   return {
     required: Boolean(node.approval.required || provider?.requires_user_approval || state.require_approval),
-    hash: digest(canonicalJSON({ revision: state.workflow_revision, node_id: node.id, attempt: state.nodes[node.id].attempts.length + 1, provider, permissions, skill_policy: effectiveSkillPolicy(pins.inherited_policy ?? pins.root.workflow.skill_policy, node.skill_policy), subworkflow: node.subworkflow ?? null })),
+    hash: digest(canonicalJSON({ revision: state.workflow_revision, node_id: node.id, attempt: attemptNumber, provider, permissions, skill_policy: effectiveSkillPolicy(pins.inherited_policy ?? pins.root.workflow.skill_policy, node.skill_policy), subworkflow: node.subworkflow ?? null })),
   };
 }
 
-export function leaseToken(controlToken, runId, nodeId, attemptId) {
-  return createHmac('sha256', controlToken).update([runId, nodeId, attemptId].join('\0')).digest('hex');
+export function leaseToken(controlToken, runId, nodeId, attemptId, generation = 0) {
+  return createHmac('sha256', controlToken).update([runId, nodeId, attemptId, ...(generation ? ['generation', String(generation)] : [])].join('\0')).digest('hex');
 }
 
 export function executionEnvelope(node, state, pins, attempt, token, resourcesRoot) {

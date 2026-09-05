@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, Field, Details, ProviderField, type Json } from './shared';
 type Action = (work: () => Promise<any>) => void;
-export function PackPanels({ pack, tab, saved, act, providers, openRun, workspace }: { pack: Json, tab: string, saved: (p: Json) => Promise<void>, act: Action, providers: Json[], openRun: (r: Json) => void, workspace: string }) {
+export function PackPanels({ pack, tab, saved, act, providers, openRun, workspace, setWorkspace }: { pack: Json, tab: string, saved: (p: Json) => Promise<void>, act: Action, providers: Json[], openRun: (r: Json) => void, workspace: string, setWorkspace: (value: string) => void }) {
   const [history, setHistory] = useState<Json[]>([]); const [review, setReview] = useState<Json | null>(null); const [resource, setResource] = useState<Json | null>(null);
   const [path, setPath] = useState(''); const [text, setText] = useState(''); const [note, setNote] = useState(''); const [provider, setProvider] = useState('');
   const ref = { workflow_id: pack.workflow.id, revision_hash: pack.revision_hash }; const cas = { workflow_id: pack.workflow.id, expected_revision: pack.revision_hash };
@@ -20,7 +20,7 @@ export function PackPanels({ pack, tab, saved, act, providers, openRun, workspac
       {review?.issues.map((issue: Json) => <article className="review-item" key={issue.id}><strong>{issue.code}</strong><pre>{JSON.stringify(issue, null, 2)}</pre>{issue.code !== 'AI_INFERENCES_REQUIRE_REVIEW' && <button disabled={!note.trim()} onClick={() => act(async () => saved(await api('review_import', { ...cas, decisions: [{ issue_id: issue.id, resolution: 'resolved', note }] })))}>确认此项已处理</button>}</article>)}
       {review?.inferences.filter((item: Json) => !item.origin.reviewed).map((item: Json) => <article className="review-item" key={item.kind + item.id}><strong>{item.kind} / {item.id}</strong><Details title="推断依据" value={item.origin}/><button disabled={!note.trim()} onClick={() => act(async () => saved(await api('review_import', { ...cas, inferences: [{ kind: item.kind, id: item.id, note }] })))}>确认此项推断</button></article>)}
       <button onClick={() => act(async () => { const result = await api('verify_relocation', ref); setReview(current => ({ ...current, relocation: result })); })}>检查固定资源的迁移完整性</button>{review?.relocation && <Details title="检查结果（不等同功能执行证明）" value={review.relocation}/>}
-      <h3>AI 展开为可编辑流程</h3><p>使用选定 Provider 建立只读 Strict 规划 Run；主控制者验收后，才可应用到此版本的 Draft。</p><ProviderField providers={providers} value={provider} onChange={setProvider} main={false}/><button disabled={!provider || !workspace} onClick={() => act(async () => openRun(await api('create_expansion_run', { ...ref, provider_id: provider, run_id: 'expansion-' + crypto.randomUUID(), workspace, main_actor: 'human-console' })))}>建立 AI 规划 Run</button>
+      <h3>AI 展开为可编辑流程</h3><p>使用选定 Provider 建立只读 Strict 规划 Run；主控制者验收后，才可应用到此版本的 Draft。</p><Field label="规划 Run 的工作区绝对路径" value={workspace} onChange={setWorkspace}/><ProviderField providers={providers} value={provider} onChange={setProvider} main={false}/><button disabled={!provider || !workspace} onClick={() => act(async () => openRun(await api('create_expansion_run', { ...ref, provider_id: provider, run_id: 'expansion-' + crypto.randomUUID(), workspace, main_actor: 'human-console' })))}>建立 AI 规划 Run</button>
     </>}</>}
   </section>;
 }

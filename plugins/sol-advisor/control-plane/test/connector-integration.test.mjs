@@ -172,6 +172,27 @@ test('migrated Workflow dispatches the real connector adapter and collects obser
   assert.equal(collected.nodes['final-acceptance'].status, 'ready'); assert.equal(collected.status, 'running');
 });
 
+test('Workflow restart rotates its max-one lease and collects the original real connector result', async t => {
+  const fx = await fixture(t); let starts = 0; const originalStart = fx.registry.start.bind(fx.registry);
+  fx.registry.start = async params => { starts++; return originalStart(params); };
+  const service = new WorkflowService({ configPath: fx.configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: fx.env, registry: fx.registry });
+  await service.call('migrate_v6', {}, { human: true });
+  const run = await service.call('start', { workflow_id: 'grok-readonly-advice', workspace: fx.workspace, access: 'read_only', main_actor: 'root', inputs: { task: 'WORKFLOW_RECOVERY', verification: 'Actual protocol and scope evidence' } });
+  const authority = { run_id: run.run_id, control_token: run.control_token };
+  await service.call('approve', { ...authority, approval_id: 'implementation:1', decision: true });
+  const lease = await service.call('claim_node', { ...authority, node_id: 'implementation', owner: 'worker', request_id: 'recover-original' });
+  const args = { ...authority, node_id: lease.node_id, attempt_id: lease.attempt_id, lease_token: lease.lease_token };
+  await service.call('dispatch', args); assert.equal((await fx.registry.status(lease.attempt_id, 5000)).state, 'completed');
+  await service.call('resume', { ...authority, after_restart: true });
+  const registry = new ConnectorRegistry({ configPath: fx.configPath, env: fx.env, spawnImpl: fx.spawnImpl, processRunningImpl: async () => false });
+  const restarted = new WorkflowService({ configPath: fx.configPath, defaultConfigPath: DEFAULT_CONFIG_PATH, env: fx.env, registry });
+  const attached = await restarted.call('reattach_connector', args); assert.equal(attached.envelope.attempt_id, lease.attempt_id); assert.notEqual(attached.envelope.lease_token, lease.lease_token);
+  await restarted.call('resume', authority);
+  const completed = await restarted.call('collect_connector', { ...args, lease_token: attached.envelope.lease_token });
+  assert.equal(completed.nodes.implementation.status, 'succeeded'); assert.equal(completed.nodes.implementation.attempts.length, 1); assert.equal(starts, 1);
+  const tasks = JSON.parse(await readFile(join(fx.root, 'connector-tasks.json'), 'utf8')); assert.equal(tasks.tasks.length, 1);
+});
+
 test('approval-gated bounded write is rejected before connector launch when approval is missing', async (t) => {
   const fx = await fixture(t);
   for (const scenarioId of ['grok-bounded-change', 'cursor-bounded-change']) {

@@ -89,3 +89,9 @@ node --test spikes/skill-isolation/fixture-policy.test.mjs
 
 The repository also has POSIX verification scripts and existing CI checks; local
 Node test success is not equivalent to a completed cross-platform release gate.
+
+M12 implements controller-tree adoption, exact same-attempt reattachment, live
+output previews and cancellation propagation. See docs/V7_RECOVERY_CONTRACT.md.
+Full183 and actual Windows6-case/17-request streaming/integration checks passed.
+M13 release documentation and cross-platform release evidence remain pending.
+

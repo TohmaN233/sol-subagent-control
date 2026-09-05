@@ -1,1 +1,2 @@
 *.sh text eol=lf
+plugins/sol-advisor/control-plane/web/workflows.* text eol=lf

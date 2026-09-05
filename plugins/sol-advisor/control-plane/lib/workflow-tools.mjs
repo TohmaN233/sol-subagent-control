@@ -12,9 +12,11 @@ const properties = {
   skill_id: string, provider_id: string, name: string, proposal: object, accepted: { type: 'boolean' },
   region_id: string, patch_sha256: string,
   resource_path: string, text: string, remove: { type: 'boolean' },
+  control: object,
 };
 const lease = ['run_id', 'node_id', 'attempt_id', 'lease_token'];
 const main = ['run_id', 'control_token'];
+const recovery = [...main, 'node_id', 'attempt_id'];
 const specs = [
   ['capabilities', 'Read current Strict qualification and declared host capabilities without starting a session or exposing credentials.', [], []],
   ['skill_inventory', 'Read actual host Skill metadata and per-path discovery errors. Never treats a filesystem guess as complete discovery.', ['workspace'], []],
@@ -38,6 +40,14 @@ const specs = [
   ['runs', 'List persisted Run metadata.', [], []],
   ['get', 'Read the current state reconstructed from the authoritative Run journal.', ['run_id'], []],
   ['run_definition', 'Read the Run-pinned Workflow definition even after its library revision is edited or deleted.', ['run_id'], []],
+  ['node_details', 'Read the exact pinned Provider and backend-computed node permission and Skill policy boundary.', ['run_id','node_id'], []],
+  ['recover_claim', 'Recover an interrupted claim only if no dispatch intent exists. Rotates its lease without a new attempt or retry charge.', recovery, []],
+  ['reattach_connector', 'Verify and reattach the exact persisted connector task. Never selects latest, submits a new task or charges a retry.', recovery, []],
+  ['reattach_handoff', 'After the main host inspects its exact native/MCP task, attest its unchanged recorded receipt and actual active/completed evidence. This is host attestation, not independent connector verification. No resubmission or retry charge.', recovery, ['reconciliation']],
+  ['control_connector', 'Control only this attempt’s exact connector task. Permission/input responses require actual user authorization and the returned exact request/options. Cancellation remains pending until confirmed remotely.', [...lease, 'control_token', 'control'], []],
+  ['recover_strict_result', 'Recover only a hash-pinned Strict result with recorded session shutdown; no model turn is resumed or submitted.', recovery, []],
+  ['reattach_subworkflow', 'Reattach the existing pinned child Run and rotate the parent lease without recreating either Run.', recovery, []],
+  ['child_control', 'Return the exact existing child main-controller capability to its authorized parent controller. Never put it in worker prompts.', recovery, []],
   ['next', 'Read ready node IDs and pending approvals. This does not claim or dispatch work.', ['run_id'], []],
   ['claim_node', 'Atomically claim one ready node and return its narrow execution lease. Main nodes require the exact main actor.', [...main, 'node_id', 'owner', 'request_id'], ['expected_sequence']],
   ['complete_node', 'Commit successful node output plus artifacts, evidence, changed_paths and outside_paths. Final acceptance requires main authority.', [...lease, 'completion'], []],

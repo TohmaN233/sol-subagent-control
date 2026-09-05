@@ -8,6 +8,7 @@ import { WorkflowRuntime } from '../lib/workflow-runtime.mjs';
 import { createDraft } from '../lib/workflow-schema.mjs';
 import { childIdentity, childPermissions } from '../lib/workflow-subworkflow.mjs';
 import { validateWorkflowGraph } from '../lib/workflow-validator.mjs';
+import { adoptRunTree, reattachAttempt } from '../lib/workflow-recovery.mjs';
 
 const agent = id => ({ id, type: 'agent', executor: { kind: 'main' }, role: 'implementer', access: 'read_only', prompt_template: '{{task}}', approval: { required: false }, retry: { max_attempts: 2 }, input_bindings: {} });
 const policy = { mode: 'cooperative', implicit: 'allow', ambient_allow: [], shadowed_skill_paths: [] };
@@ -36,6 +37,24 @@ const claim = (runtime, run, nodeId) => runtime.claimNode(run.run_id, { node_id:
 const args = (run, lease) => ({ control_token: run.control_token, node_id: lease.node_id, attempt_id: lease.attempt_id, lease_token: lease.lease_token });
 const completion = (output, extra = {}) => ({ status: 'succeeded', summary: 'Synthetic verified result', structured_output: output, artifacts: [], evidence: [{ checked: true }], changed_paths: [], outside_paths: [], ...extra });
 const complete = (runtime, run, lease, output = {}, extra) => runtime.completeNode(run.run_id, { ...args(run, lease), completion: completion(output, extra) });
+
+test('human tree adoption preserves pinned child identity, rotates all controllers and reconnects existing attempts', async t => {
+  const f = await fixture(t); const parent = await f.start(); const call = await claim(f.runtime, parent, 'call');
+  const child = (await f.runtime.startSubworkflow(parent.run_id, args(parent, call))).child; const work = await claim(f.runtime, child, 'work');
+  await f.store.delete('child', f.child.revision_hash); await f.store.delete('parent', f.parent.revision_hash);
+  const recovery = await adoptRunTree(f.runtime, parent.run_id, { expected_sequence: (await f.runtime.get(parent.run_id)).sequence, reason: 'Synthetic tree recovery', main_actor: 'root' });
+  assert.deepEqual(recovery.errors, []); assert.equal(recovery.authorities.size, 2);
+  await assert.rejects(f.runtime.pause(child.run_id, child), { code: 'RUN_AUTHORITY' });
+  const newChild = { run_id: child.run_id, control_token: recovery.authorities.get(child.run_id).control_token };
+  const dispatch = recovery.authorities.get(parent.run_id).state.nodes.call.attempts[0].dispatch;
+  const reattached = await reattachAttempt(f.runtime, parent.run_id, args(recovery.run, call), { kind: 'subworkflow_exact_identity', attempt_id: call.attempt_id, dispatch_request_id: dispatch.request_id, receipt: dispatch.receipt });
+  await f.runtime.resume(parent.run_id, recovery.run);
+  const recoveredWork = await reattachAttempt(f.runtime, child.run_id, args(newChild, work), { kind: 'unsubmitted_claim' });
+  await f.runtime.resume(child.run_id, newChild); await complete(f.runtime, newChild, recoveredWork.envelope, { value: 9 });
+  await complete(f.runtime, newChild, await claim(f.runtime, newChild, 'final'), { value: 9 }, { acceptance: { accepted: true } });
+  const accepted = await f.runtime.collectSubworkflow(parent.run_id, args(recovery.run, reattached.envelope)); assert.deepEqual(accepted.nodes.call.output, { result: { value: 9 } });
+  assert.equal((await f.runtime.runs.list()).length, 2); assert.equal(accepted.nodes.call.attempts.length, 1);
+});
 
 test('child execution pins survive library deletion, reconcile exact identity and require main acceptance before namespaced collection', async t => {
   const f = await fixture(t); const parent = await f.start(); const call = await claim(f.runtime, parent, 'call');

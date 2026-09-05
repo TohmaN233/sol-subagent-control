@@ -437,6 +437,10 @@ function render() {
   $('#providers').replaceChildren(...config.providers.map(providerCard));
   $('#task-types').closest('section').hidden = config.version === 7;
   $('#load-defaults').hidden = config.version === 7;
+  $('#defaults-heading').closest('section').hidden = config.version === 7;
+  $('.lede').textContent = config.version === 7
+    ? 'Manage Providers pinned to Workflow nodes. Open the Workflow workspace to edit graphs, review resources, and inspect Runs.'
+    : 'Define reusable Task Types, then pin exactly one Provider to each implementation or review Stage. Sol may select a Task Type, but cannot change its Provider bindings or fall back silently.';
   $('#task-types').replaceChildren(...(config.task_types ?? []).map(taskTypeCard));
   renderPresetOptions();
   refreshProviderOptions();

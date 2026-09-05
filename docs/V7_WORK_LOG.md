@@ -358,3 +358,14 @@ claimed. Root/Provider authority, persisted dispatch intent and restart reconcil
 must remain explicit throughout the runtime. M12 must add verified remote
 reattachment with rotated leases (without resubmission or retry-budget charge);
 current restart recovery fences leases and exposes exact identity reconciliation.
+
+## M12 checkpoint (2026-09-05)
+
+Run recovery, effective node details, bounded volatile output and exact cancellation
+are implemented; see V7_RECOVERY_CONTRACT.md for contracts, limits and evidence.
+Full183 passed, zero failures (57.46s). Actual App Server6 cases/17 requests passed
+with shared config unchanged and owned profiles cleaned. A preview test initially
+asserted against the sanitized event endpoint; corrected it to inspect the actual
+journal and fixed fixture shutdown ordering so assertion failures cannot hang.
+Malformed Draft canvas now reports errors and preserves IR for repair. M13 continues.
+

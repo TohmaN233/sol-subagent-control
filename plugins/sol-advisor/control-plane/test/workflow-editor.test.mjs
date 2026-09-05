@@ -7,7 +7,7 @@ import { WorkflowStore } from '../lib/workflow-store.mjs';
 import { packDirectory } from '../lib/workflow-paths.mjs';
 import { createDraft } from '../lib/workflow-schema.mjs';
 import { readEditorResource, writeEditorResource, publishEditorWorkflow } from '../lib/workflow-editor.mjs';
-import { toCanvas, moveNode, connectNodes, removeElements, layoutGraph } from '../web-src/graph-adapter.mjs';
+import { canvasIssues, toCanvas, moveNode, connectNodes, removeElements, layoutGraph } from '../web-src/graph-adapter.mjs';
 import { DEFAULT_CONFIG_PATH, startConsole, stopConsole } from '../server.mjs';
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'workflow-editor-'));
@@ -43,6 +43,11 @@ test('canvas view and explicit layout preserve opaque domain metadata without pe
   assert.deepEqual(layoutGraph(moved).extension, before.extension); assert.equal(JSON.stringify(moved).includes('measured'), false);
   const connected = connectNodes(moved, 'b', 'a', 'ba'); assert.deepEqual(connected.edges[0], before.edges[0]);
   const removed = removeElements(connected, ['a']); assert.deepEqual(removed.nodes, [before.nodes[1]]); assert.deepEqual(removed.edges, []);
+});
+test('malformed Draft canvas reports null, duplicate, missing endpoint and invalid position without altering recoverable IR', () => {
+  const workflow = { nodes: [null, { id: 'a', type: 'agent', ui: { position: { x: 'invalid', y: 0 } } }, { id: 'a', type: 'end' }], edges: [null, { id: 'bad', source: 'a', target: 'missing' }] };
+  const before = structuredClone(workflow); assert.equal(canvasIssues(workflow).length, 5);
+  assert.throws(() => toCanvas(workflow), /nodes\[0\]/); assert.deepEqual(workflow, before);
 });
 test('graph console serves bundled assets with bounded CSP and keeps human publication separate from model tools', async t => {
   const { root } = await fixture(t); const consoleState = await startConsole({ configPath: join(root, 'control-plane.json'), defaultConfigPath: DEFAULT_CONFIG_PATH, open: false, port: 0 }); t.after(stopConsole);

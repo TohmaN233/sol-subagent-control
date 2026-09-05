@@ -30,7 +30,15 @@ export async function createStrictSession(options) {
     requireValue(digest(await readFile(options.binary)) === profile.binary_sha256, 'CODEX_BINARY_CHANGED', 'Codex executable changed before process launch');
     client = createCodexClient(options.binary, { home: profile.home, cwd: profile.model_catalog_sha256 ? cwd : profile.home,
       overrides: profileOverrides(profile), env: isolatedEnvironment(env, profile.home),
-      onEvent: event => onEvent(codexEventMetadata(event)),
+      onEvent: async event => {
+        await onEvent(codexEventMetadata(event));
+        if (event.method === 'item/agentMessage/delta' && options.onOutput) {
+          const params = event.params;
+          requireValue(params && activeThread && params.threadId === activeThread && typeof params.turnId === 'string' && (!activeTurn || params.turnId === activeTurn) && typeof params.delta === 'string' && params.delta.length <= 65536,
+            'CODEX_OUTPUT_IDENTITY', 'Streaming output is outside this exact node thread/turn or exceeds its event bound');
+          await options.onOutput({ delta: params.delta, thread_id: params.threadId, turn_id: params.turnId });
+        }
+      },
       async onToolCall(params) {
         requireValue(!closed && params.threadId === activeThread && !params.namespace, 'CODEX_TOOL_DENIED', 'Tool call is outside this node execution envelope');
         if (params.tool === 'read_allowed_skill') {
