@@ -1,6 +1,6 @@
 # Sol Subagent Control
 
-## A FULL UPDATED VERSION IS AVAILABLE IN https://github.com/TohmaN233/chatgpt-review-agent-skill
+## A FULL UPDATED VERSION IS AVAILABLE IN [https://github.com/TohmaN233/chatgpt-review-agent-skill](https://github.com/TohmaN233/codex-agents-workflow)
 
 A Sol Advisor fork with a console.
 
