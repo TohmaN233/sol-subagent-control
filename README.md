@@ -1,5 +1,7 @@
 # Sol Subagent Control
 
+## A FULL UPDATED VERSION IS AVAILABLE IN https://github.com/TohmaN233/chatgpt-review-agent-skill
+
 A Sol Advisor fork with a console.
 
 You choose the tasks, the subagent models, and their thinking levels. Plug them in, take them out, add your own, and turn each model connection on or off. Cursor and Grok are extra subagent entries. ChatGPT review uses the installed chatgpt-review-agent skill.
